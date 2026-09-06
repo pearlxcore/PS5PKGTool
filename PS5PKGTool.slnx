@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="PS5PKGTool.Core/PS5PKGTool.Core.csproj" />
+  <Project Path="PS5PKGTool.Ffpfsc/PS5PKGTool.Ffpfsc.csproj" />
+  <Project Path="PS5PKGTool.SmokeTests/PS5PKGTool.SmokeTests.csproj" />
+  <Project Path="PS5PKGTool.Ufs2/PS5PKGTool.Ufs2.csproj" />
+  <Project Path="PS5PKGTool/PS5PKGTool.csproj" />
+</Solution>

@@ -1,0 +1,304 @@
+#nullable enable
+
+namespace PS5PKGTool.Forms;
+
+partial class FfpkgEditorForm
+{
+    private System.ComponentModel.IContainer? components = null;
+    private DarkUI.Controls.DarkLabel lblImage = null!;
+    private SplitContainer splitEditor = null!;
+    private DarkUI.Controls.DarkSectionPanel sectionEntries = null!;
+    private DarkUI.Controls.DarkDataGridView gridEntries = null!;
+    private DarkUI.Controls.DarkSectionPanel sectionChanges = null!;
+    private DarkUI.Controls.DarkListBox lstChanges = null!;
+    private Panel commandPanel = null!;
+    private DarkUI.Controls.DarkLabel lblTarget = null!;
+    private DarkUI.Controls.DarkTextBox txtTarget = null!;
+    private DarkUI.Controls.DarkButton btnReplace = null!;
+    private DarkUI.Controls.DarkButton btnAddFiles = null!;
+    private DarkUI.Controls.DarkButton btnAddFolder = null!;
+    private DarkUI.Controls.DarkButton btnNewDirectory = null!;
+    private DarkUI.Controls.DarkButton btnDelete = null!;
+    private DarkUI.Controls.DarkButton btnUndo = null!;
+    private DarkUI.Controls.DarkProgressBar progressEdit = null!;
+    private DarkUI.Controls.DarkLabel lblStatus = null!;
+    private DarkUI.Controls.DarkButton btnApply = null!;
+    private DarkUI.Controls.DarkButton btnCancelOperation = null!;
+    private DarkUI.Controls.DarkButton btnClose = null!;
+    private OpenFileDialog replacementOpenDialog = null!;
+    private OpenFileDialog addFilesOpenDialog = null!;
+    private FolderBrowserDialog addFolderDialog = null!;
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) components?.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private void InitializeComponent()
+    {
+        components = new System.ComponentModel.Container();
+        lblImage = new DarkUI.Controls.DarkLabel();
+        splitEditor = new SplitContainer();
+        sectionEntries = new DarkUI.Controls.DarkSectionPanel();
+        gridEntries = new DarkUI.Controls.DarkDataGridView();
+        sectionChanges = new DarkUI.Controls.DarkSectionPanel();
+        lstChanges = new DarkUI.Controls.DarkListBox();
+        commandPanel = new Panel();
+        lblTarget = new DarkUI.Controls.DarkLabel();
+        txtTarget = new DarkUI.Controls.DarkTextBox();
+        btnReplace = new DarkUI.Controls.DarkButton();
+        btnAddFiles = new DarkUI.Controls.DarkButton();
+        btnAddFolder = new DarkUI.Controls.DarkButton();
+        btnNewDirectory = new DarkUI.Controls.DarkButton();
+        btnDelete = new DarkUI.Controls.DarkButton();
+        btnUndo = new DarkUI.Controls.DarkButton();
+        progressEdit = new DarkUI.Controls.DarkProgressBar();
+        lblStatus = new DarkUI.Controls.DarkLabel();
+        btnApply = new DarkUI.Controls.DarkButton();
+        btnCancelOperation = new DarkUI.Controls.DarkButton();
+        btnClose = new DarkUI.Controls.DarkButton();
+        replacementOpenDialog = new OpenFileDialog();
+        addFilesOpenDialog = new OpenFileDialog();
+        addFolderDialog = new FolderBrowserDialog();
+        ((System.ComponentModel.ISupportInitialize)splitEditor).BeginInit();
+        splitEditor.Panel1.SuspendLayout();
+        splitEditor.Panel2.SuspendLayout();
+        splitEditor.SuspendLayout();
+        sectionEntries.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)gridEntries).BeginInit();
+        sectionChanges.SuspendLayout();
+        commandPanel.SuspendLayout();
+        SuspendLayout();
+        // 
+        // lblImage
+        // 
+        lblImage.AutoEllipsis = true;
+        lblImage.Dock = DockStyle.Top;
+        lblImage.Location = new Point(10, 10);
+        lblImage.Name = "lblImage";
+        lblImage.Padding = new Padding(8, 0, 8, 0);
+        lblImage.Size = new Size(1164, 32);
+        lblImage.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // splitEditor
+        // 
+        splitEditor.Dock = DockStyle.Fill;
+        splitEditor.Location = new Point(10, 42);
+        splitEditor.Name = "splitEditor";
+        splitEditor.Panel1.Controls.Add(sectionEntries);
+        splitEditor.Panel2.Controls.Add(sectionChanges);
+        splitEditor.Size = new Size(1164, 530);
+        splitEditor.SplitterDistance = 780;
+        // 
+        // sectionEntries
+        // 
+        sectionEntries.Controls.Add(gridEntries);
+        sectionEntries.Dock = DockStyle.Fill;
+        sectionEntries.Name = "sectionEntries";
+        sectionEntries.SectionHeader = "Image files and directories";
+        // 
+        // gridEntries
+        // 
+        gridEntries.AllowUserToAddRows = false;
+        gridEntries.AllowUserToDeleteRows = false;
+        gridEntries.AllowUserToOrderColumns = true;
+        gridEntries.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        gridEntries.Dock = DockStyle.Fill;
+        gridEntries.MultiSelect = true;
+        gridEntries.Name = "gridEntries";
+        gridEntries.ReadOnly = true;
+        gridEntries.RowHeadersVisible = false;
+        gridEntries.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        gridEntries.SelectionChanged += gridEntries_SelectionChanged;
+        // 
+        // sectionChanges
+        // 
+        sectionChanges.Controls.Add(lstChanges);
+        sectionChanges.Dock = DockStyle.Fill;
+        sectionChanges.Name = "sectionChanges";
+        sectionChanges.SectionHeader = "Queued changes";
+        // 
+        // lstChanges
+        // 
+        lstChanges.Dock = DockStyle.Fill;
+        lstChanges.DrawMode = DrawMode.OwnerDrawFixed;
+        lstChanges.FormattingEnabled = true;
+        lstChanges.ItemHeight = 18;
+        lstChanges.Name = "lstChanges";
+        // 
+        // commandPanel
+        // 
+        commandPanel.BackColor = Color.FromArgb(45, 45, 48);
+        commandPanel.Controls.Add(lblTarget);
+        commandPanel.Controls.Add(txtTarget);
+        commandPanel.Controls.Add(btnReplace);
+        commandPanel.Controls.Add(btnAddFiles);
+        commandPanel.Controls.Add(btnAddFolder);
+        commandPanel.Controls.Add(btnNewDirectory);
+        commandPanel.Controls.Add(btnDelete);
+        commandPanel.Controls.Add(btnUndo);
+        commandPanel.Controls.Add(progressEdit);
+        commandPanel.Controls.Add(lblStatus);
+        commandPanel.Controls.Add(btnApply);
+        commandPanel.Controls.Add(btnCancelOperation);
+        commandPanel.Controls.Add(btnClose);
+        commandPanel.Dock = DockStyle.Bottom;
+        commandPanel.Location = new Point(10, 572);
+        commandPanel.Name = "commandPanel";
+        commandPanel.Size = new Size(1164, 150);
+        // 
+        // lblTarget
+        // 
+        lblTarget.Location = new Point(8, 8);
+        lblTarget.Name = "lblTarget";
+        lblTarget.Size = new Size(130, 25);
+        lblTarget.Text = "Target directory:";
+        lblTarget.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // txtTarget
+        // 
+        txtTarget.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        txtTarget.Location = new Point(140, 8);
+        txtTarget.Name = "txtTarget";
+        txtTarget.PlaceholderText = "Root is empty; use forward slashes for nested paths";
+        txtTarget.Size = new Size(1016, 25);
+        // 
+        // btnReplace
+        // 
+        btnReplace.Location = new Point(8, 40);
+        btnReplace.Name = "btnReplace";
+        btnReplace.Size = new Size(120, 29);
+        btnReplace.Text = "Replace File...";
+        btnReplace.Click += btnReplace_Click;
+        // 
+        // btnAddFiles
+        // 
+        btnAddFiles.Location = new Point(134, 40);
+        btnAddFiles.Name = "btnAddFiles";
+        btnAddFiles.Size = new Size(120, 29);
+        btnAddFiles.Text = "Add Files...";
+        btnAddFiles.Click += btnAddFiles_Click;
+        // 
+        // btnAddFolder
+        // 
+        btnAddFolder.Location = new Point(260, 40);
+        btnAddFolder.Name = "btnAddFolder";
+        btnAddFolder.Size = new Size(120, 29);
+        btnAddFolder.Text = "Add Folder...";
+        btnAddFolder.Click += btnAddFolder_Click;
+        // 
+        // btnNewDirectory
+        // 
+        btnNewDirectory.Location = new Point(386, 40);
+        btnNewDirectory.Name = "btnNewDirectory";
+        btnNewDirectory.Size = new Size(130, 29);
+        btnNewDirectory.Text = "New Target Folder";
+        btnNewDirectory.Click += btnNewDirectory_Click;
+        // 
+        // btnDelete
+        // 
+        btnDelete.Location = new Point(522, 40);
+        btnDelete.Name = "btnDelete";
+        btnDelete.Size = new Size(120, 29);
+        btnDelete.Text = "Delete Selected";
+        btnDelete.Click += btnDelete_Click;
+        // 
+        // btnUndo
+        // 
+        btnUndo.Location = new Point(648, 40);
+        btnUndo.Name = "btnUndo";
+        btnUndo.Size = new Size(120, 29);
+        btnUndo.Text = "Undo Last";
+        btnUndo.Click += btnUndo_Click;
+        // 
+        // progressEdit
+        // 
+        progressEdit.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        progressEdit.Location = new Point(8, 78);
+        progressEdit.Name = "progressEdit";
+        progressEdit.Size = new Size(1148, 22);
+        progressEdit.TextMode = DarkUI.Controls.DarkProgressBarMode.Percentage;
+        // 
+        // lblStatus
+        // 
+        lblStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        lblStatus.AutoEllipsis = true;
+        lblStatus.Location = new Point(8, 105);
+        lblStatus.Name = "lblStatus";
+        lblStatus.Size = new Size(730, 32);
+        lblStatus.Text = "Queue changes, then Apply. Structural changes use a verified transactional rebuild.";
+        lblStatus.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // btnApply
+        // 
+        btnApply.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnApply.Location = new Point(786, 108);
+        btnApply.Name = "btnApply";
+        btnApply.Size = new Size(120, 31);
+        btnApply.Text = "Apply Changes";
+        btnApply.Click += btnApply_Click;
+        // 
+        // btnCancelOperation
+        // 
+        btnCancelOperation.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnCancelOperation.Enabled = false;
+        btnCancelOperation.Location = new Point(912, 108);
+        btnCancelOperation.Name = "btnCancelOperation";
+        btnCancelOperation.Size = new Size(112, 31);
+        btnCancelOperation.Text = "Cancel";
+        btnCancelOperation.Click += btnCancelOperation_Click;
+        // 
+        // btnClose
+        // 
+        btnClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnClose.DialogResult = DialogResult.Cancel;
+        btnClose.Location = new Point(1030, 108);
+        btnClose.Name = "btnClose";
+        btnClose.Size = new Size(126, 31);
+        btnClose.Text = "Close";
+        // 
+        // replacementOpenDialog
+        // 
+        replacementOpenDialog.CheckFileExists = true;
+        replacementOpenDialog.Filter = "All files (*.*)|*.*";
+        replacementOpenDialog.Title = "Select replacement file";
+        // 
+        // addFilesOpenDialog
+        // 
+        addFilesOpenDialog.CheckFileExists = true;
+        addFilesOpenDialog.Filter = "All files (*.*)|*.*";
+        addFilesOpenDialog.Multiselect = true;
+        addFilesOpenDialog.Title = "Select files to add";
+        // 
+        // addFolderDialog
+        // 
+        addFolderDialog.Description = "Select a directory tree to add to the FFPKG image";
+        // 
+        // FfpkgEditorForm
+        // 
+        AutoScaleDimensions = new SizeF(7F, 15F);
+        AutoScaleMode = AutoScaleMode.Font;
+        BackColor = Color.FromArgb(60, 63, 65);
+        CancelButton = btnClose;
+        ClientSize = new Size(1184, 732);
+        Controls.Add(splitEditor);
+        Controls.Add(commandPanel);
+        Controls.Add(lblImage);
+        MinimumSize = new Size(950, 650);
+        Name = "FfpkgEditorForm";
+        Padding = new Padding(10);
+        StartPosition = FormStartPosition.CenterParent;
+        Text = "FFPKG Image Editor";
+        FormClosing += FfpkgEditorForm_FormClosing;
+        splitEditor.Panel1.ResumeLayout(false);
+        splitEditor.Panel2.ResumeLayout(false);
+        ((System.ComponentModel.ISupportInitialize)splitEditor).EndInit();
+        splitEditor.ResumeLayout(false);
+        sectionEntries.ResumeLayout(false);
+        ((System.ComponentModel.ISupportInitialize)gridEntries).EndInit();
+        sectionChanges.ResumeLayout(false);
+        commandPanel.ResumeLayout(false);
+        ResumeLayout(false);
+    }
+}

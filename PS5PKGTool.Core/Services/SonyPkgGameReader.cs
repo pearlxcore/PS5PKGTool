@@ -1,0 +1,89 @@
+using System.Text;
+using System.Text.RegularExpressions;
+using PS5PKGTool.Core.Models;
+using PS5PKGTool.Core.Parsers;
+
+namespace PS5PKGTool.Core.Services;
+
+public sealed partial class SonyPkgGameReader
+{
+    private const int MaximumParamJsonSize = 16 * 1024 * 1024;
+    private readonly SonyPkgReader _packageReader = new();
+    private readonly Ps5ParamReader _paramReader = new();
+
+    public Ps5GameInfo Read(string packagePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
+        string fullPath = Path.GetFullPath(packagePath);
+        SonyPkgSummary package = _packageReader.Read(fullPath);
+        DateTime lastWrite = File.GetLastWriteTimeUtc(fullPath);
+        string inferredContentId = ExtractContentId(Path.GetFileNameWithoutExtension(fullPath));
+        string effectiveContentId = string.IsNullOrWhiteSpace(package.ContentId)
+            ? inferredContentId
+            : package.ContentId;
+        SonyPkgEntry? paramEntry = package.Entries.FirstOrDefault(entry => entry.Id == 0x2000 && !entry.IsEncrypted);
+
+        Ps5GameInfo game;
+        if (paramEntry is not null && paramEntry.DataSize <= MaximumParamJsonSize)
+        {
+            byte[] data = _packageReader.ReadEntryBytes(fullPath, package, paramEntry, MaximumParamJsonSize);
+            string raw = Encoding.UTF8.GetString(data).TrimStart('\uFEFF').TrimEnd('\0');
+            game = _paramReader.ReadJson(raw, fullPath + "::sce_sys/param.json", fullPath, lastWrite);
+        }
+        else
+        {
+            string fallbackTitle = Path.GetFileNameWithoutExtension(fullPath);
+            game = new Ps5GameInfo
+            {
+                RootPath = fullPath,
+                ParamPath = string.Empty,
+                Title = string.IsNullOrWhiteSpace(fallbackTitle) ? "Unknown PS5 Package" : fallbackTitle,
+                ContentId = effectiveContentId,
+                TitleId = ExtractTitleId(effectiveContentId),
+                LastWriteTimeUtc = lastWrite
+            };
+            game.DataWarnings.Add(paramEntry is null
+                ? "An unencrypted param.json entry was not available in the CNT metadata."
+                : "param.json exceeds the safe metadata read limit.");
+        }
+
+        game.SourceKind = Ps5SourceKind.SonyPackage;
+        game.RootPath = fullPath;
+        game.SourceSize = package.FileSize;
+        game.Package = package;
+        if (string.IsNullOrWhiteSpace(game.ContentId)) game.ContentId = effectiveContentId;
+        if (string.IsNullOrWhiteSpace(game.TitleId)) game.TitleId = ExtractTitleId(game.ContentId);
+        if (string.IsNullOrWhiteSpace(package.ContentId) && !string.IsNullOrWhiteSpace(inferredContentId))
+            game.DataWarnings.Add("The content ID and title ID were inferred from the standard Sony package filename.");
+        if (package.Kind == SonyPkgKind.FinalizedRetail && package.Entries.Count == 0)
+            game.DataWarnings.Add("This retail FIH has no embedded CNT metadata. Detailed game metadata and artwork are inside the encrypted PFS and require the matching retail image key.");
+        if (!string.IsNullOrWhiteSpace(package.ContentId) &&
+            !string.IsNullOrWhiteSpace(game.ContentId) &&
+            !string.Equals(package.ContentId, game.ContentId, StringComparison.Ordinal))
+            game.DataWarnings.Add($"CNT content ID '{package.ContentId}' differs from param.json content ID '{game.ContentId}'.");
+        if (package.FormatVersion is not null and not 3)
+            game.DataWarnings.Add($"FIH format version is {package.FormatVersion}; version 3 is normally expected.");
+        if (package.EncryptedEntryCount > 0)
+            game.DataWarnings.Add($"{package.EncryptedEntryCount:N0} CNT entr{(package.EncryptedEntryCount == 1 ? "y is" : "ies are")} encrypted.");
+        return game;
+    }
+
+    private static string ExtractTitleId(string contentId)
+    {
+        Match match = TitleIdPattern().Match(contentId ?? string.Empty);
+        return match.Success ? match.Value.ToUpperInvariant() : string.Empty;
+    }
+
+    private static string ExtractContentId(string value)
+    {
+        Match match = ContentIdPattern().Match(value ?? string.Empty);
+        return match.Success ? match.Value.ToUpperInvariant() : string.Empty;
+    }
+
+    [GeneratedRegex(@"PPSA\d{5}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex TitleIdPattern();
+
+    [GeneratedRegex(@"[A-Z]{2}\d{4}-PPSA\d{5}_\d{2}-[A-Z0-9]{16}",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ContentIdPattern();
+}
