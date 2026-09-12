@@ -1,4 +1,5 @@
 using PS5PKGTool.Core.Models;
+using ProsperoPkgTool.Containers;
 
 namespace PS5PKGTool.Core.Parsers;
 
@@ -20,6 +21,13 @@ internal static class SonyPfsEntryDataReader
     {
         if (offset < 0 || count < 0 || offset > entry.Size || count > entry.Size - offset)
             throw new ArgumentOutOfRangeException(nameof(offset));
+        if (image.EngineAccess is { } engine)
+        {
+            if (!engine.TryFindFile(entry.RelativePath, out ProsperoInnerPfsReader.Entry inner))
+                throw new InvalidDataException($"The PFS entry '{entry.RelativePath}' is not present in the reconstructed image.");
+            return engine.ReadFileRange(inner, offset, count);
+        }
+
         byte[] output = new byte[count];
         using var stream = new FileStream(packagePath, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.RandomAccess);

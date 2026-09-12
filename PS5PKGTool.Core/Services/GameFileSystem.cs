@@ -1,6 +1,7 @@
 using PS5PKGTool.Core.Models;
 using PS5PKGTool.Core.Parsers;
 using PS5PKGTool.Ffpfsc;
+using ProsperoPkgTool.Containers;
 using UFS2Tool;
 
 namespace PS5PKGTool.Core.Services;
@@ -111,12 +112,54 @@ public static class GameFileSystem
         private readonly string _path;
         private readonly Dictionary<string, Segment[]> _segments;
         private readonly SonyPfsCryptoContext? _cryptoContext;
+        private readonly SonyEnginePackageAccess? _engine;
+        private readonly Dictionary<string, (uint Id, long Size)>? _cntEntries;
 
         public SonyPackageGameFileSystem(Ps5GameInfo game)
         {
             _path = Path.GetFullPath(game.RootPath);
-            SonyPkgSummary package = game.Package ?? new Parsers.SonyPkgReader().Read(_path);
+            SonyPkgSummary package = ResolveSonyPackage(game, _path);
             _segments = new Dictionary<string, Segment[]>(StringComparer.OrdinalIgnoreCase);
+
+            if (package.NestedPfs?.EngineAccess is { } engine)
+            {
+                _engine = engine;
+
+                // Always expose the plaintext CNT content entries (param.json, param.sfo, artwork,
+                // trophies, activities...). Real packages keep these in the CNT container rather than
+                // the inner PFS, so hiding them whenever the inner image decodes would drop metadata,
+                // artwork, and trophies. The inner PFS wins for any path present in both.
+                ProsperoInnerPfsReader.Entry[] innerFiles = engine.Files.ToArray();
+                bool hasInnerTree = innerFiles.Length > 0;
+
+                _cntEntries = new Dictionary<string, (uint Id, long Size)>(StringComparer.OrdinalIgnoreCase);
+                foreach ((uint id, string path, long size) in engine.ListReadableEntries())
+                {
+                    string relative = NormalizePath(path);
+                    if (relative.Length == 0) continue;
+                    // When a real inner tree is present, merge only logical content paths (for example
+                    // sce_sys/...); the container's internal bookkeeping entries (digests, entry-keys,
+                    // image-key, metas...) are not files a user browses. Without an inner tree the CNT
+                    // is the only source, so everything readable is kept.
+                    if (hasInnerTree && !relative.Contains('/')) continue;
+                    _cntEntries[relative] = (id, size);
+                }
+
+                var records = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                foreach (ProsperoInnerPfsReader.Entry file in innerFiles)
+                {
+                    string relative = NormalizePath(engine.ToRelativePath(file));
+                    if (relative.Length > 0) records[relative] = file.Size;
+                }
+                foreach (KeyValuePair<string, (uint Id, long Size)> pair in _cntEntries)
+                    records.TryAdd(pair.Key, pair.Value.Size);
+
+                Files = records
+                    .Select(pair => new GameFileRecord(pair.Key, pair.Value))
+                    .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                return;
+            }
 
             if (package.NestedPfs?.AccessState == SonyPfsAccessState.PlaintextIndexed)
             {
@@ -138,7 +181,7 @@ public static class GameFileSystem
                 {
                     string path = NormalizePath(entry.DisplayName);
                     if (path.Length == 0 || _segments.ContainsKey(path)) continue;
-                    _segments[path] = [new Segment(checked(package.ContainerOffset + entry.DataOffset), entry.DataSize)];
+                    _segments[path] = [new Segment(checked((long)package.EmbeddedCntOffset + entry.DataOffset), entry.DataSize)];
                 }
             }
 
@@ -146,12 +189,37 @@ public static class GameFileSystem
                 .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
+        private static SonyPkgSummary ResolveSonyPackage(Ps5GameInfo game, string path)
+        {
+            // A manifest-restored package has no live engine access, so re-open it for inner reads.
+            SonyPkgSummary? cached = game.Package;
+            if (cached is not null && (cached.NestedPfs is null || cached.NestedPfs.EngineAccess is not null))
+                return cached;
+            SonyPkgSummary fresh = new Parsers.SonyPkgReader().Read(path);
+            game.Package = fresh;
+            return fresh;
+        }
+
         public IReadOnlyList<GameFileRecord> Files { get; }
-        public bool FileExists(string relativePath) => _segments.ContainsKey(NormalizePath(relativePath));
+        public bool FileExists(string relativePath)
+        {
+            string normalized = NormalizePath(relativePath);
+            if (_engine is not null && _engine.TryFindFile(normalized, out _)) return true;
+            if (_cntEntries is not null && _cntEntries.ContainsKey(normalized)) return true;
+            return _segments.ContainsKey(normalized);
+        }
 
         public Stream OpenRead(string relativePath)
         {
             string normalized = NormalizePath(relativePath);
+            if (_engine is not null)
+            {
+                if (_engine.TryFindFile(normalized, out ProsperoInnerPfsReader.Entry entry))
+                    return _engine.OpenInnerFile(entry);
+                if (_cntEntries is not null && _cntEntries.TryGetValue(normalized, out (uint Id, long Size) info))
+                    return new MemoryStream(_engine.ReadCntEntry(info.Id), writable: false);
+                throw new FileNotFoundException("The selected package file was not found or is encrypted.", normalized);
+            }
             if (!_segments.TryGetValue(normalized, out Segment[]? segments))
                 throw new FileNotFoundException("The selected package file was not found or is encrypted.", normalized);
             var source = new FileStream(_path, FileMode.Open, FileAccess.Read,
@@ -159,7 +227,9 @@ public static class GameFileSystem
             return new SegmentedReadStream(source, segments, _cryptoContext);
         }
 
-        public void Dispose() { }
+        // The engine access is shared/cached, so it is not disposed here; releasing its file handle
+        // lets another process replace the package while this app is not actively reading it.
+        public void Dispose() => _engine?.ReleaseHandles();
     }
 
     private readonly record struct Segment(long Offset, long Length, int BlockIndex = 0,

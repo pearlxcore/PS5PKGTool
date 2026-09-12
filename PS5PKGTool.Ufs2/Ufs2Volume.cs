@@ -256,7 +256,8 @@ public static class Ufs2Operations
 
     public static async Task<Ufs2VerificationResult> CreateFromDirectoryAsync(string sourceDirectory,
         string outputPath, string? volumeName = null, IProgress<Ufs2Progress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, int blockSize = 32768, int fragmentSize = 4096,
+        int bytesPerInode = 262144, int minFreePercent = 0)
     {
         string source = Path.GetFullPath(sourceDirectory);
         string output = Path.GetFullPath(outputPath);
@@ -274,9 +275,12 @@ public static class Ufs2Operations
                 {
                     FilesystemFormat = 2,
                     SectorSize = 4096,
-                    BlockSize = 32768,
-                    FragmentSize = 4096,
-                    MinFreePercent = 0,
+                    BlockSize = blockSize,
+                    FragmentSize = fragmentSize,
+                    BytesPerInode = bytesPerInode,
+                    SizeSlackPercent = 2.0,
+                    SizeSlackBytes = 2 * 1024 * 1024,
+                    MinFreePercent = minFreePercent,
                     SoftUpdates = false,
                     SoftUpdatesJournal = false,
                     OptimizationPreference = "space",

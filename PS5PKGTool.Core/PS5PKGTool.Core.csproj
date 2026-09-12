@@ -13,4 +13,10 @@
     <ProjectReference Include="..\PS5PKGTool.Ffpfsc\PS5PKGTool.Ffpfsc.csproj" />
     <ProjectReference Include="..\PS5PKGTool.Ufs2\PS5PKGTool.Ufs2.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Reference Include="ProsperoPkgTool">
+      <HintPath>..\PS5PKGTool\ThirdParty\ProsperoPkgTool\ProsperoPkgTool.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
 </Project>

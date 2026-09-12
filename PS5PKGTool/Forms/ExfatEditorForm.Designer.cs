@@ -6,12 +6,13 @@ partial class ExfatEditorForm
 {
     private System.ComponentModel.IContainer? components = null;
     private DarkUI.Controls.DarkLabel lblImage = null!;
-    private SplitContainer splitEditor = null!;
+    private DarkUI.Controls.DarkSplitContainer splitEditor = null!;
+    private DarkUI.Controls.DarkSplitPane splitEditorPane1 = null!;
+    private DarkUI.Controls.DarkSplitPane splitEditorPane2 = null!;
     private DarkUI.Controls.DarkSectionPanel sectionEntries = null!;
     private DarkUI.Controls.DarkDataGridView gridEntries = null!;
     private DarkUI.Controls.DarkSectionPanel sectionChanges = null!;
     private DarkUI.Controls.DarkListBox lstChanges = null!;
-    private Panel commandPanel = null!;
     private DarkUI.Controls.DarkLabel lblTarget = null!;
     private DarkUI.Controls.DarkTextBox txtTarget = null!;
     private DarkUI.Controls.DarkButton btnReplace = null!;
@@ -37,14 +38,16 @@ partial class ExfatEditorForm
 
     private void InitializeComponent()
     {
+        System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ExfatEditorForm));
         components = new System.ComponentModel.Container();
         lblImage = new DarkUI.Controls.DarkLabel();
-        splitEditor = new SplitContainer();
+        splitEditor = new DarkUI.Controls.DarkSplitContainer();
+        splitEditorPane1 = new DarkUI.Controls.DarkSplitPane();
+        splitEditorPane2 = new DarkUI.Controls.DarkSplitPane();
         sectionEntries = new DarkUI.Controls.DarkSectionPanel();
         gridEntries = new DarkUI.Controls.DarkDataGridView();
         sectionChanges = new DarkUI.Controls.DarkSectionPanel();
         lstChanges = new DarkUI.Controls.DarkListBox();
-        commandPanel = new Panel();
         lblTarget = new DarkUI.Controls.DarkLabel();
         txtTarget = new DarkUI.Controls.DarkTextBox();
         btnReplace = new DarkUI.Controls.DarkButton();
@@ -61,14 +64,12 @@ partial class ExfatEditorForm
         replacementOpenDialog = new OpenFileDialog();
         addFilesOpenDialog = new OpenFileDialog();
         addFolderDialog = new FolderBrowserDialog();
-        ((System.ComponentModel.ISupportInitialize)splitEditor).BeginInit();
-        splitEditor.Panel1.SuspendLayout();
-        splitEditor.Panel2.SuspendLayout();
         splitEditor.SuspendLayout();
+        splitEditorPane1.SuspendLayout();
+        splitEditorPane2.SuspendLayout();
         sectionEntries.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)gridEntries).BeginInit();
         sectionChanges.SuspendLayout();
-        commandPanel.SuspendLayout();
         SuspendLayout();
         // 
         // lblImage
@@ -85,11 +86,13 @@ partial class ExfatEditorForm
         // 
         splitEditor.Dock = DockStyle.Fill;
         splitEditor.Location = new Point(10, 42);
+        splitEditor.Controls.Add(splitEditorPane1);
+        splitEditor.Controls.Add(splitEditorPane2);
         splitEditor.Name = "splitEditor";
-        splitEditor.Panel1.Controls.Add(sectionEntries);
-        splitEditor.Panel2.Controls.Add(sectionChanges);
+        splitEditorPane1.Controls.Add(sectionEntries);
+        splitEditorPane2.Controls.Add(sectionChanges);
         splitEditor.Size = new Size(1164, 530);
-        splitEditor.SplitterDistance = 780;
+        splitEditor.PanelSizes = new int[] { 780, 384 };
         // 
         // sectionEntries
         // 
@@ -102,6 +105,7 @@ partial class ExfatEditorForm
         // 
         gridEntries.AllowUserToAddRows = false;
         gridEntries.AllowUserToDeleteRows = false;
+        gridEntries.AllowUserToDragDropRows = false;
         gridEntries.AllowUserToOrderColumns = true;
         gridEntries.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridEntries.Dock = DockStyle.Fill;
@@ -127,30 +131,10 @@ partial class ExfatEditorForm
         lstChanges.ItemHeight = 18;
         lstChanges.Name = "lstChanges";
         // 
-        // commandPanel
-        // 
-        commandPanel.BackColor = Color.FromArgb(45, 45, 48);
-        commandPanel.Controls.Add(lblTarget);
-        commandPanel.Controls.Add(txtTarget);
-        commandPanel.Controls.Add(btnReplace);
-        commandPanel.Controls.Add(btnAddFiles);
-        commandPanel.Controls.Add(btnAddFolder);
-        commandPanel.Controls.Add(btnNewDirectory);
-        commandPanel.Controls.Add(btnDelete);
-        commandPanel.Controls.Add(btnUndo);
-        commandPanel.Controls.Add(progressEdit);
-        commandPanel.Controls.Add(lblStatus);
-        commandPanel.Controls.Add(btnApply);
-        commandPanel.Controls.Add(btnCancelOperation);
-        commandPanel.Controls.Add(btnClose);
-        commandPanel.Dock = DockStyle.Bottom;
-        commandPanel.Location = new Point(10, 572);
-        commandPanel.Name = "commandPanel";
-        commandPanel.Size = new Size(1164, 150);
-        // 
         // lblTarget
         // 
-        lblTarget.Location = new Point(8, 8);
+        lblTarget.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        lblTarget.Location = new Point(18, 580);
         lblTarget.Name = "lblTarget";
         lblTarget.Size = new Size(130, 25);
         lblTarget.Text = "Target directory:";
@@ -158,15 +142,16 @@ partial class ExfatEditorForm
         // 
         // txtTarget
         // 
-        txtTarget.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        txtTarget.Location = new Point(140, 8);
+        txtTarget.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        txtTarget.Location = new Point(150, 580);
         txtTarget.Name = "txtTarget";
         txtTarget.PlaceholderText = "Root is empty; use forward slashes for nested paths";
         txtTarget.Size = new Size(1016, 25);
         // 
         // btnReplace
         // 
-        btnReplace.Location = new Point(8, 40);
+        btnReplace.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        btnReplace.Location = new Point(18, 612);
         btnReplace.Name = "btnReplace";
         btnReplace.Size = new Size(120, 29);
         btnReplace.Text = "Replace File...";
@@ -174,7 +159,8 @@ partial class ExfatEditorForm
         // 
         // btnAddFiles
         // 
-        btnAddFiles.Location = new Point(134, 40);
+        btnAddFiles.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        btnAddFiles.Location = new Point(144, 612);
         btnAddFiles.Name = "btnAddFiles";
         btnAddFiles.Size = new Size(120, 29);
         btnAddFiles.Text = "Add Files...";
@@ -182,7 +168,8 @@ partial class ExfatEditorForm
         // 
         // btnAddFolder
         // 
-        btnAddFolder.Location = new Point(260, 40);
+        btnAddFolder.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        btnAddFolder.Location = new Point(270, 612);
         btnAddFolder.Name = "btnAddFolder";
         btnAddFolder.Size = new Size(120, 29);
         btnAddFolder.Text = "Add Folder...";
@@ -190,7 +177,8 @@ partial class ExfatEditorForm
         // 
         // btnNewDirectory
         // 
-        btnNewDirectory.Location = new Point(386, 40);
+        btnNewDirectory.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        btnNewDirectory.Location = new Point(396, 612);
         btnNewDirectory.Name = "btnNewDirectory";
         btnNewDirectory.Size = new Size(130, 29);
         btnNewDirectory.Text = "New Target Folder";
@@ -198,7 +186,8 @@ partial class ExfatEditorForm
         // 
         // btnDelete
         // 
-        btnDelete.Location = new Point(522, 40);
+        btnDelete.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        btnDelete.Location = new Point(532, 612);
         btnDelete.Name = "btnDelete";
         btnDelete.Size = new Size(120, 29);
         btnDelete.Text = "Delete Selected";
@@ -206,7 +195,8 @@ partial class ExfatEditorForm
         // 
         // btnUndo
         // 
-        btnUndo.Location = new Point(648, 40);
+        btnUndo.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+        btnUndo.Location = new Point(658, 612);
         btnUndo.Name = "btnUndo";
         btnUndo.Size = new Size(120, 29);
         btnUndo.Text = "Undo Last";
@@ -214,17 +204,17 @@ partial class ExfatEditorForm
         // 
         // progressEdit
         // 
-        progressEdit.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        progressEdit.Location = new Point(8, 78);
+        progressEdit.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        progressEdit.Location = new Point(18, 650);
         progressEdit.Name = "progressEdit";
         progressEdit.Size = new Size(1148, 22);
         progressEdit.TextMode = DarkUI.Controls.DarkProgressBarMode.Percentage;
         // 
         // lblStatus
         // 
-        lblStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        lblStatus.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         lblStatus.AutoEllipsis = true;
-        lblStatus.Location = new Point(8, 105);
+        lblStatus.Location = new Point(18, 677);
         lblStatus.Name = "lblStatus";
         lblStatus.Size = new Size(730, 32);
         lblStatus.Text = "Queue changes, then Apply. Structural changes use a verified transactional rebuild.";
@@ -232,8 +222,8 @@ partial class ExfatEditorForm
         // 
         // btnApply
         // 
-        btnApply.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnApply.Location = new Point(786, 108);
+        btnApply.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+        btnApply.Location = new Point(796, 680);
         btnApply.Name = "btnApply";
         btnApply.Size = new Size(120, 31);
         btnApply.Text = "Apply Changes";
@@ -241,9 +231,9 @@ partial class ExfatEditorForm
         // 
         // btnCancelOperation
         // 
-        btnCancelOperation.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnCancelOperation.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         btnCancelOperation.Enabled = false;
-        btnCancelOperation.Location = new Point(912, 108);
+        btnCancelOperation.Location = new Point(922, 680);
         btnCancelOperation.Name = "btnCancelOperation";
         btnCancelOperation.Size = new Size(112, 31);
         btnCancelOperation.Text = "Cancel";
@@ -251,9 +241,9 @@ partial class ExfatEditorForm
         // 
         // btnClose
         // 
-        btnClose.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnClose.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         btnClose.DialogResult = DialogResult.Cancel;
-        btnClose.Location = new Point(1030, 108);
+        btnClose.Location = new Point(1040, 680);
         btnClose.Name = "btnClose";
         btnClose.Size = new Size(126, 31);
         btnClose.Text = "Close";
@@ -283,22 +273,33 @@ partial class ExfatEditorForm
         CancelButton = btnClose;
         ClientSize = new Size(1184, 732);
         Controls.Add(splitEditor);
-        Controls.Add(commandPanel);
+        Controls.Add(lblTarget);
+        Controls.Add(txtTarget);
+        Controls.Add(btnReplace);
+        Controls.Add(btnAddFiles);
+        Controls.Add(btnAddFolder);
+        Controls.Add(btnNewDirectory);
+        Controls.Add(btnDelete);
+        Controls.Add(btnUndo);
+        Controls.Add(progressEdit);
+        Controls.Add(lblStatus);
+        Controls.Add(btnApply);
+        Controls.Add(btnCancelOperation);
+        Controls.Add(btnClose);
         Controls.Add(lblImage);
         MinimumSize = new Size(950, 650);
+        Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
         Name = "ExfatEditorForm";
-        Padding = new Padding(10);
+        Padding = new Padding(10, 10, 10, 160);
         StartPosition = FormStartPosition.CenterParent;
         Text = "exFAT Image Editor";
         FormClosing += ExfatEditorForm_FormClosing;
-        splitEditor.Panel1.ResumeLayout(false);
-        splitEditor.Panel2.ResumeLayout(false);
-        ((System.ComponentModel.ISupportInitialize)splitEditor).EndInit();
+        splitEditorPane1.ResumeLayout(false);
+        splitEditorPane2.ResumeLayout(false);
         splitEditor.ResumeLayout(false);
         sectionEntries.ResumeLayout(false);
         ((System.ComponentModel.ISupportInitialize)gridEntries).EndInit();
         sectionChanges.ResumeLayout(false);
-        commandPanel.ResumeLayout(false);
         ResumeLayout(false);
     }
 }

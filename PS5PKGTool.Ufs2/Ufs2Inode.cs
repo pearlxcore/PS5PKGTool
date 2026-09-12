@@ -65,15 +65,15 @@ namespace UFS2Tool
             writer.Write(Flags);             // 0x58 (4 bytes)
             writer.Write(ExtSize);           // 0x5C (4 bytes)
 
-            // Extended attribute blocks (2 Ã— int64) - reserved
+            // Extended attribute blocks (2 Ã- int64) - reserved
             writer.Write(0L);                // 0x60
             writer.Write(0L);                // 0x68
 
-            // Direct block pointers: 12 Ã— int64 = 96 bytes
+            // Direct block pointers: 12 Ã- int64 = 96 bytes
             for (int i = 0; i < Ufs2Constants.NDirect; i++)
                 writer.Write(DirectBlocks[i]);
 
-            // Indirect block pointers: 3 Ã— int64 = 24 bytes
+            // Indirect block pointers: 3 Ã- int64 = 24 bytes
             for (int i = 0; i < Ufs2Constants.NIndirect; i++)
                 writer.Write(IndirectBlocks[i]);
 

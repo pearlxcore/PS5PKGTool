@@ -1,0 +1,211 @@
+namespace PS5PKGTool.Core.Tasks;
+
+/// <summary>Lifecycle state of a queued operation. <see cref="Interrupted"/> is used when a task
+/// was running in a previous session and could not be resumed.</summary>
+public enum PackageTaskStatus
+{
+    Queued,
+    Running,
+    Cancelling,
+    Completed,
+    Failed,
+    Cancelled,
+    Interrupted
+}
+
+/// <summary>Progress snapshot for a running task. <see cref="OperationPercent"/> is the progress of
+/// the active step; <see cref="TaskPercent"/> is progress across the task's steps.</summary>
+public readonly record struct PackageTaskProgress(
+    string Stage,
+    int Step = 0,
+    int TotalSteps = 0,
+    long CurrentBytes = 0,
+    long TotalBytes = 0,
+    int CurrentItem = 0,
+    int TotalItems = 0,
+    string CurrentFile = "",
+    double StagePercent = -1)
+{
+    public static readonly PackageTaskProgress Empty = new(string.Empty);
+
+    /// <summary>Percent within the current step, derived from the most useful counter pair.</summary>
+    public double OperationPercent => StagePercent >= 0
+        ? Math.Clamp(StagePercent, 0d, 1d)
+        : TotalBytes > 0
+            ? Math.Clamp((double)CurrentBytes / TotalBytes, 0d, 1d)
+            : TotalItems > 0
+                ? Math.Clamp((double)CurrentItem / TotalItems, 0d, 1d)
+                : TotalSteps > 0
+                    ? Math.Clamp((double)Step / TotalSteps, 0d, 1d)
+                    : 0d;
+
+    /// <summary>Fraction of the task's steps completed; single-step tasks mirror the step percent.</summary>
+    public double TaskPercent => TotalSteps > 1
+        ? Math.Clamp((double)Step / TotalSteps, 0d, 1d)
+        : OperationPercent;
+
+    /// <summary>Backward-compatible alias for the current step percent.</summary>
+    public double Percent => OperationPercent;
+}
+
+/// <summary>
+/// One named step of a task. A reported stage is matched to a step through <see cref="Keywords"/>
+/// (case-insensitive substring); unmatched reports fall back to the last matched step.
+/// </summary>
+public sealed class PackageTaskStage
+{
+    public PackageTaskStage(string name, params string[] keywords)
+    {
+        Name = name;
+        Keywords = keywords;
+    }
+
+    public string Name { get; }
+    public string[] Keywords { get; }
+}
+
+/// <summary>Declarative step lists used to turn stage-relative reports into task step progress.</summary>
+public static class PackageTaskPlans
+{
+    public static readonly PackageTaskStage[] Single = [];
+    public static readonly PackageTaskStage[] Extract = [new("Extract")];
+    public static readonly PackageTaskStage[] Verify = [new("Verify")];
+    public static readonly PackageTaskStage[] Build = [new("Build")];
+
+    public static readonly PackageTaskStage[] ConvertImage =
+    [
+        new("Extract", "extract", "reading"),
+        new("Build", "build", "creating", "writing"),
+        new("Verify", "verif", "check", "compar")
+    ];
+
+    public static readonly PackageTaskStage[] ConvertPackage =
+    [
+        new("Extract", "extract", "reading"),
+        new("Build", "build", "creating", "writing"),
+        new("Verify", "verif", "check", "compar")
+    ];
+
+    public static readonly PackageTaskStage[] BuildPackage =
+    [
+        new("Read", "reading image filesystem"),
+        new("Build", "build", "inner image", "outer pfs", "creating", "writing")
+    ];
+
+    public static readonly PackageTaskStage[] Ampr =
+    [
+        new("Build index", "building"),
+        new("Write index", "writing")
+    ];
+
+    public static readonly PackageTaskStage[] BuildAndVerify =
+    [
+        new("Build", "build", "creating", "writing"),
+        new("Verify", "verif", "check", "compar")
+    ];
+}
+
+/// <summary>
+/// Wraps a task progress sink and annotates raw reports with the current step and step count from
+/// a <see cref="PackageTaskStage"/> plan. Tasks without a plan are treated as a single step.
+/// </summary>
+public sealed class PackageTaskProgressTracker : IProgress<PackageTaskProgress>
+{
+    private readonly IProgress<PackageTaskProgress> _sink;
+    private readonly PackageTaskStage[] _stages;
+    private int _stageIndex = -1;
+
+    public PackageTaskProgressTracker(IProgress<PackageTaskProgress> sink, PackageTaskStage[]? plan = null)
+    {
+        _sink = sink ?? throw new ArgumentNullException(nameof(sink));
+        _stages = plan is { Length: > 0 } ? plan : [];
+    }
+
+    public void Report(PackageTaskProgress value)
+    {
+        double stageFraction = value.OperationPercent;
+        int index = ResolveStage(value.Stage);
+        int steps = _stages.Length > 0 ? _stages.Length : 1;
+        int step = index < 0 ? 0 : index;
+        _sink.Report(value with { Step = step, TotalSteps = steps, StagePercent = stageFraction });
+    }
+
+    private int ResolveStage(string raw)
+    {
+        if (_stages.Length == 0) return -1;
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            for (int i = 0; i < _stages.Length; i++)
+            {
+                foreach (string keyword in _stages[i].Keywords)
+                {
+                    if (raw.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (i > _stageIndex) _stageIndex = i;
+                        return _stageIndex;
+                    }
+                }
+            }
+        }
+        return _stageIndex;
+    }
+}
+
+/// <summary>
+/// One unit of work in the <see cref="PackageTaskQueue"/>. Tasks are deliberately UI-agnostic:
+/// the queue owns sequencing, cancellation, retry and persistence, while the executable action is
+/// injected by the caller. Persistence carries an opaque <see cref="PersistencePayload"/> so the
+/// owning feature can reconstruct the action after a restart.
+/// </summary>
+public sealed class QueuedPackageTask
+{
+    public required string Id { get; init; }
+    public required string Type { get; init; }
+    public required string DisplayName { get; init; }
+    public string SourcePath { get; init; } = string.Empty;
+    public string OutputPath { get; init; } = string.Empty;
+    public string? PersistencePayload { get; init; }
+
+    /// <summary>Coarse operation label, for example "Convert" or "Build package".</summary>
+    public string Operation { get; init; } = string.Empty;
+
+    /// <summary>Human-readable source format, for example "FFPKG" or "dump".</summary>
+    public string SourceFormat { get; init; } = string.Empty;
+
+    /// <summary>Human-readable target format, for example "FFPFSC".</summary>
+    public string TargetFormat { get; init; } = string.Empty;
+
+    /// <summary>Weighted stages used to compute task-overall progress; empty means single-stage.</summary>
+    public PackageTaskStage[] StagePlan { get; init; } = [];
+
+    /// <summary>The action this task runs when dequeued. Supplied by the owning feature.</summary>
+    public Func<IProgress<PackageTaskProgress>, CancellationToken, Task>? Execute { get; init; }
+
+    public PackageTaskStatus Status { get; internal set; } = PackageTaskStatus.Queued;
+    public PackageTaskProgress Progress { get; internal set; }
+    public string Message { get; internal set; } = string.Empty;
+    public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
+    public DateTime? StartedUtc { get; internal set; }
+    public DateTime? CompletedUtc { get; internal set; }
+
+    internal CancellationTokenSource? Cancellation { get; set; }
+
+    public event EventHandler? Changed;
+
+    public bool IsTerminal => Status is PackageTaskStatus.Completed or PackageTaskStatus.Failed
+        or PackageTaskStatus.Cancelled or PackageTaskStatus.Interrupted;
+
+    public string FormatRoute => SourceFormat.Length > 0 && TargetFormat.Length > 0
+        ? $"{SourceFormat} \u2192 {TargetFormat}"
+        : string.Empty;
+
+    internal void Apply(PackageTaskStatus status, string? message = null, PackageTaskProgress? progress = null)
+    {
+        Status = status;
+        if (message is not null) Message = message;
+        if (progress is not null) Progress = progress.Value;
+        if (status == PackageTaskStatus.Running) StartedUtc ??= DateTime.UtcNow;
+        if (IsTerminal) CompletedUtc ??= DateTime.UtcNow;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+}

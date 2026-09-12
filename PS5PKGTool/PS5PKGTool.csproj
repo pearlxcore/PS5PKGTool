@@ -9,9 +9,12 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>PS5 PKG Tool</AssemblyName>
     <RootNamespace>PS5PKGTool</RootNamespace>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <FileVersion>1.0.0.0</FileVersion>
     <Product>PS5 PKG Tool</Product>
     <Company>pearlxcore</Company>
-    <Copyright>Copyright © pearlxcore</Copyright>
+    <Copyright>Copyright (c) pearlxcore</Copyright>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PS5PKGTool.Core\PS5PKGTool.Core.csproj" />
@@ -25,5 +28,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\*.png" />
+    <EmbeddedResource Include="icon.ico">
+      <LogicalName>PS5PKGTool.icon.ico</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

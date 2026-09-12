@@ -51,11 +51,11 @@ namespace UFS2Tool
             writer.Write(ChangeTime);        // 0x20 (4 bytes)
             writer.Write(CTimeNsec);         // 0x24 (4 bytes)
 
-            // Direct block pointers: 12 Ã— int32 = 48 bytes
+            // Direct block pointers: 12 Ã- int32 = 48 bytes
             for (int i = 0; i < Ufs2Constants.NDirect; i++)
                 writer.Write(DirectBlocks[i]);
 
-            // Indirect block pointers: 3 Ã— int32 = 12 bytes
+            // Indirect block pointers: 3 Ã- int32 = 12 bytes
             for (int i = 0; i < Ufs2Constants.NIndirect; i++)
                 writer.Write(IndirectBlocks[i]);
 

@@ -57,10 +57,11 @@ public sealed class FfpfscInfo
 
 public sealed class FfpfscVerificationResult
 {
-    public required FfpfscInfo Info { get; init; }
+    public FfpfscInfo? Info { get; init; }
     public required bool StructureValid { get; init; }
     public required bool EveryPfscBlockDecodes { get; init; }
     public bool? SourceMatches { get; init; }
     public string? SourceSha256 { get; init; }
     public string? DecodedSha256 { get; init; }
+    public string? Error { get; init; }
 }

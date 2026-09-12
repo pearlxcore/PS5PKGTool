@@ -82,7 +82,7 @@ internal static class NativeFfpfscSmoke
             Require(ffpfscGame.SourceKind == Ps5SourceKind.Ffpfsc && ffpfscGame.TitleId == "PPSA00002",
                 "The library reader did not load FFPFSC param.json metadata.");
             Ps5GameDetails ffpfscDetails = await new Ps5DetailsLoader().LoadAsync(ffpfscGame);
-            Require(ffpfscDetails.Files.FileCount == 3 && ffpfscDetails.IconPng is { Length: 40_000 },
+            Require(ffpfscDetails.Files.FileCount == 3 && ffpfscDetails.Icon is { Bytes.Length: 40_000 },
                 "The details loader did not read the FFPFSC inventory and artwork bytes.");
             GameFileChunk ffpfscChunk = GameFileSystem.ReadFileChunk(ffpfscGame, "eboot.bin", 65_530, 32);
             Require(ffpfscChunk.Offset == 65_530 && ffpfscChunk.FileSize == 180_000 &&

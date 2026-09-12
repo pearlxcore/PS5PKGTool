@@ -6,42 +6,65 @@ namespace PS5PKGTool.Ffpfsc;
 public enum FfpfscInnerFilesystemKind
 {
     Exfat,
-    Ufs2
+    Ufs2,
+    /// <summary>The inner payload is itself a PFS container (nested FFPFSC/FFPFS).</summary>
+    Pfs
 }
 
 public sealed record FfpfscVolumeEntry(string Path, bool IsDirectory, long Size);
 
-/// <summary>Opens the inner exFAT or UFS2 filesystem of an FFPFSC image without extracting it.</summary>
+/// <summary>
+/// Opens the inner payload of an FFPFSC image without extracting it. The inner filesystem is
+/// detected by signature (exFAT, UFS2) so wrapped payloads do not depend on the inner file name.
+/// Nested PFS payloads are exposed through <see cref="PayloadStream"/> for recursive unwrapping.
+/// </summary>
 public sealed class FfpfscVolume : IDisposable
 {
-    private readonly FileStream _container;
+    private readonly Stream _container;
     private readonly PfscReadStream _decoded;
     private readonly ExfatVolume? _exfat;
     private readonly Ufs2Volume? _ufs2;
+    private readonly bool _leaveContainerOpen;
     private bool _disposed;
 
     private FfpfscVolume(string path)
+        : this(new FileStream(System.IO.Path.GetFullPath(path), FileMode.Open, FileAccess.Read, FileShare.Read,
+            1024 * 1024, FileOptions.RandomAccess), System.IO.Path.GetFullPath(path), leaveContainerOpen: false)
     {
-        Path = System.IO.Path.GetFullPath(path);
-        _container = new FileStream(Path, FileMode.Open, FileAccess.Read, FileShare.Read,
-            1024 * 1024, FileOptions.RandomAccess);
+    }
+
+    private FfpfscVolume(Stream container, string displayPath, bool leaveContainerOpen)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        Path = displayPath;
+        _container = container;
+        _leaveContainerOpen = leaveContainerOpen;
         try
         {
             Info = FfpfscImage.Inspect(_container);
             _decoded = new PfscReadStream(_container, Info.Pfsc, Info.PayloadOffset, Info.LogicalLength, leaveOpen: true);
-            if (System.IO.Path.GetExtension(Info.InnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase))
+
+            Ps5ImageFormat format = Ps5ImageFormatProbe.Detect(_decoded);
+            switch (format)
             {
-                _ufs2 = new Ufs2Volume(_decoded, Path + "!" + Info.InnerFileName, leaveOpen: true);
-                InnerFilesystemKind = FfpfscInnerFilesystemKind.Ufs2;
-                Entries = _ufs2.Entries.Select(entry =>
-                    new FfpfscVolumeEntry(entry.Path, entry.IsDirectory, entry.Size)).ToArray();
-            }
-            else
-            {
-                _exfat = new ExfatVolume(_decoded, leaveOpen: true);
-                InnerFilesystemKind = FfpfscInnerFilesystemKind.Exfat;
-                Entries = _exfat.Entries.Select(entry =>
-                    new FfpfscVolumeEntry(entry.Path, entry.IsDirectory, entry.Size)).ToArray();
+                case Ps5ImageFormat.Ufs2:
+                    _ufs2 = new Ufs2Volume(_decoded, Path + "!" + Info.InnerFileName, leaveOpen: true);
+                    InnerFilesystemKind = FfpfscInnerFilesystemKind.Ufs2;
+                    Entries = _ufs2.Entries
+                        .Select(entry => new FfpfscVolumeEntry(entry.Path, entry.IsDirectory, entry.Size))
+                        .ToArray();
+                    break;
+                case Ps5ImageFormat.Pfs:
+                    InnerFilesystemKind = FfpfscInnerFilesystemKind.Pfs;
+                    Entries = [new FfpfscVolumeEntry(Info.InnerFileName, false, Info.LogicalLength)];
+                    break;
+                default:
+                    _exfat = new ExfatVolume(_decoded, leaveOpen: true);
+                    InnerFilesystemKind = FfpfscInnerFilesystemKind.Exfat;
+                    Entries = _exfat.Entries
+                        .Select(entry => new FfpfscVolumeEntry(entry.Path, entry.IsDirectory, entry.Size))
+                        .ToArray();
+                    break;
             }
         }
         catch
@@ -49,7 +72,7 @@ public sealed class FfpfscVolume : IDisposable
             _ufs2?.Dispose();
             _exfat?.Dispose();
             _decoded?.Dispose();
-            _container.Dispose();
+            if (!leaveContainerOpen) _container.Dispose();
             throw;
         }
     }
@@ -58,7 +81,10 @@ public sealed class FfpfscVolume : IDisposable
     public FfpfscInfo Info { get; }
     public FfpfscInnerFilesystemKind InnerFilesystemKind { get; }
     public IReadOnlyList<FfpfscVolumeEntry> Entries { get; } = [];
-    public ExfatVolume FileSystem => _exfat ?? throw new InvalidOperationException("The inner filesystem is UFS2.");
+    public ExfatVolume FileSystem => _exfat ?? throw new InvalidOperationException("The inner filesystem is not exFAT.");
+
+    /// <summary>The decoded inner payload stream (seekable). Used to unwrap nested PFS containers.</summary>
+    public Stream PayloadStream => _decoded;
 
     public static FfpfscVolume Open(string path)
     {
@@ -66,12 +92,20 @@ public sealed class FfpfscVolume : IDisposable
         return new FfpfscVolume(path);
     }
 
+    public static FfpfscVolume Open(Stream container, string displayPath, bool leaveOpen = false)
+    {
+        ArgumentNullException.ThrowIfNull(container);
+        return new FfpfscVolume(container, displayPath, leaveOpen);
+    }
+
     public FfpfscVolumeEntry? Find(string path)
     {
         string normalized = path.Replace('\\', '/').Trim('/');
         return Entries.FirstOrDefault(entry => entry.Path.Equals(normalized, StringComparison.OrdinalIgnoreCase));
     }
+
     public Stream OpenFile(string path) => _ufs2 is not null ? _ufs2.OpenFile(path) : _exfat!.OpenFile(path);
+
     public byte[] ReadAllBytes(string path, int maximumBytes = 256 * 1024 * 1024)
     {
         FfpfscVolumeEntry entry = Find(path) ?? throw new FileNotFoundException("The file was not found in FFPFSC.", path);
@@ -83,6 +117,7 @@ public sealed class FfpfscVolume : IDisposable
         input.ReadExactly(result);
         return result;
     }
+
     public string ReadAllText(string path, Encoding? encoding = null, int maximumBytes = 16 * 1024 * 1024) =>
         (encoding ?? new UTF8Encoding(false, true)).GetString(ReadAllBytes(path, maximumBytes));
 
@@ -92,7 +127,7 @@ public sealed class FfpfscVolume : IDisposable
         _exfat?.Dispose();
         _ufs2?.Dispose();
         _decoded.Dispose();
-        _container.Dispose();
+        if (!_leaveContainerOpen) _container.Dispose();
         _disposed = true;
     }
 }

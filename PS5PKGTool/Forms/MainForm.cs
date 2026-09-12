@@ -1,12 +1,19 @@
 using System.Data;
 using System.Diagnostics;
+using System.Net.Http;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using DarkUI.Controls;
+using DarkUI.Config;
 using DarkUI.Forms;
+using PS5PKGTool.Core.Assets;
 using PS5PKGTool.Core.Builders;
 using PS5PKGTool.Core.Models;
 using PS5PKGTool.Core.Parsers;
 using PS5PKGTool.Core.Services;
+using PS5PKGTool.Core.Tasks;
 using PS5PKGTool.Ffpfsc;
 using PS5PKGTool.Infrastructure;
 using UFS2Tool;
@@ -21,60 +28,157 @@ public partial class MainForm : DarkForm
     private readonly Dictionary<string, Ps5GameDetails> _detailsCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, TreeNode> _directoryNodes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, List<Ps5FileInfo>> _filesByDirectory = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _directorySizes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _populatedDetailTabs = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<Image> _trophyImages = [];
+    private Ps5GameDetails? _currentDetails;
+    private Ps5Artwork? _currentArtwork;
+    private Ps5UdsSummary? _udsSummary;
+    private Ps5SelfInfo? _selfInfo;
+    private DataView? _trophyView;
+    private int _fileSortColumn;
+    private bool _fileSortAscending = true;
+    private string _currentDetailsRoot = string.Empty;
     private AppSettings _settings = new();
     private List<Ps5GameInfo> _games = [];
     private List<Ps5GameInfo> _visibleGames = [];
     private CancellationTokenSource? _scanCancellation;
     private CancellationTokenSource? _detailCancellation;
-    private CancellationTokenSource? _ffpfscCancellation;
-    private CancellationTokenSource? _exfatCancellation;
-    private CancellationTokenSource? _ffpkgCancellation;
-    private CancellationTokenSource? _sonyPkgCancellation;
     private CancellationTokenSource? _fileCancellation;
     private CancellationTokenSource? _filePreviewCancellation;
     private Ps5GameInfo? _selectedGame;
-    private string _lastFfpfscPath = string.Empty;
-    private string _lastExfatPath = string.Empty;
-    private string _lastFfpkgPath = string.Empty;
-    private string _lastSonyPkgPath = string.Empty;
     private string _currentGameRoot = string.Empty;
     private readonly string _previewDirectory = Path.Combine(Path.GetTempPath(), "PS5PKGTool", "Preview",
         Environment.ProcessId.ToString());
+    private readonly string? _pendingExternalPath;
     private bool _currentSourceIsContainer;
     private bool _isScanning;
-    private bool _isFfpfscBusy;
-    private bool _isExfatBusy;
-    private bool _isFfpkgBusy;
-    private bool _isSonyPkgBusy;
     private bool _isFileBusy;
     private int _detailVersion;
     private int _filePreviewVersion;
     private long _hexPreviewOffset;
     private FileBrowserEntry? _filePreviewEntry;
     private Ps5FileInfo? _filePreviewInfo;
-    private const int HexPreviewPageSize = 16 * 1024;
+    private int HexPreviewPageSizeBytes => Math.Max(1, _settings.HexPageKb) * 1024;
 
-    public MainForm()
+    public MainForm() : this(null)
     {
-        InitializeComponent();
     }
 
-    private void MainForm_Shown(object? sender, EventArgs e)
+    public MainForm(string? externalPath)
+    {
+        InitializeComponent();
+        Text = $"PS5 PKG Tool v{AppVersion()}";
+        // The WinForms designer cannot serialize the hosted WPF MediaElement, so re-saving the form
+        // drops it. Recreate it here when that happens.
+        if (mediaFileViewer is null)
+        {
+            mediaFileViewer = new System.Windows.Controls.MediaElement();
+            mediaFileHost.Child = mediaFileViewer;
+        }
+        // MediaElement must be Manual to allow imperative Play/Pause/Stop.
+        mediaFileViewer.LoadedBehavior = System.Windows.Controls.MediaState.Manual;
+        mediaFileViewer.UnloadedBehavior = System.Windows.Controls.MediaState.Close;
+        FileIconProvider.Populate(imageListFiles);
+        InitializeTaskQueue();
+        InitializeLibraryTools();
+        RefreshImageTools();
+        _pendingExternalPath = externalPath;
+    }
+
+    private static string AppVersion()
+    {
+        Version? version = typeof(MainForm).Assembly.GetName().Version;
+        if (version is null) return "1.0.0";
+        return version.Build >= 0
+            ? $"{version.Major}.{version.Minor}.{version.Build}"
+            : $"{version.Major}.{version.Minor}";
+    }
+
+    private async void MainForm_Shown(object? sender, EventArgs e)
     {
         _settings = _stateStore.LoadSettings();
-        _games = _stateStore.LoadManifest().Games
-            .Where(game => !string.IsNullOrWhiteSpace(game.RootPath))
-            .Where(game => game.SourceKind != Ps5SourceKind.FilesystemImage ||
-                           Path.GetExtension(game.RootPath).Equals(".exfat", StringComparison.OrdinalIgnoreCase))
-            .Where(game => game.SourceKind != Ps5SourceKind.Ffpkg ||
-                           Path.GetExtension(game.RootPath).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(game => game.Title, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
+        _settings.ManualSources.RemoveAll(path => !File.Exists(path) && !Directory.Exists(path));
+        RestoreWindowBounds();
+        ApplyRuntimeSettings();
+        ApplyDefaultGrouping();
+        SyncFilterControls();
+        RebuildRecentMenu();
+
+        var configured = new List<Ps5GameInfo>();
+        foreach (Ps5GameInfo game in _stateStore.LoadManifest().Games)
+        {
+            if (string.IsNullOrWhiteSpace(game.RootPath)) continue;
+            if (game.SourceKind == Ps5SourceKind.FilesystemImage &&
+                !Path.GetExtension(game.RootPath).Equals(".exfat", StringComparison.OrdinalIgnoreCase)) continue;
+            if (game.SourceKind == Ps5SourceKind.Ffpkg &&
+                !Path.GetExtension(game.RootPath).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase)) continue;
+            if (IsUnderLibrary(game.RootPath) || IsManualSource(game.RootPath)) configured.Add(game);
+        }
+        _games = configured.OrderBy(game => game.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+        _stateStore.SaveManifest(_games);
         ApplyFilter();
         statusLabel.Text = _games.Count == 0
             ? "Add a PS5 dump, PKG, FFPFSC, FFPKG, or exFAT library folder, then choose Refresh."
             : "Loaded cached library. Choose Refresh to rescan folders.";
+
+        if (!string.IsNullOrWhiteSpace(_pendingExternalPath))
+        {
+            string path = _pendingExternalPath;
+            if (File.Exists(path) || Directory.Exists(path))
+            {
+                Logger.Info($"Opening external path: {path}");
+                AddRecentFolder(path);
+                RememberManualSource(path);
+                await ScanAsync([path], merge: true);
+            }
+        }
+        else if (_settings.RefreshOnStartup && ScanRoots().Count > 0)
+        {
+            await ScanAsync(ScanRoots(), merge: false);
+        }
+    }
+
+    private void ApplyRuntimeSettings()
+    {
+        Theme theme = ThemeManager.Presets.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, _settings.Theme, StringComparison.OrdinalIgnoreCase)) ?? ThemeManager.BuiltIn.Default;
+        ThemeManager.Apply(theme);
+
+        gridLibrary.RowTemplate.Height = Math.Max(16, _settings.GridRowHeight);
+        gridLibrary.CellBorderStyle = _settings.ShowGridLines
+            ? DataGridViewCellBorderStyle.Single
+            : DataGridViewCellBorderStyle.None;
+    }
+
+    private void ApplyDefaultGrouping()
+    {
+        _libraryGroupBy = _settings.DefaultGroupBy;
+        foreach ((ToolStripMenuItem item, string key) in _groupItems)
+            item.Checked = string.Equals(key, _libraryGroupBy, StringComparison.Ordinal);
+    }
+
+    private void RestoreWindowBounds()
+    {
+        if (_settings.WindowWidth < 800 || _settings.WindowHeight < 600) return;
+        var bounds = new Rectangle(0, 0, _settings.WindowWidth, _settings.WindowHeight);
+        bool visible = Screen.AllScreens.Any(screen => screen.WorkingArea.IntersectsWith(bounds));
+        if (!visible) return;
+        StartPosition = FormStartPosition.Manual;
+        Size = new Size(_settings.WindowWidth, _settings.WindowHeight);
+        if (_settings.WindowMaximized) WindowState = FormWindowState.Maximized;
+    }
+
+    private void SaveWindowBounds()
+    {
+        Rectangle bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+        if (bounds.Width >= 800 && bounds.Height >= 600)
+        {
+            _settings.WindowWidth = bounds.Width;
+            _settings.WindowHeight = bounds.Height;
+        }
+        _settings.WindowMaximized = WindowState == FormWindowState.Maximized;
+        SaveSettingsQuietly();
     }
 
     private async void AddFolder_Click(object? sender, EventArgs e)
@@ -87,30 +191,62 @@ public partial class MainForm : DarkForm
             _settings.LibraryFolders.Add(selected);
             _stateStore.SaveSettings(_settings);
         }
-        await ScanAsync(_settings.LibraryFolders, merge: false);
+        AddRecentFolder(selected);
+        await ScanAsync(ScanRoots(), merge: false);
     }
 
     private async void OpenDump_Click(object? sender, EventArgs e)
     {
         folderBrowserDialog.Description = "Select the root of an unpacked PS5 game dump";
         if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        AddRecentFolder(folderBrowserDialog.SelectedPath);
+        RememberManualSource(folderBrowserDialog.SelectedPath);
         await ScanAsync([folderBrowserDialog.SelectedPath], merge: true);
     }
 
     private async void OpenPackage_Click(object? sender, EventArgs e)
     {
         if (packageOpenDialog.ShowDialog(this) != DialogResult.OK) return;
+        AddRecentFolder(packageOpenDialog.FileName);
+        RememberManualSource(packageOpenDialog.FileName);
         await ScanAsync([packageOpenDialog.FileName], merge: true);
     }
 
     private async void Refresh_Click(object? sender, EventArgs e)
     {
-        if (_settings.LibraryFolders.Count == 0)
+        IReadOnlyList<string> roots = ScanRoots();
+        Logger.Info($"Refresh requested for {roots.Count} root(s): {string.Join("; ", roots)}");
+        if (roots.Count == 0)
         {
-            DarkMessageBox.ShowInformation("Add at least one PS5 dump library folder in Settings.", "PS5 PKG Tool");
+            AppDialog.ShowInformation("Add at least one PS5 dump library folder in Settings.", "PS5 PKG Tool");
             return;
         }
-        await ScanAsync(_settings.LibraryFolders, merge: false);
+        await ScanAsync(roots, merge: false);
+    }
+
+    private void MainForm_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.F5)
+        {
+            e.Handled = true;
+            Refresh_Click(this, EventArgs.Empty);
+        }
+        else if (e.Control && e.KeyCode == Keys.F)
+        {
+            e.Handled = true;
+            searchLibrary.Focus();
+        }
+        else if (e.KeyCode == Keys.Escape && searchLibrary.ContainsFocus)
+        {
+            e.Handled = true;
+            searchLibrary.SearchText = string.Empty;
+        }
+        else if (e.KeyCode == Keys.Escape && _isFileBusy)
+        {
+            e.Handled = true;
+            _fileCancellation?.Cancel();
+            statusLabel.Text = "Cancelling extraction...";
+        }
     }
 
     private async Task ScanAsync(IEnumerable<string> folders, bool merge)
@@ -128,7 +264,8 @@ public partial class MainForm : DarkForm
 
         try
         {
-            Ps5ScanResult result = await _scanner.ScanAsync(folders, _settings.RecursiveScan, progress, _scanCancellation.Token);
+            Ps5ScanResult result = await _scanner.ScanAsync(folders, _settings.RecursiveScan, _games, progress, _scanCancellation.Token);
+            Logger.Info($"Scan finished: {result.Games.Count} game(s), {result.Errors.Count} warning(s).");
             if (merge)
             {
                 var combined = _games.Concat(result.Games)
@@ -148,7 +285,7 @@ public partial class MainForm : DarkForm
                 ? $"Library refresh complete: {_games.Count:N0} game(s)."
                 : $"Refresh complete with {result.Errors.Count:N0} warning(s).";
             if (result.Errors.Count > 0)
-                DarkMessageBox.ShowWarning(string.Join(Environment.NewLine, result.Errors.Take(12)), "PS5 scan warnings");
+                AppDialog.ShowWarning(string.Join(Environment.NewLine, result.Errors.Take(12)), "PS5 scan warnings");
         }
         catch (OperationCanceledException)
         {
@@ -157,7 +294,7 @@ public partial class MainForm : DarkForm
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             statusLabel.Text = "Library refresh failed.";
-            DarkMessageBox.ShowError(ex.Message, "PS5 library refresh");
+            AppDialog.ShowError(ex.Message, "PS5 library refresh");
         }
         finally
         {
@@ -171,346 +308,33 @@ public partial class MainForm : DarkForm
         UpdateOperationState();
     }
 
-    private void Cancel_Click(object? sender, EventArgs e)
-    {
-        _scanCancellation?.Cancel();
-        _ffpfscCancellation?.Cancel();
-        _exfatCancellation?.Cancel();
-        _ffpkgCancellation?.Cancel();
-        _sonyPkgCancellation?.Cancel();
-        _ffpkgCancellation?.Cancel();
-        _fileCancellation?.Cancel();
-    }
-
-    private async void BuildFfpfsc_Click(object? sender, EventArgs e)
-    {
-        if (sourceImageOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        ffpfscSaveDialog.FileName = Path.GetFileName(sourceImageOpenDialog.FileName) + ".ffpfsc";
-        ffpfscSaveDialog.InitialDirectory = Path.GetDirectoryName(sourceImageOpenDialog.FileName);
-        if (ffpfscSaveDialog.ShowDialog(this) != DialogResult.OK) return;
-
-        string sourcePath = sourceImageOpenDialog.FileName;
-        string outputPath = ffpfscSaveDialog.FileName;
-        _ffpfscCancellation?.Dispose();
-        _ffpfscCancellation = new CancellationTokenSource();
-        SetFfpfscBusy(true);
-        var progress = new Progress<FfpfscProgress>(value =>
-        {
-            double percent = value.TotalBytes == 0 ? 100 : value.BytesProcessed * 100.0 / value.TotalBytes;
-            statusLabel.Text = $"{value.Stage} FFPFSC: {percent:N1}% ({FormatBytes(value.BytesProcessed)} / {FormatBytes(value.TotalBytes)})";
-        });
-
-        try
-        {
-            FfpfscBuildResult result = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.CreateFromImageAsync(sourcePath, outputPath,
-                    new FfpfscBuildOptions { OverwriteExisting = true }, progress, _ffpfscCancellation.Token),
-                _ffpfscCancellation.Token);
-            FfpfscVerificationResult verification = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.VerifyAsync(outputPath, sourcePath, progress, _ffpfscCancellation.Token),
-                _ffpfscCancellation.Token);
-            if (verification.SourceMatches != true)
-                throw new InvalidDataException("The completed FFPFSC image did not match the source image.");
-
-            statusLabel.Text = $"Created and verified {Path.GetFileName(outputPath)}.";
-            DarkMessageBox.ShowInformation(
-                $"Native FFPFSC image created and verified.\n\n" +
-                $"Inner image: {result.InnerFileName}\n" +
-                $"Source: {FormatBytes(result.SourceLength)}\n" +
-                $"PFSC payload: {FormatBytes(result.PfscStoredLength)}\n" +
-                $"Container: {FormatBytes(result.ContainerLength)}\n" +
-                $"Payload saving: {result.PayloadSavingsPercent:N2}%\n" +
-                $"SHA-256: {verification.DecodedSha256}",
-                "FFPFSC conversion complete");
-        }
-        catch (OperationCanceledException)
-        {
-            statusLabel.Text = "FFPFSC conversion cancelled; partial output was removed.";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
-        {
-            statusLabel.Text = "FFPFSC conversion failed.";
-            DarkMessageBox.ShowError(ex.Message, "FFPFSC conversion");
-        }
-        finally
-        {
-            SetFfpfscBusy(false);
-        }
-    }
-
-    private async void BuildDumpFfpfsc_Click(object? sender, EventArgs e)
-    {
-        folderBrowserDialog.Description = "Select the root of an unpacked PS5 game dump";
-        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
-        string sourceDirectory = folderBrowserDialog.SelectedPath;
-        ffpfscSaveDialog.FileName = new DirectoryInfo(sourceDirectory).Name + ".ffpfsc";
-        ffpfscSaveDialog.InitialDirectory = new DirectoryInfo(sourceDirectory).Parent?.FullName;
-        if (ffpfscSaveDialog.ShowDialog(this) != DialogResult.OK) return;
-
-        _ffpfscCancellation?.Dispose();
-        _ffpfscCancellation = new CancellationTokenSource();
-        SetFfpfscBusy(true);
-        var progress = new Progress<FfpfscProgress>(value =>
-        {
-            double percent = value.TotalBytes == 0 ? 100 : value.BytesProcessed * 100.0 / value.TotalBytes;
-            statusLabel.Text = $"{value.Stage}: {percent:N1}% ({FormatBytes(value.BytesProcessed)} / {FormatBytes(value.TotalBytes)})";
-        });
-        try
-        {
-            FfpfscBuildResult result = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.CreateFromDirectoryAsync(sourceDirectory, ffpfscSaveDialog.FileName,
-                    new FfpfscBuildOptions { OverwriteExisting = true }, progress: progress,
-                    cancellationToken: _ffpfscCancellation.Token), _ffpfscCancellation.Token);
-            FfpfscVerificationResult verification = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.VerifyAsync(ffpfscSaveDialog.FileName, progress: progress,
-                    cancellationToken: _ffpfscCancellation.Token), _ffpfscCancellation.Token);
-            statusLabel.Text = $"Created and verified {Path.GetFileName(ffpfscSaveDialog.FileName)}.";
-            DarkMessageBox.ShowInformation(
-                $"PS5 dump converted with the native single-pass writer.\n\n" +
-                $"Inner image: {result.InnerFileName}\n" +
-                $"Generated exFAT: {FormatBytes(result.SourceLength)}\n" +
-                $"PFSC payload: {FormatBytes(result.PfscStoredLength)}\n" +
-                $"Container: {FormatBytes(result.ContainerLength)}\n" +
-                $"Payload saving: {result.PayloadSavingsPercent:N2}%\n" +
-                $"Decoded SHA-256: {verification.DecodedSha256}",
-                "Dump conversion complete");
-        }
-        catch (OperationCanceledException)
-        {
-            statusLabel.Text = "Dump conversion cancelled; partial output was removed.";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
-        {
-            statusLabel.Text = "Dump conversion failed.";
-            DarkMessageBox.ShowError(ex.Message, "Dump to FFPFSC conversion");
-        }
-        finally
-        {
-            SetFfpfscBusy(false);
-        }
-    }
-
-    private async void VerifyFfpfsc_Click(object? sender, EventArgs e)
-    {
-        if (ffpfscOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        _ffpfscCancellation?.Dispose();
-        _ffpfscCancellation = new CancellationTokenSource();
-        SetFfpfscBusy(true);
-        var progress = new Progress<FfpfscProgress>(value =>
-        {
-            double percent = value.TotalBytes == 0 ? 100 : value.BytesProcessed * 100.0 / value.TotalBytes;
-            statusLabel.Text = $"{value.Stage} FFPFSC: {percent:N1}%";
-        });
-        try
-        {
-            FfpfscVerificationResult result = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.VerifyAsync(ffpfscOpenDialog.FileName, progress: progress,
-                    cancellationToken: _ffpfscCancellation.Token), _ffpfscCancellation.Token);
-            FfpfscInfo info = result.Info;
-            statusLabel.Text = $"Verified {Path.GetFileName(ffpfscOpenDialog.FileName)}.";
-            DarkMessageBox.ShowInformation(
-                $"FFPFSC structure and every PFSC block are valid.\n\n" +
-                $"Inner image: {info.InnerFileName}\n" +
-                $"Logical size: {FormatBytes(info.LogicalLength)}\n" +
-                $"Stored PFSC: {FormatBytes(info.StoredLength)}\n" +
-                $"PFS blocks: {info.PfsBlockCount:N0} × {FormatBytes(info.PfsBlockSize)}\n" +
-                $"PFSC blocks: {info.Pfsc.BlockCount:N0}\n" +
-                $"Decoded SHA-256: {result.DecodedSha256}",
-                "FFPFSC verification");
-        }
-        catch (OperationCanceledException)
-        {
-            statusLabel.Text = "FFPFSC verification cancelled.";
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
-        {
-            statusLabel.Text = "FFPFSC verification failed.";
-            DarkMessageBox.ShowError(ex.Message, "FFPFSC verification");
-        }
-        finally
-        {
-            SetFfpfscBusy(false);
-        }
-    }
-
-    private void SetFfpfscBusy(bool busy)
-    {
-        _isFfpfscBusy = busy;
-        UpdateOperationState();
-    }
-
     private void UpdateOperationState()
     {
-        bool idle = !_isScanning && !_isFfpfscBusy && !_isExfatBusy && !_isFfpkgBusy && !_isSonyPkgBusy && !_isFileBusy;
-        btnAddFolder.Enabled = idle;
-        btnRefresh.Enabled = idle;
-        btnSettings.Enabled = idle;
-        btnCancel.Enabled = !idle;
+        bool idle = !_isScanning && !_isFileBusy;
         menuAddFolder.Enabled = idle;
         menuOpenDump.Enabled = idle;
         menuOpenPackage.Enabled = idle;
         menuRefresh.Enabled = idle;
         menuSettings.Enabled = idle;
-        menuBuildDumpFfpfsc.Enabled = idle;
-        menuBuildFfpfsc.Enabled = idle;
-        menuVerifyFfpfsc.Enabled = idle;
+        btnImageRun.Enabled = idle && cboImageAction.SelectedItem is not null;
+        btnImageCancel.Enabled = _taskQueue.Tasks.Any(task => task.Status is PackageTaskStatus.Running or PackageTaskStatus.Queued);
 
-        bool ffpfscIdle = idle;
-        btnFfpfscBrowseOutput.Enabled = ffpfscIdle;
-        txtFfpfscOutput.Enabled = ffpfscIdle;
-        nudFfpfscLevel.Enabled = ffpfscIdle;
-        nudFfpfscGain.Enabled = ffpfscIdle;
-        cboFfpfscCluster.Enabled = ffpfscIdle;
-        chkFfpfscAmpr.Enabled = ffpfscIdle;
-        btnFfpfscCreateSelected.Enabled = ffpfscIdle && _selectedGame?.SourceKind == Ps5SourceKind.LooseDump;
-        btnFfpfscWrapImage.Enabled = ffpfscIdle;
-        btnFfpfscVerify.Enabled = ffpfscIdle;
-        btnFfpfscExtract.Enabled = ffpfscIdle;
-        btnFfpfscCancel.Enabled = _isFfpfscBusy;
+        btnFileCancel.Enabled = _isFileBusy;
+    }
 
-        bool ffpkgIdle = idle;
-        txtFfpkgOutput.Enabled = ffpkgIdle;
-        btnFfpkgBrowseOutput.Enabled = ffpkgIdle;
-        btnFfpkgCreate.Enabled = ffpkgIdle && _selectedGame?.SourceKind == Ps5SourceKind.LooseDump;
-        btnFfpkgVerify.Enabled = ffpkgIdle;
-        btnFfpkgExtract.Enabled = ffpkgIdle;
-        btnFfpkgEdit.Enabled = ffpkgIdle;
-        btnFfpkgRebuild.Enabled = ffpkgIdle;
-        btnFfpkgCancel.Enabled = _isFfpkgBusy;
-
-        bool exfatIdle = idle;
-        txtExfatOutput.Enabled = exfatIdle;
-        btnExfatBrowseOutput.Enabled = exfatIdle;
-        cboExfatCluster.Enabled = exfatIdle;
-        chkExfatAmpr.Enabled = exfatIdle;
-        btnExfatCreate.Enabled = exfatIdle && _selectedGame?.SourceKind == Ps5SourceKind.LooseDump;
-        btnExfatVerify.Enabled = exfatIdle;
-        btnExfatExtract.Enabled = exfatIdle;
-        btnExfatRefreshAmpr.Enabled = exfatIdle;
-        btnExfatEdit.Enabled = exfatIdle;
-        btnExfatRepair.Enabled = exfatIdle;
-        btnExfatCancel.Enabled = _isExfatBusy;
-
-        bool sonyPkgIdle = idle;
-        txtSonyPkgOutput.Enabled = sonyPkgIdle;
-        btnSonyPkgBrowseOutput.Enabled = sonyPkgIdle;
-        txtSonyPkgContentId.Enabled = sonyPkgIdle;
-        chkSonyPkgCustomPasscode.Enabled = sonyPkgIdle;
-        txtSonyPkgPasscode.Enabled = sonyPkgIdle && chkSonyPkgCustomPasscode.Checked;
-        btnSonyPkgCreate.Enabled = sonyPkgIdle && _selectedGame?.SourceKind == Ps5SourceKind.LooseDump;
-        btnSonyPkgVerify.Enabled = sonyPkgIdle;
-        btnSonyPkgExtract.Enabled = sonyPkgIdle;
-        btnSonyPkgAcceptance.Enabled = sonyPkgIdle;
-        btnSonyPkgSplit.Enabled = sonyPkgIdle;
-        btnSonyPkgMerge.Enabled = sonyPkgIdle;
-        btnSonyPkgCancel.Enabled = _isSonyPkgBusy;
+    private void btnFileCancel_Click(object? sender, EventArgs e)
+    {
+        if (!_isFileBusy) return;
+        _fileCancellation?.Cancel();
+        statusLabel.Text = "Cancelling extraction...";
     }
 
     private void SetSelectedGame(Ps5GameInfo? game)
     {
         _selectedGame = game;
-        if (game is null)
-        {
-            lblFfpfscSelectedGame.Text = "Select an unpacked game in the library above.";
-            txtFfpfscOutput.Clear();
-        }
-        else if (game.SourceKind == Ps5SourceKind.LooseDump)
-        {
-            lblFfpfscSelectedGame.Text = $"Selected dump: {game.Title}  |  {game.TitleId}  |  {game.RootPath}";
-            string outputName = MakeSafeFileName(string.IsNullOrWhiteSpace(game.TitleId)
-                ? new DirectoryInfo(game.RootPath).Name
-                : game.TitleId) + ".ffpfsc";
-            string? parent = Directory.GetParent(game.RootPath)?.FullName;
-            txtFfpfscOutput.Text = Path.Combine(parent ?? game.RootPath, outputName);
-        }
-        else if (game.SourceKind == Ps5SourceKind.SonyPackage)
-        {
-            lblFfpfscSelectedGame.Text =
-                $"Selected Sony PKG: {game.Title}  |  Dump conversion is unavailable; retail PKG is not an FFPKG/exFAT image.";
-            txtFfpfscOutput.Clear();
-        }
-        else if (game.SourceKind == Ps5SourceKind.FilesystemImage)
-        {
-            lblFfpfscSelectedGame.Text =
-                $"Selected filesystem image: {game.Title}  |  Direct reading is available; use Wrap Image to create FFPFSC.";
-            txtFfpfscOutput.Clear();
-        }
-        else if (game.SourceKind == Ps5SourceKind.Ffpkg)
-        {
-            lblFfpfscSelectedGame.Text =
-                $"Selected FFPKG: {game.Title}  |  Direct UFS2 reading is available; use Wrap Image to create FFPFSC.";
-            txtFfpfscOutput.Clear();
-        }
-        else
-        {
-            lblFfpfscSelectedGame.Text =
-                $"Selected FFPFSC: {game.Title}  |  Direct metadata and filesystem reading is available below.";
-            txtFfpfscOutput.Clear();
-        }
-        UpdateExfatSelection(game);
-        UpdateFfpkgSelection(game);
-        UpdateSonyPkgSelection(game);
         UpdateOperationState();
     }
 
-    private void UpdateSonyPkgSelection(Ps5GameInfo? game)
-    {
-        if (game?.SourceKind != Ps5SourceKind.LooseDump)
-        {
-            lblSonyPkgSelectedGame.Text = game is null
-                ? "Select an unpacked game in the library above."
-                : $"Selected source: {game.Title}  |  Debug package creation requires an unpacked dump folder.";
-            txtSonyPkgOutput.Clear();
-            txtSonyPkgContentId.Clear();
-            return;
-        }
-        lblSonyPkgSelectedGame.Text = $"Selected dump: {game.Title}  |  {game.TitleId}  |  {game.RootPath}";
-        string outputName = MakeSafeFileName(string.IsNullOrWhiteSpace(game.TitleId)
-            ? new DirectoryInfo(game.RootPath).Name : game.TitleId) + ".pkg";
-        string? parent = Directory.GetParent(game.RootPath)?.FullName;
-        txtSonyPkgOutput.Text = Path.Combine(parent ?? game.RootPath, outputName);
-        txtSonyPkgContentId.Text = game.ContentId;
-    }
-
-    private void UpdateFfpkgSelection(Ps5GameInfo? game)
-    {
-        if (game?.SourceKind != Ps5SourceKind.LooseDump)
-        {
-            lblFfpkgSelectedGame.Text = game is null
-                ? "Select an unpacked game in the library above."
-                : game.SourceKind == Ps5SourceKind.Ffpkg
-                    ? $"Selected FFPKG: {game.Title}  |  Direct metadata and filesystem reading is available."
-                    : $"Selected source: {game.Title}  |  FFPKG creation requires an unpacked dump folder.";
-            txtFfpkgOutput.Clear();
-            return;
-        }
-
-        lblFfpkgSelectedGame.Text = $"Selected dump: {game.Title}  |  {game.TitleId}  |  {game.RootPath}";
-        string outputName = MakeSafeFileName(string.IsNullOrWhiteSpace(game.TitleId)
-            ? new DirectoryInfo(game.RootPath).Name
-            : game.TitleId) + ".ffpkg";
-        string? parent = Directory.GetParent(game.RootPath)?.FullName;
-        txtFfpkgOutput.Text = Path.Combine(parent ?? game.RootPath, outputName);
-    }
-
-    private void UpdateExfatSelection(Ps5GameInfo? game)
-    {
-        if (game?.SourceKind != Ps5SourceKind.LooseDump)
-        {
-            lblExfatSelectedGame.Text = game is null
-                ? "Select an unpacked game in the library above."
-                : $"Selected source: {game.Title}  |  exFAT creation requires an unpacked dump folder.";
-            txtExfatOutput.Clear();
-            return;
-        }
-
-        lblExfatSelectedGame.Text = $"Selected dump: {game.Title}  |  {game.TitleId}  |  {game.RootPath}";
-        string outputName = MakeSafeFileName(string.IsNullOrWhiteSpace(game.TitleId)
-            ? new DirectoryInfo(game.RootPath).Name
-            : game.TitleId) + ".exfat";
-        string? parent = Directory.GetParent(game.RootPath)?.FullName;
-        txtExfatOutput.Text = Path.Combine(parent ?? game.RootPath, outputName);
-    }
 
     private static string MakeSafeFileName(string value)
     {
@@ -518,297 +342,6 @@ public partial class MainForm : DarkForm
         string result = new(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray());
         result = result.Trim(' ', '.');
         return result.Length == 0 ? "PS5_GAME" : result;
-    }
-
-    private void btnFfpfscBrowseOutput_Click(object? sender, EventArgs e)
-    {
-        string current = txtFfpfscOutput.Text.Trim();
-        if (current.Length > 0)
-        {
-            ffpfscSaveDialog.FileName = Path.GetFileName(current);
-            ffpfscSaveDialog.InitialDirectory = Path.GetDirectoryName(current);
-        }
-        if (ffpfscSaveDialog.ShowDialog(this) == DialogResult.OK)
-            txtFfpfscOutput.Text = ffpfscSaveDialog.FileName;
-    }
-
-    private async void btnFfpfscCreateSelected_Click(object? sender, EventArgs e)
-    {
-        Ps5GameInfo? game = _selectedGame;
-        if (game?.SourceKind != Ps5SourceKind.LooseDump || !Directory.Exists(game.RootPath))
-        {
-            DarkMessageBox.ShowWarning("Select an unpacked PS5 game dump in the library first.", "Create FFPFSC");
-            return;
-        }
-        string outputPath = txtFfpfscOutput.Text.Trim();
-        if (outputPath.Length == 0)
-        {
-            btnFfpfscBrowseOutput_Click(sender, e);
-            outputPath = txtFfpfscOutput.Text.Trim();
-            if (outputPath.Length == 0) return;
-        }
-        if (!ConfirmFfpfscOverwrite(outputPath)) return;
-
-        BeginFfpfscOperation("Preparing selected dump...");
-        try
-        {
-            FfpfscBuildOptions buildOptions = CreateFfpfscBuildOptions();
-            ExfatBuildOptions exfatOptions = CreateExfatBuildOptions();
-            IProgress<FfpfscProgress> progress = CreateFfpfscProgress();
-            FfpfscBuildResult result = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.CreateFromDirectoryAsync(game.RootPath, outputPath, buildOptions, exfatOptions,
-                    progress, _ffpfscCancellation!.Token), _ffpfscCancellation!.Token);
-            FfpfscVerificationResult verification = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.VerifyAsync(outputPath, progress: progress,
-                    cancellationToken: _ffpfscCancellation.Token), _ffpfscCancellation.Token);
-            _lastFfpfscPath = Path.GetFullPath(outputPath);
-            ShowFfpfscBuildResult(result, verification, "Selected dump conversion complete");
-        }
-        catch (OperationCanceledException)
-        {
-            SetFfpfscResult("Dump conversion cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetFfpfscResult("Dump conversion failed.");
-            DarkMessageBox.ShowError(ex.Message, "Dump to FFPFSC conversion");
-        }
-        finally
-        {
-            EndFfpfscOperation();
-        }
-    }
-
-    private async void btnFfpfscWrapImage_Click(object? sender, EventArgs e)
-    {
-        if (sourceImageOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        ffpfscSaveDialog.FileName = Path.GetFileName(sourceImageOpenDialog.FileName) + ".ffpfsc";
-        ffpfscSaveDialog.InitialDirectory = Path.GetDirectoryName(sourceImageOpenDialog.FileName);
-        if (ffpfscSaveDialog.ShowDialog(this) != DialogResult.OK) return;
-
-        string sourcePath = sourceImageOpenDialog.FileName;
-        string outputPath = ffpfscSaveDialog.FileName;
-        BeginFfpfscOperation("Preparing filesystem image...");
-        try
-        {
-            FfpfscBuildOptions buildOptions = CreateFfpfscBuildOptions();
-            IProgress<FfpfscProgress> progress = CreateFfpfscProgress();
-            FfpfscBuildResult result = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.CreateFromImageAsync(sourcePath, outputPath, buildOptions, progress,
-                    _ffpfscCancellation!.Token), _ffpfscCancellation!.Token);
-            FfpfscVerificationResult verification = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.VerifyAsync(outputPath, sourcePath, progress, _ffpfscCancellation.Token),
-                _ffpfscCancellation.Token);
-            if (verification.SourceMatches != true)
-                throw new InvalidDataException("The completed FFPFSC image did not match the source image.");
-            _lastFfpfscPath = Path.GetFullPath(outputPath);
-            txtFfpfscOutput.Text = _lastFfpfscPath;
-            ShowFfpfscBuildResult(result, verification, "Filesystem image conversion complete");
-        }
-        catch (OperationCanceledException)
-        {
-            SetFfpfscResult("Image conversion cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetFfpfscResult("Image conversion failed.");
-            DarkMessageBox.ShowError(ex.Message, "Image to FFPFSC conversion");
-        }
-        finally
-        {
-            EndFfpfscOperation();
-        }
-    }
-
-    private async void btnFfpfscVerify_Click(object? sender, EventArgs e)
-    {
-        PrepareFfpfscOpenDialog();
-        if (ffpfscOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = ffpfscOpenDialog.FileName;
-        BeginFfpfscOperation("Inspecting FFPFSC structure...");
-        try
-        {
-            IProgress<FfpfscProgress> progress = CreateFfpfscProgress();
-            FfpfscVerificationResult result = await RunFfpfscWorkerAsync(() =>
-                FfpfscImage.VerifyAsync(inputPath, progress: progress,
-                    cancellationToken: _ffpfscCancellation!.Token), _ffpfscCancellation!.Token);
-            _lastFfpfscPath = Path.GetFullPath(inputPath);
-            FfpfscInfo info = result.Info;
-            string summary = $"Valid | {info.InnerFileName} | Logical {FormatBytes(info.LogicalLength)} | " +
-                             $"Stored {FormatBytes(info.StoredLength)} | {info.Pfsc.BlockCount:N0} PFSC blocks";
-            SetFfpfscResult(summary);
-            DarkMessageBox.ShowInformation(
-                $"FFPFSC structure and every PFSC block are valid.\n\n" +
-                $"Inner image: {info.InnerFileName}\n" +
-                $"Logical size: {FormatBytes(info.LogicalLength)}\n" +
-                $"Stored PFSC: {FormatBytes(info.StoredLength)}\n" +
-                $"PFS blocks: {info.PfsBlockCount:N0} x {FormatBytes(info.PfsBlockSize)}\n" +
-                $"PFSC blocks: {info.Pfsc.BlockCount:N0}\n" +
-                $"Decoded SHA-256: {result.DecodedSha256}",
-                "FFPFSC verification");
-        }
-        catch (OperationCanceledException)
-        {
-            SetFfpfscResult("FFPFSC verification cancelled.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetFfpfscResult("FFPFSC verification failed.");
-            DarkMessageBox.ShowError(ex.Message, "FFPFSC verification");
-        }
-        finally
-        {
-            EndFfpfscOperation();
-        }
-    }
-
-    private async void btnFfpfscExtract_Click(object? sender, EventArgs e)
-    {
-        PrepareFfpfscOpenDialog();
-        if (ffpfscOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = ffpfscOpenDialog.FileName;
-        FfpfscInfo info;
-        try
-        {
-            using FileStream input = File.OpenRead(inputPath);
-            info = FfpfscImage.Inspect(input);
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            DarkMessageBox.ShowError(ex.Message, "FFPFSC inspection");
-            return;
-        }
-
-        innerImageSaveDialog.FileName = info.InnerFileName;
-        innerImageSaveDialog.InitialDirectory = Path.GetDirectoryName(inputPath);
-        if (innerImageSaveDialog.ShowDialog(this) != DialogResult.OK) return;
-        string destination = innerImageSaveDialog.FileName;
-        string extractionPath = File.Exists(destination)
-            ? destination + "." + Guid.NewGuid().ToString("N") + ".replacement"
-            : destination;
-
-        BeginFfpfscOperation("Extracting inner filesystem image...");
-        try
-        {
-            IProgress<FfpfscProgress> progress = CreateFfpfscProgress();
-            await RunFfpfscWorkerActionAsync(() =>
-                FfpfscImage.ExtractAsync(inputPath, extractionPath, progress, _ffpfscCancellation!.Token),
-                _ffpfscCancellation!.Token);
-            if (!string.Equals(extractionPath, destination, StringComparison.OrdinalIgnoreCase))
-                File.Move(extractionPath, destination, true);
-            _lastFfpfscPath = Path.GetFullPath(inputPath);
-            SetFfpfscResult($"Extracted {info.InnerFileName} to {destination}");
-            DarkMessageBox.ShowInformation(
-                $"Inner image extracted successfully.\n\nFile: {destination}\nSize: {FormatBytes(info.LogicalLength)}",
-                "FFPFSC extraction");
-        }
-        catch (OperationCanceledException)
-        {
-            TryDeleteFile(extractionPath);
-            SetFfpfscResult("FFPFSC extraction cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            TryDeleteFile(extractionPath);
-            SetFfpfscResult("FFPFSC extraction failed.");
-            DarkMessageBox.ShowError(ex.Message, "FFPFSC extraction");
-        }
-        finally
-        {
-            EndFfpfscOperation();
-        }
-    }
-
-    private void btnFfpfscCancel_Click(object? sender, EventArgs e) => _ffpfscCancellation?.Cancel();
-
-    private static Task<TResult> RunFfpfscWorkerAsync<TResult>(Func<Task<TResult>> operation,
-        CancellationToken cancellationToken) => Task.Run(operation, cancellationToken);
-
-    private static Task RunFfpfscWorkerActionAsync(Func<Task> operation, CancellationToken cancellationToken) =>
-        Task.Run(operation, cancellationToken);
-
-    private bool ConfirmFfpfscOverwrite(string outputPath) =>
-        !File.Exists(outputPath) || DarkMessageBox.ShowWarning(
-            $"The output file already exists and will be replaced after the new image is complete.\n\n{outputPath}",
-            "Replace FFPFSC image?", DarkDialogButton.YesNo) == DialogResult.Yes;
-
-    private FfpfscBuildOptions CreateFfpfscBuildOptions() => new()
-    {
-        OverwriteExisting = true,
-        Compression = new PfscCompressionOptions
-        {
-            CompressionLevel = decimal.ToInt32(nudFfpfscLevel.Value),
-            MinimumGainPercent = decimal.ToInt32(nudFfpfscGain.Value)
-        }
-    };
-
-    private ExfatBuildOptions CreateExfatBuildOptions() => new()
-    {
-        ClusterSize = cboFfpfscCluster.SelectedIndex switch
-        {
-            1 => 32 * 1024,
-            2 => 64 * 1024,
-            _ => null
-        },
-        GenerateAmprIndex = chkFfpfscAmpr.Checked
-    };
-
-    private void BeginFfpfscOperation(string message)
-    {
-        _ffpfscCancellation?.Cancel();
-        _ffpfscCancellation?.Dispose();
-        _ffpfscCancellation = new CancellationTokenSource();
-        progressFfpfsc.Value = 0;
-        lblFfpfscProgress.Text = message;
-        statusLabel.Text = message;
-        SetFfpfscBusy(true);
-    }
-
-    private void EndFfpfscOperation()
-    {
-        SetFfpfscBusy(false);
-        _ffpfscCancellation?.Dispose();
-        _ffpfscCancellation = null;
-    }
-
-    private IProgress<FfpfscProgress> CreateFfpfscProgress() => new Progress<FfpfscProgress>(value =>
-    {
-        double percentage = value.TotalBytes <= 0 ? 0 : value.BytesProcessed * 100.0 / value.TotalBytes;
-        progressFfpfsc.Value = Math.Clamp((int)Math.Round(percentage), progressFfpfsc.Minimum, progressFfpfsc.Maximum);
-        lblFfpfscProgress.Text = $"{value.Stage}: {percentage:N1}%  ({FormatBytes(value.BytesProcessed)} / {FormatBytes(value.TotalBytes)})";
-        statusLabel.Text = lblFfpfscProgress.Text;
-    });
-
-    private void SetFfpfscResult(string message)
-    {
-        lblFfpfscProgress.Text = message;
-        lblFfpfscOperationsInfo.Text = message;
-        statusLabel.Text = message;
-    }
-
-    private void ShowFfpfscBuildResult(FfpfscBuildResult result, FfpfscVerificationResult verification, string title)
-    {
-        progressFfpfsc.Value = progressFfpfsc.Maximum;
-        string summary = $"Created {Path.GetFileName(result.OutputPath)} | {result.PayloadSavingsPercent:N2}% payload saving | " +
-                         $"{result.CompressedBlockCount:N0}/{result.PfscBlockCount:N0} blocks compressed";
-        SetFfpfscResult(summary);
-        DarkMessageBox.ShowInformation(
-            $"Native FFPFSC image created and fully verified.\n\n" +
-            $"Inner image: {result.InnerFileName}\n" +
-            $"Logical image: {FormatBytes(result.SourceLength)}\n" +
-            $"PFSC payload: {FormatBytes(result.PfscStoredLength)}\n" +
-            $"Container: {FormatBytes(result.ContainerLength)}\n" +
-            $"Compressed blocks: {result.CompressedBlockCount:N0} / {result.PfscBlockCount:N0}\n" +
-            $"Payload saving: {result.PayloadSavingsPercent:N2}%\n" +
-            $"Decoded SHA-256: {verification.DecodedSha256}", title);
-    }
-
-    private void PrepareFfpfscOpenDialog()
-    {
-        string candidate = File.Exists(_lastFfpfscPath) ? _lastFfpfscPath : txtFfpfscOutput.Text.Trim();
-        if (!File.Exists(candidate)) return;
-        ffpfscOpenDialog.FileName = Path.GetFileName(candidate);
-        ffpfscOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate);
     }
 
     private static bool IsFfpfscOperationException(Exception ex) =>
@@ -825,875 +358,6 @@ public partial class MainForm : DarkForm
         catch (UnauthorizedAccessException) { }
     }
 
-    private void btnFfpkgBrowseOutput_Click(object? sender, EventArgs e)
-    {
-        string current = txtFfpkgOutput.Text.Trim();
-        if (current.Length > 0)
-        {
-            ffpkgSaveDialog.FileName = Path.GetFileName(current);
-            ffpkgSaveDialog.InitialDirectory = Path.GetDirectoryName(current);
-        }
-        if (ffpkgSaveDialog.ShowDialog(this) == DialogResult.OK)
-            txtFfpkgOutput.Text = ffpkgSaveDialog.FileName;
-    }
-
-    private async void btnFfpkgCreate_Click(object? sender, EventArgs e)
-    {
-        Ps5GameInfo? game = _selectedGame;
-        if (game?.SourceKind != Ps5SourceKind.LooseDump || !Directory.Exists(game.RootPath))
-        {
-            DarkMessageBox.ShowWarning("Select an unpacked PS5 game dump in the library first.", "Create FFPKG");
-            return;
-        }
-        string destination = txtFfpkgOutput.Text.Trim();
-        if (destination.Length == 0)
-        {
-            btnFfpkgBrowseOutput_Click(sender, e);
-            destination = txtFfpkgOutput.Text.Trim();
-            if (destination.Length == 0) return;
-        }
-        destination = Path.GetFullPath(destination);
-        if (IsPathInsideDirectory(destination, game.RootPath))
-        {
-            DarkMessageBox.ShowWarning("The output image must be outside the source game folder.",
-                "Invalid FFPKG output");
-            return;
-        }
-        bool replacing = File.Exists(destination);
-        if (replacing && DarkMessageBox.ShowWarning(
-                $"The existing output will be replaced only after the new FFPKG passes full verification.\n\n{destination}",
-                "Replace FFPKG image?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-        string workingPath = replacing
-            ? destination + "." + Guid.NewGuid().ToString("N") + ".replacement"
-            : destination;
-
-        BeginFfpkgOperation("Creating PS5 UFS2 filesystem...");
-        try
-        {
-            Ufs2VerificationResult result = await Ufs2Operations.CreateFromDirectoryAsync(game.RootPath,
-                workingPath, game.TitleId, CreateFfpkgProgress(), _ffpkgCancellation!.Token);
-            if (replacing) File.Move(workingPath, destination, true);
-            _lastFfpkgPath = destination;
-            txtFfpkgOutput.Text = destination;
-            progressFfpkg.Value = progressFfpkg.Maximum;
-            SetFfpkgResult($"Created, source-matched, and verified {result.FileCount:N0} files | {FormatBytes(result.ImageSize)}");
-            ShowFfpkgVerification(result with { ImagePath = destination }, "FFPKG creation complete",
-                sourceMatched: true);
-        }
-        catch (OperationCanceledException)
-        {
-            TryDeleteFile(workingPath);
-            SetFfpkgResult("FFPKG creation cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            TryDeleteFile(workingPath);
-            SetFfpkgResult("FFPKG creation failed.");
-            DarkMessageBox.ShowError(ex.Message, "FFPKG creation");
-        }
-        finally
-        {
-            EndFfpkgOperation();
-        }
-    }
-
-    private async void btnFfpkgVerify_Click(object? sender, EventArgs e)
-    {
-        PrepareFfpkgOpenDialog();
-        if (ffpkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = ffpkgOpenDialog.FileName;
-        BeginFfpkgOperation("Inspecting UFS2 filesystem...");
-        try
-        {
-            Ufs2VerificationResult result = await Ufs2Operations.VerifyAsync(inputPath, CreateFfpkgProgress(),
-                _ffpkgCancellation!.Token);
-            _lastFfpkgPath = Path.GetFullPath(inputPath);
-            progressFfpkg.Value = progressFfpkg.Maximum;
-            SetFfpkgResult($"Valid UFS2 | {result.FileCount:N0} files | {FormatBytes(result.ImageSize)}");
-            ShowFfpkgVerification(result, "FFPKG verification");
-        }
-        catch (OperationCanceledException)
-        {
-            SetFfpkgResult("FFPKG verification cancelled.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetFfpkgResult("FFPKG verification failed.");
-            DarkMessageBox.ShowError(ex.Message, "FFPKG verification");
-        }
-        finally
-        {
-            EndFfpkgOperation();
-        }
-    }
-
-    private async void btnFfpkgExtract_Click(object? sender, EventArgs e)
-    {
-        PrepareFfpkgOpenDialog();
-        if (ffpkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        if (ffpkgExtractFolderDialog.ShowDialog(this) != DialogResult.OK) return;
-        string baseName = MakeSafeFileName(Path.GetFileNameWithoutExtension(ffpkgOpenDialog.FileName));
-        string destination = FindAvailableDirectory(Path.Combine(ffpkgExtractFolderDialog.SelectedPath, baseName));
-        BeginFfpkgOperation("Extracting FFPKG files...");
-        try
-        {
-            await Ufs2Operations.ExtractAsync(ffpkgOpenDialog.FileName, destination, CreateFfpkgProgress(),
-                _ffpkgCancellation!.Token);
-            _lastFfpkgPath = Path.GetFullPath(ffpkgOpenDialog.FileName);
-            progressFfpkg.Value = progressFfpkg.Maximum;
-            SetFfpkgResult($"Extracted files to {destination}");
-            DarkMessageBox.ShowInformation($"The FFPKG filesystem was extracted successfully.\n\n{destination}",
-                "FFPKG extraction");
-        }
-        catch (OperationCanceledException)
-        {
-            SetFfpkgResult("FFPKG extraction cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetFfpkgResult("FFPKG extraction failed.");
-            DarkMessageBox.ShowError(ex.Message, "FFPKG extraction");
-        }
-        finally
-        {
-            EndFfpkgOperation();
-        }
-    }
-
-    private void btnFfpkgEdit_Click(object? sender, EventArgs e)
-    {
-        PrepareFfpkgOpenDialog();
-        ffpkgOpenDialog.Title = "Select an FFPKG image to edit";
-        if (ffpkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        try
-        {
-            using var editor = new FfpkgEditorForm(ffpkgOpenDialog.FileName);
-            editor.ShowDialog(this);
-            _lastFfpkgPath = Path.GetFullPath(ffpkgOpenDialog.FileName);
-            statusLabel.Text = $"Closed FFPKG editor for {Path.GetFileName(_lastFfpkgPath)}.";
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            DarkMessageBox.ShowError(ex.Message, "Open FFPKG editor");
-        }
-    }
-
-    private async void btnFfpkgRebuild_Click(object? sender, EventArgs e)
-    {
-        PrepareFfpkgOpenDialog();
-        ffpkgOpenDialog.Title = "Select a readable FFPKG image to rebuild";
-        if (ffpkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = ffpkgOpenDialog.FileName;
-        if (DarkMessageBox.ShowWarning(
-                "This extracts every readable file, rebuilds all UFS2 metadata beside the original, fully verifies " +
-                "the replacement, and only then swaps it into place. It requires substantial free disk space and " +
-                "cannot recover unreadable file data or a filesystem whose directory tree cannot be opened.\n\n" + inputPath,
-                "Rebuild FFPKG image?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-        BeginFfpkgOperation("Extracting FFPKG for verified rebuild...");
-        try
-        {
-            Ufs2VerificationResult result = await Ufs2Operations.RebuildWithEditsAsync(inputPath,
-                static _ => { }, CreateFfpkgProgress(), _ffpkgCancellation!.Token);
-            _lastFfpkgPath = Path.GetFullPath(inputPath);
-            progressFfpkg.Value = progressFfpkg.Maximum;
-            SetFfpkgResult($"Rebuilt and verified {result.FileCount:N0} files.");
-            ShowFfpkgVerification(result, "FFPKG rebuild complete");
-        }
-        catch (OperationCanceledException)
-        {
-            SetFfpkgResult("FFPKG rebuild cancelled; the original image was preserved.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetFfpkgResult("FFPKG rebuild failed; the original image was preserved.");
-            DarkMessageBox.ShowError(ex.Message, "FFPKG rebuild");
-        }
-        finally
-        {
-            EndFfpkgOperation();
-        }
-    }
-
-    private void btnFfpkgCancel_Click(object? sender, EventArgs e) => _ffpkgCancellation?.Cancel();
-
-    private void BeginFfpkgOperation(string message)
-    {
-        _ffpkgCancellation?.Cancel();
-        _ffpkgCancellation?.Dispose();
-        _ffpkgCancellation = new CancellationTokenSource();
-        progressFfpkg.Value = 0;
-        lblFfpkgProgress.Text = message;
-        statusLabel.Text = message;
-        _isFfpkgBusy = true;
-        UpdateOperationState();
-    }
-
-    private void EndFfpkgOperation()
-    {
-        _isFfpkgBusy = false;
-        UpdateOperationState();
-        _ffpkgCancellation?.Dispose();
-        _ffpkgCancellation = null;
-    }
-
-    private IProgress<Ufs2Progress> CreateFfpkgProgress() => new Progress<Ufs2Progress>(value =>
-    {
-        if (value.TotalBytes <= 0)
-        {
-            progressFfpkg.Value = progressFfpkg.Minimum;
-            lblFfpkgProgress.Text = value.Stage + "...";
-            statusLabel.Text = lblFfpkgProgress.Text;
-            return;
-        }
-        double percentage = value.BytesProcessed * 100.0 / value.TotalBytes;
-        progressFfpkg.Value = Math.Clamp((int)Math.Round(percentage), progressFfpkg.Minimum, progressFfpkg.Maximum);
-        string amounts = value.Unit.Equals("bytes", StringComparison.OrdinalIgnoreCase)
-            ? $"{FormatBytes(value.Completed)} / {FormatBytes(value.Total)}"
-            : $"{value.Completed:N0} / {value.Total:N0} {value.Unit}";
-        lblFfpkgProgress.Text = $"{value.Stage}: {percentage:N1}%  ({amounts})";
-        statusLabel.Text = lblFfpkgProgress.Text;
-    });
-
-    private void SetFfpkgResult(string message)
-    {
-        lblFfpkgProgress.Text = message;
-        lblFfpkgOperationsInfo.Text = message;
-        statusLabel.Text = message;
-    }
-
-    private void PrepareFfpkgOpenDialog()
-    {
-        ffpkgOpenDialog.Title = "Select an FFPKG image";
-        string candidate = File.Exists(_lastFfpkgPath) ? _lastFfpkgPath : txtFfpkgOutput.Text.Trim();
-        if (_selectedGame?.SourceKind == Ps5SourceKind.Ffpkg && File.Exists(_selectedGame.RootPath))
-            candidate = _selectedGame.RootPath;
-        if (!File.Exists(candidate)) return;
-        ffpkgOpenDialog.FileName = Path.GetFileName(candidate);
-        ffpkgOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate);
-    }
-
-    private void ShowFfpkgVerification(Ufs2VerificationResult result, string title, bool sourceMatched = false) =>
-        DarkMessageBox.ShowInformation(
-            $"The UFS2 structure is valid and every file was read successfully.\n\n" +
-            (sourceMatched ? "Every source file and directory matches the finished FFPKG.\n\n" : string.Empty) +
-            $"Image: {result.ImagePath}\n" +
-            $"Image size: {FormatBytes(result.ImageSize)}\n" +
-            $"Volume: {(string.IsNullOrWhiteSpace(result.VolumeName) ? "(none)" : result.VolumeName)}\n" +
-            $"Block / fragment: {FormatBytes(result.BlockSize)} / {FormatBytes(result.FragmentSize)}\n" +
-            $"Files: {result.FileCount:N0}\n" +
-            $"Directories: {result.DirectoryCount:N0}\n" +
-            $"Logical file data: {FormatBytes(result.LogicalFileBytes)}\n" +
-            $"Filesystem warnings: {result.FsckWarnings:N0}\n" +
-            $"Manifest SHA-256: {result.ManifestSha256}", title);
-
-    private void btnSonyPkgBrowseOutput_Click(object? sender, EventArgs e)
-    {
-        string current = txtSonyPkgOutput.Text.Trim();
-        if (current.Length > 0)
-        {
-            sonyPkgSaveDialog.FileName = Path.GetFileName(current);
-            sonyPkgSaveDialog.InitialDirectory = Path.GetDirectoryName(current);
-        }
-        if (sonyPkgSaveDialog.ShowDialog(this) == DialogResult.OK)
-            txtSonyPkgOutput.Text = sonyPkgSaveDialog.FileName;
-    }
-
-    private void chkSonyPkgCustomPasscode_CheckedChanged(object? sender, EventArgs e)
-    {
-        if (!chkSonyPkgCustomPasscode.Checked)
-            txtSonyPkgPasscode.Text = SonyDebugPackageCredentials.DefaultPasscode;
-        txtSonyPkgPasscode.Enabled = chkSonyPkgCustomPasscode.Checked && !_isSonyPkgBusy;
-    }
-
-    private async void btnSonyPkgCreate_Click(object? sender, EventArgs e)
-    {
-        Ps5GameInfo? game = _selectedGame;
-        if (game?.SourceKind != Ps5SourceKind.LooseDump || !Directory.Exists(game.RootPath))
-        {
-            DarkMessageBox.ShowWarning("Select an unpacked PS5 game dump in the library first.", "Create PS5 debug PKG");
-            return;
-        }
-        string destination = txtSonyPkgOutput.Text.Trim();
-        if (destination.Length == 0)
-        {
-            btnSonyPkgBrowseOutput_Click(sender, e);
-            destination = txtSonyPkgOutput.Text.Trim();
-            if (destination.Length == 0) return;
-        }
-        destination = Path.GetFullPath(destination);
-        if (IsPathInsideDirectory(destination, game.RootPath))
-        {
-            DarkMessageBox.ShowWarning("The output package must be outside the source game folder.",
-                "Invalid package output");
-            return;
-        }
-        if (File.Exists(destination) && DarkMessageBox.ShowWarning(
-                "The existing package will be replaced only after the new package passes validation.\n\n" + destination,
-                "Replace PS5 debug package?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-
-        string passcode = chkSonyPkgCustomPasscode.Checked
-            ? txtSonyPkgPasscode.Text : SonyDebugPackageCredentials.DefaultPasscode;
-        BeginSonyPkgOperation("Creating encrypted PS5 debug package...");
-        try
-        {
-            SonyDebugPackageBuildResult result = await SonyDebugPackageBuilder.CreateFromDirectoryAsync(
-                game.RootPath, destination, new SonyDebugPackageBuildOptions
-                {
-                    ContentId = txtSonyPkgContentId.Text.Trim(),
-                    Passcode = passcode
-                }, CreateSonyPkgProgress(), _sonyPkgCancellation!.Token);
-            _lastSonyPkgPath = destination;
-            progressSonyPkg.Value = progressSonyPkg.Maximum;
-            SetSonyPkgResult($"Created and verified {result.SourceFiles:N0} files | {FormatBytes(result.PackageSize)}");
-            DarkMessageBox.ShowInformation(
-                $"The debug package was created and reopened successfully.\n\n" +
-                $"Package: {result.OutputPath}\n" +
-                $"Content ID: {result.ContentId}\n" +
-                $"Files: {result.SourceFiles:N0}\n" +
-                $"Source data: {FormatBytes(result.SourceBytes)}\n" +
-                $"Package size: {FormatBytes(result.PackageSize)}\n" +
-                $"Passcode: {(result.UsesDefaultPasscode ? "32 zero default" : "custom")}\n" +
-                $"Image key fingerprint: {result.KeyFingerprint}", "PS5 debug package complete");
-        }
-        catch (OperationCanceledException)
-        {
-            SetSonyPkgResult("Package creation cancelled. Partial temporary files were removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetSonyPkgResult("Package creation failed.");
-            DarkMessageBox.ShowError(ex.Message, "PS5 debug package creation");
-        }
-        finally { EndSonyPkgOperation(); }
-    }
-
-    private void btnSonyPkgVerify_Click(object? sender, EventArgs e)
-    {
-        string candidate = File.Exists(_lastSonyPkgPath) ? _lastSonyPkgPath : txtSonyPkgOutput.Text.Trim();
-        if (File.Exists(candidate))
-        {
-            sonyPkgOpenDialog.FileName = Path.GetFileName(candidate);
-            sonyPkgOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate);
-        }
-        if (sonyPkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string passcode = chkSonyPkgCustomPasscode.Checked
-            ? txtSonyPkgPasscode.Text : SonyDebugPackageCredentials.DefaultPasscode;
-        BeginSonyPkgOperation("Validating encrypted PS5 debug package...");
-        try
-        {
-            SonyDebugPackageValidationResult result = SonyDebugPackageBuilder.Validate(sonyPkgOpenDialog.FileName, passcode);
-            _lastSonyPkgPath = sonyPkgOpenDialog.FileName;
-            progressSonyPkg.Value = result.IsValid ? progressSonyPkg.Maximum : progressSonyPkg.Minimum;
-            SetSonyPkgResult(result.IsValid
-                ? $"Valid debug package | {result.IndexedFiles:N0} indexed files | {FormatBytes(result.PackageSize)}"
-                : "Package validation failed: " + result.Message);
-            if (result.IsValid)
-                DarkMessageBox.ShowInformation(result.Message + $"\n\nIndexed files: {result.IndexedFiles:N0}\nPackage size: {FormatBytes(result.PackageSize)}",
-                    "PS5 debug package verification");
-            else DarkMessageBox.ShowError(result.Message, "PS5 debug package verification");
-        }
-        finally { EndSonyPkgOperation(); }
-    }
-
-    private async void btnSonyPkgExtract_Click(object? sender, EventArgs e)
-    {
-        string candidate = File.Exists(_lastSonyPkgPath) ? _lastSonyPkgPath : txtSonyPkgOutput.Text.Trim();
-        if (File.Exists(candidate)) { sonyPkgOpenDialog.FileName = Path.GetFileName(candidate); sonyPkgOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate); }
-        if (sonyPkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        sonyPkgExtractFolderDialog.Description = "Select a folder for PS5 debug package extraction";
-        if (sonyPkgExtractFolderDialog.ShowDialog(this) != DialogResult.OK) return;
-        string destination = FindAvailableDirectory(Path.Combine(sonyPkgExtractFolderDialog.SelectedPath,
-            MakeSafeFileName(Path.GetFileNameWithoutExtension(sonyPkgOpenDialog.FileName))));
-        string passcode = chkSonyPkgCustomPasscode.Checked ? txtSonyPkgPasscode.Text : SonyDebugPackageCredentials.DefaultPasscode;
-        BeginSonyPkgOperation("Extracting PS5 debug package...");
-        try
-        {
-            SonyPackageExtractResult result = await SonyPackageExtraction.ExtractAsync(sonyPkgOpenDialog.FileName,
-                destination, passcode, new Progress<SonyPackageExtractProgress>(value =>
-                {
-                    double percent = value.TotalBytes == 0 ? 0 : value.CompletedBytes * 100d / value.TotalBytes;
-                    progressSonyPkg.Value = Math.Clamp((int)Math.Round(percent), progressSonyPkg.Minimum, progressSonyPkg.Maximum);
-                    lblSonyPkgProgress.Text = $"Extracting: {percent:N1}%  ({FormatBytes(value.CompletedBytes)} / {FormatBytes(value.TotalBytes)})";
-                }), _sonyPkgCancellation!.Token);
-            SetSonyPkgResult($"Extracted {result.FileCount:N0} files to {result.Destination}");
-        }
-        catch (OperationCanceledException) { SetSonyPkgResult("Package extraction cancelled; partial output was removed."); }
-        catch (Exception ex) when (IsFfpfscOperationException(ex)) { SetSonyPkgResult("Package extraction failed."); DarkMessageBox.ShowError(ex.Message, "PS5 debug package extraction"); }
-        finally { EndSonyPkgOperation(); }
-    }
-
-    private void btnSonyPkgAcceptance_Click(object? sender, EventArgs e)
-    {
-        string candidate = File.Exists(_lastSonyPkgPath) ? _lastSonyPkgPath : txtSonyPkgOutput.Text.Trim();
-        if (File.Exists(candidate)) { sonyPkgOpenDialog.FileName = Path.GetFileName(candidate); sonyPkgOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate); }
-        if (sonyPkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string passcode = chkSonyPkgCustomPasscode.Checked ? txtSonyPkgPasscode.Text : SonyDebugPackageCredentials.DefaultPasscode;
-        SonyPackageAcceptanceReport report = SonyPackageAcceptanceValidator.Validate(sonyPkgOpenDialog.FileName, passcode);
-        string details = string.Join(Environment.NewLine, report.Checks.Select(check => $"[{check.State}] {check.Name}: {check.Message}"));
-        SetSonyPkgResult(report.IsStructurallyReady ? "Structural package acceptance checks passed." : "Structural package acceptance checks found failures.");
-        DarkMessageBox.ShowInformation(details, "PS5 debug package acceptance check");
-    }
-
-    private async void btnSonyPkgSplit_Click(object? sender, EventArgs e)
-    {
-        string candidate = File.Exists(_lastSonyPkgPath) ? _lastSonyPkgPath : txtSonyPkgOutput.Text.Trim();
-        if (File.Exists(candidate))
-        {
-            sonyPkgOpenDialog.FileName = Path.GetFileName(candidate);
-            sonyPkgOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate);
-        }
-        if (sonyPkgOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        if (sonyPkgSplitFolderDialog.ShowDialog(this) != DialogResult.OK) return;
-        if (Directory.EnumerateFileSystemEntries(sonyPkgSplitFolderDialog.SelectedPath).Any())
-        {
-            DarkMessageBox.ShowWarning("Select an empty output folder. This keeps a split set and its manifest together.",
-                "Split package");
-            return;
-        }
-        BeginSonyPkgOperation("Splitting package and calculating SHA-256 and CRC-32C checksums...");
-        try
-        {
-            SonyPackageSplitResult result = await SonyPackageSplit.CreateAsync(sonyPkgOpenDialog.FileName,
-                sonyPkgSplitFolderDialog.SelectedPath, progress: new Progress<SonyPackageSplitProgress>(value =>
-                {
-                    double percent = value.TotalBytes == 0 ? 0 : value.CompletedBytes * 100d / value.TotalBytes;
-                    progressSonyPkg.Value = Math.Clamp((int)Math.Round(percent), progressSonyPkg.Minimum, progressSonyPkg.Maximum);
-                    lblSonyPkgProgress.Text = $"Splitting: {percent:N1}%  ({FormatBytes(value.CompletedBytes)} / {FormatBytes(value.TotalBytes)})";
-                }), cancellationToken: _sonyPkgCancellation!.Token);
-            _lastSonyPkgPath = sonyPkgOpenDialog.FileName;
-            progressSonyPkg.Value = progressSonyPkg.Maximum;
-            SetSonyPkgResult($"Created verified split set: {result.Manifest.Pieces.Count:N0} pieces.");
-            DarkMessageBox.ShowInformation(
-                $"Created {result.Manifest.Pieces.Count:N0} verified package pieces.\n\nManifest: {result.ManifestPath}\n" +
-                $"Original size: {FormatBytes(result.Manifest.SourceBytes)}\nSHA-256: {result.Manifest.SourceSha256}",
-                "PS5 package split complete");
-        }
-        catch (OperationCanceledException) { SetSonyPkgResult("Package split cancelled; partial pieces were removed."); }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetSonyPkgResult("Package split failed.");
-            DarkMessageBox.ShowError(ex.Message, "PS5 package split");
-        }
-        finally { EndSonyPkgOperation(); }
-    }
-
-    private async void btnSonyPkgMerge_Click(object? sender, EventArgs e)
-    {
-        if (sonyPkgSplitManifestOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string manifest = sonyPkgSplitManifestOpenDialog.FileName;
-        string baseName = Path.GetFileNameWithoutExtension(manifest);
-        if (baseName.EndsWith(".ps5split", StringComparison.OrdinalIgnoreCase))
-            baseName = baseName[..^".ps5split".Length];
-        sonyPkgSaveDialog.FileName = baseName + ".pkg";
-        sonyPkgSaveDialog.InitialDirectory = Path.GetDirectoryName(manifest);
-        sonyPkgSaveDialog.Title = "Save merged PS5 package";
-        if (sonyPkgSaveDialog.ShowDialog(this) != DialogResult.OK) return;
-        string destination = sonyPkgSaveDialog.FileName;
-        if (File.Exists(destination) && DarkMessageBox.ShowWarning(
-                "The merged package will replace this existing file after the split set has been fully verified.\n\n" + destination,
-                "Replace merged package?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-        BeginSonyPkgOperation("Verifying split manifest and package pieces...");
-        try
-        {
-            await SonyPackageMerge.MergeManifestAtomicAsync(manifest, destination, _sonyPkgCancellation!.Token);
-            _lastSonyPkgPath = destination;
-            progressSonyPkg.Value = progressSonyPkg.Maximum;
-            SetSonyPkgResult("Verified split set merged successfully.");
-            DarkMessageBox.ShowInformation("Every split piece passed SHA-256 and CRC-32C verification before merging.\n\n" + destination,
-                "PS5 package merge complete");
-        }
-        catch (OperationCanceledException) { SetSonyPkgResult("Package merge cancelled; partial output was removed."); }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetSonyPkgResult("Package merge failed; the original split set is unchanged.");
-            DarkMessageBox.ShowError(ex.Message, "PS5 package merge");
-        }
-        finally
-        {
-            sonyPkgSaveDialog.Title = "Save PS5 debug package";
-            EndSonyPkgOperation();
-        }
-    }
-
-    private void btnSonyPkgCancel_Click(object? sender, EventArgs e) => _sonyPkgCancellation?.Cancel();
-
-    private void BeginSonyPkgOperation(string message)
-    {
-        _sonyPkgCancellation?.Cancel();
-        _sonyPkgCancellation?.Dispose();
-        _sonyPkgCancellation = new CancellationTokenSource();
-        progressSonyPkg.Value = 0;
-        lblSonyPkgProgress.Text = message;
-        statusLabel.Text = message;
-        _isSonyPkgBusy = true;
-        UpdateOperationState();
-    }
-
-    private void EndSonyPkgOperation()
-    {
-        _isSonyPkgBusy = false;
-        UpdateOperationState();
-        _sonyPkgCancellation?.Dispose();
-        _sonyPkgCancellation = null;
-    }
-
-    private IProgress<SonyDebugPackageProgress> CreateSonyPkgProgress() =>
-        new Progress<SonyDebugPackageProgress>(value =>
-        {
-            double percentage = value.TotalBytes <= 0 ? 0 : value.CompletedBytes * 100.0 / value.TotalBytes;
-            progressSonyPkg.Value = Math.Clamp((int)Math.Round(percentage), progressSonyPkg.Minimum, progressSonyPkg.Maximum);
-            lblSonyPkgProgress.Text = value.TotalBytes <= 0
-                ? value.Stage
-                : $"{value.Stage}: {percentage:N1}%  ({FormatBytes(value.CompletedBytes)} / {FormatBytes(value.TotalBytes)})";
-            statusLabel.Text = lblSonyPkgProgress.Text;
-        });
-
-    private void SetSonyPkgResult(string message)
-    {
-        lblSonyPkgProgress.Text = message;
-        lblSonyPkgOperationsInfo.Text = message;
-        statusLabel.Text = message;
-    }
-
-    private void btnExfatBrowseOutput_Click(object? sender, EventArgs e)
-    {
-        string current = txtExfatOutput.Text.Trim();
-        if (current.Length > 0)
-        {
-            exfatSaveDialog.FileName = Path.GetFileName(current);
-            exfatSaveDialog.InitialDirectory = Path.GetDirectoryName(current);
-        }
-        if (exfatSaveDialog.ShowDialog(this) == DialogResult.OK)
-            txtExfatOutput.Text = exfatSaveDialog.FileName;
-    }
-
-    private async void btnExfatCreate_Click(object? sender, EventArgs e)
-    {
-        Ps5GameInfo? game = _selectedGame;
-        if (game?.SourceKind != Ps5SourceKind.LooseDump || !Directory.Exists(game.RootPath))
-        {
-            DarkMessageBox.ShowWarning("Select an unpacked PS5 game dump in the library first.", "Create exFAT");
-            return;
-        }
-        string destination = txtExfatOutput.Text.Trim();
-        if (destination.Length == 0)
-        {
-            btnExfatBrowseOutput_Click(sender, e);
-            destination = txtExfatOutput.Text.Trim();
-            if (destination.Length == 0) return;
-        }
-        destination = Path.GetFullPath(destination);
-        if (IsPathInsideDirectory(destination, game.RootPath))
-        {
-            DarkMessageBox.ShowWarning(
-                "The output image must be outside the source game folder so it cannot be included in itself.",
-                "Invalid exFAT output");
-            return;
-        }
-        bool replacing = File.Exists(destination);
-        if (replacing && DarkMessageBox.ShowWarning(
-                $"The output file already exists and will be replaced only after the new image passes verification.\n\n{destination}",
-                "Replace exFAT image?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-        string workingPath = replacing
-            ? destination + "." + Guid.NewGuid().ToString("N") + ".replacement"
-            : destination;
-
-        BeginExfatOperation("Preparing selected dump...");
-        try
-        {
-            var options = new ExfatBuildOptions
-            {
-                ClusterSize = cboExfatCluster.SelectedIndex switch
-                {
-                    1 => 32 * 1024,
-                    2 => 64 * 1024,
-                    _ => null
-                },
-                GenerateAmprIndex = chkExfatAmpr.Checked
-            };
-            IProgress<FfpfscProgress> progress = CreateExfatProgress();
-            await RunFfpfscWorkerActionAsync(() => ExfatImage.WriteDirectoryAsync(game.RootPath, workingPath,
-                options, progress, _exfatCancellation!.Token), _exfatCancellation!.Token);
-            ExfatVerificationResult verification = await RunFfpfscWorkerAsync(() =>
-                ExfatImage.VerifyAsync(workingPath, progress, _exfatCancellation.Token), _exfatCancellation.Token);
-            if (replacing) File.Move(workingPath, destination, true);
-            _lastExfatPath = destination;
-            txtExfatOutput.Text = destination;
-            progressExfat.Value = progressExfat.Maximum;
-            string summary = $"Created {Path.GetFileName(destination)} | {verification.FileCount:N0} files | " +
-                             $"{FormatBytes(verification.ImageSize)} | {FormatBytes(verification.ClusterSize)} clusters";
-            SetExfatResult(summary);
-            DarkMessageBox.ShowInformation(
-                $"Native exFAT image created and fully verified.\n\n" +
-                $"Image: {destination}\n" +
-                $"Image size: {FormatBytes(verification.ImageSize)}\n" +
-                $"Cluster size: {FormatBytes(verification.ClusterSize)}\n" +
-                $"Files: {verification.FileCount:N0}\n" +
-                $"Directories: {verification.DirectoryCount:N0}\n" +
-                $"Logical file data: {FormatBytes(verification.LogicalFileBytes)}\n" +
-                $"Manifest SHA-256: {verification.ManifestSha256}",
-                "exFAT creation complete");
-        }
-        catch (OperationCanceledException)
-        {
-            TryDeleteFile(workingPath);
-            SetExfatResult("exFAT creation cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            TryDeleteFile(workingPath);
-            SetExfatResult("exFAT creation failed.");
-            DarkMessageBox.ShowError(ex.Message, "exFAT creation");
-        }
-        finally
-        {
-            EndExfatOperation();
-        }
-    }
-
-    private async void btnExfatVerify_Click(object? sender, EventArgs e)
-    {
-        PrepareExfatOpenDialog();
-        if (exfatOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = exfatOpenDialog.FileName;
-        BeginExfatOperation("Inspecting exFAT filesystem...");
-        try
-        {
-            IProgress<FfpfscProgress> progress = CreateExfatProgress();
-            ExfatVerificationResult result = await RunFfpfscWorkerAsync(() =>
-                ExfatImage.VerifyAsync(inputPath, progress, _exfatCancellation!.Token),
-                _exfatCancellation!.Token);
-            _lastExfatPath = Path.GetFullPath(inputPath);
-            progressExfat.Value = progressExfat.Maximum;
-            SetExfatResult($"Valid | {result.FileCount:N0} files | {FormatBytes(result.ImageSize)} | " +
-                           $"{FormatBytes(result.ClusterSize)} clusters");
-            DarkMessageBox.ShowInformation(
-                $"The exFAT structure is valid and every file was read successfully.\n\n" +
-                $"Image size: {FormatBytes(result.ImageSize)}\n" +
-                $"Cluster size: {FormatBytes(result.ClusterSize)}\n" +
-                $"Files: {result.FileCount:N0}\n" +
-                $"Directories: {result.DirectoryCount:N0}\n" +
-                $"Logical file data: {FormatBytes(result.LogicalFileBytes)}\n" +
-                $"Manifest SHA-256: {result.ManifestSha256}",
-                "exFAT verification");
-        }
-        catch (OperationCanceledException)
-        {
-            SetExfatResult("exFAT verification cancelled.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetExfatResult("exFAT verification failed.");
-            DarkMessageBox.ShowError(ex.Message, "exFAT verification");
-        }
-        finally
-        {
-            EndExfatOperation();
-        }
-    }
-
-    private async void btnExfatExtract_Click(object? sender, EventArgs e)
-    {
-        PrepareExfatOpenDialog();
-        if (exfatOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        if (exfatExtractFolderDialog.ShowDialog(this) != DialogResult.OK) return;
-        string baseName = MakeSafeFileName(Path.GetFileNameWithoutExtension(exfatOpenDialog.FileName));
-        string destination = FindAvailableDirectory(Path.Combine(exfatExtractFolderDialog.SelectedPath, baseName));
-        BeginExfatOperation("Extracting exFAT files...");
-        try
-        {
-            IProgress<FfpfscProgress> progress = CreateExfatProgress();
-            await RunFfpfscWorkerActionAsync(() => ExfatImage.ExtractDirectoryAsync(exfatOpenDialog.FileName,
-                destination, progress, _exfatCancellation!.Token), _exfatCancellation!.Token);
-            _lastExfatPath = Path.GetFullPath(exfatOpenDialog.FileName);
-            progressExfat.Value = progressExfat.Maximum;
-            SetExfatResult($"Extracted files to {destination}");
-            DarkMessageBox.ShowInformation($"The exFAT filesystem was extracted successfully.\n\n{destination}",
-                "exFAT extraction");
-        }
-        catch (OperationCanceledException)
-        {
-            SetExfatResult("exFAT extraction cancelled; partial output was removed.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetExfatResult("exFAT extraction failed.");
-            DarkMessageBox.ShowError(ex.Message, "exFAT extraction");
-        }
-        finally
-        {
-            EndExfatOperation();
-        }
-    }
-
-    private async void btnExfatRefreshAmpr_Click(object? sender, EventArgs e)
-    {
-        PrepareExfatOpenDialog();
-        if (exfatOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = exfatOpenDialog.FileName;
-        if (DarkMessageBox.ShowWarning(
-                "This operation creates or refreshes the root ampr_emu.index. If necessary, it can relocate the " +
-                "index, extend the root directory, and safely grow the exFAT image tail. All changed byte ranges " +
-                "and the original image length are restored automatically if cancellation or verification fails.\n\n" +
-                inputPath,
-                "Refresh AMPR index?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-
-        BeginExfatOperation("Building AMPR index from exFAT entries...");
-        try
-        {
-            IProgress<FfpfscProgress> progress = CreateExfatProgress();
-            ExfatAmprRefreshResult result = await RunFfpfscWorkerAsync(() =>
-                ExfatAmprPatcher.RefreshAsync(inputPath, progress, _exfatCancellation!.Token),
-                _exfatCancellation!.Token);
-            _lastExfatPath = Path.GetFullPath(inputPath);
-            progressExfat.Value = progressExfat.Maximum;
-            string state = result.Created ? "Created" : result.Changed ? "Refreshed" : "Already current";
-            SetExfatResult($"{state} AMPR index | {result.RecordCount:N0} records | " +
-                           $"{FormatBytes(result.IndexBytes)}");
-            DarkMessageBox.ShowInformation(
-                $"AMPR index status: {state}.\n\n" +
-                $"Records: {result.RecordCount:N0}\n" +
-                $"Index size: {FormatBytes(result.IndexBytes)}\n" +
-                $"Allocation: cluster {result.FirstCluster:N0}, {result.ClusterCount:N0} cluster(s)\n" +
-                $"Image grew: {(result.ImageGrew ? "Yes" : "No")}\n" +
-                $"SHA-256: {result.Sha256}",
-                "exFAT AMPR index");
-        }
-        catch (OperationCanceledException)
-        {
-            SetExfatResult("AMPR refresh cancelled; original index bytes were preserved.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetExfatResult("AMPR refresh was not applied.");
-            DarkMessageBox.ShowError(ex.Message, "exFAT AMPR refresh");
-        }
-        finally
-        {
-            EndExfatOperation();
-        }
-    }
-
-    private void btnExfatEdit_Click(object? sender, EventArgs e)
-    {
-        PrepareExfatOpenDialog();
-        exfatOpenDialog.Title = "Select an exFAT image to edit";
-        if (exfatOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        try
-        {
-            using var editor = new ExfatEditorForm(exfatOpenDialog.FileName);
-            editor.ShowDialog(this);
-            _lastExfatPath = Path.GetFullPath(exfatOpenDialog.FileName);
-            statusLabel.Text = $"Closed exFAT editor for {Path.GetFileName(_lastExfatPath)}.";
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            DarkMessageBox.ShowError(ex.Message, "Open exFAT editor");
-        }
-    }
-
-    private async void btnExfatRepair_Click(object? sender, EventArgs e)
-    {
-        PrepareExfatOpenDialog();
-        exfatOpenDialog.Title = "Select a recoverable exFAT image to repair";
-        if (exfatOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        string inputPath = exfatOpenDialog.FileName;
-        if (DarkMessageBox.ShowWarning(
-                "Repair first restores a damaged main or backup boot region when the other copy is valid. It then " +
-                "extracts every readable file, rebuilds all filesystem metadata beside the original, fully verifies " +
-                "the result, and only then replaces the original image.\n\n" +
-                "This can require substantial free space and time. Damage affecting both boot copies or unreadable " +
-                "file data cannot be repaired automatically.\n\n" + inputPath,
-                "Repair exFAT image?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
-
-        BeginExfatOperation("Checking exFAT boot regions...");
-        try
-        {
-            IProgress<FfpfscProgress> progress = CreateExfatProgress();
-            ExfatRepairResult result = await RunFfpfscWorkerAsync(() =>
-                ExfatImageMaintenance.RepairAsync(inputPath, progress, _exfatCancellation!.Token),
-                _exfatCancellation!.Token);
-            _lastExfatPath = Path.GetFullPath(inputPath);
-            progressExfat.Value = progressExfat.Maximum;
-            SetExfatResult($"Repaired and verified {result.Verification.FileCount:N0} files.");
-            DarkMessageBox.ShowInformation(
-                $"The exFAT image was rebuilt and fully verified.\n\n" +
-                $"Boot mirror recovered: {(result.BootRegionRecovered ? "Yes" : "Not required")}\n" +
-                $"Files: {result.Verification.FileCount:N0}\n" +
-                $"Directories: {result.Verification.DirectoryCount:N0}\n" +
-                $"Manifest SHA-256: {result.Verification.ManifestSha256}",
-                "exFAT repair complete");
-        }
-        catch (OperationCanceledException)
-        {
-            SetExfatResult("exFAT repair cancelled; the original image was preserved.");
-        }
-        catch (Exception ex) when (IsFfpfscOperationException(ex))
-        {
-            SetExfatResult("exFAT repair failed; the original image was preserved.");
-            DarkMessageBox.ShowError(ex.Message, "exFAT repair");
-        }
-        finally
-        {
-            EndExfatOperation();
-        }
-    }
-
-    private void btnExfatCancel_Click(object? sender, EventArgs e) => _exfatCancellation?.Cancel();
-
-    private void BeginExfatOperation(string message)
-    {
-        _exfatCancellation?.Cancel();
-        _exfatCancellation?.Dispose();
-        _exfatCancellation = new CancellationTokenSource();
-        progressExfat.Value = 0;
-        lblExfatProgress.Text = message;
-        statusLabel.Text = message;
-        _isExfatBusy = true;
-        UpdateOperationState();
-    }
-
-    private void EndExfatOperation()
-    {
-        _isExfatBusy = false;
-        UpdateOperationState();
-        _exfatCancellation?.Dispose();
-        _exfatCancellation = null;
-    }
-
-    private IProgress<FfpfscProgress> CreateExfatProgress() => new Progress<FfpfscProgress>(value =>
-    {
-        double percentage = value.TotalBytes <= 0 ? 0 : value.BytesProcessed * 100.0 / value.TotalBytes;
-        progressExfat.Value = Math.Clamp((int)Math.Round(percentage), progressExfat.Minimum, progressExfat.Maximum);
-        lblExfatProgress.Text = $"{value.Stage}: {percentage:N1}%  " +
-                                $"({FormatBytes(value.BytesProcessed)} / {FormatBytes(value.TotalBytes)})";
-        statusLabel.Text = lblExfatProgress.Text;
-    });
-
-    private void SetExfatResult(string message)
-    {
-        lblExfatProgress.Text = message;
-        lblExfatOperationsInfo.Text = message;
-        statusLabel.Text = message;
-    }
-
-    private void PrepareExfatOpenDialog()
-    {
-        exfatOpenDialog.Title = "Select an exFAT image";
-        string candidate = File.Exists(_lastExfatPath) ? _lastExfatPath : txtExfatOutput.Text.Trim();
-        if (_selectedGame?.SourceKind == Ps5SourceKind.FilesystemImage && File.Exists(_selectedGame.RootPath))
-            candidate = _selectedGame.RootPath;
-        if (!File.Exists(candidate)) return;
-        exfatOpenDialog.FileName = Path.GetFileName(candidate);
-        exfatOpenDialog.InitialDirectory = Path.GetDirectoryName(candidate);
-    }
-
-    private static bool IsPathInsideDirectory(string path, string directory)
-    {
-        string fullPath = Path.GetFullPath(path);
-        string root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase);
-    }
 
     private static string FindAvailableDirectory(string preferredPath)
     {
@@ -1707,52 +371,153 @@ public partial class MainForm : DarkForm
         throw new IOException("Unable to find an available extraction directory name.");
     }
 
-    private void Settings_Click(object? sender, EventArgs e)
+    private async void Settings_Click(object? sender, EventArgs e)
     {
         using var form = new SettingsForm(_settings);
         if (form.ShowDialog(this) != DialogResult.OK) return;
+
+        bool libraryChanged = !_settings.LibraryFolders.SequenceEqual(form.Settings.LibraryFolders, StringComparer.OrdinalIgnoreCase)
+                              || _settings.RecursiveScan != form.Settings.RecursiveScan;
         _settings = form.Settings;
-        _stateStore.SaveSettings(_settings);
-        statusLabel.Text = "Settings saved. Choose Refresh to rescan the configured folders.";
+        SaveSettingsQuietly();
+        ApplyRuntimeSettings();
+        SyncFilterControls();
+        if (form.ResetLayout) ResetLibraryColumnLayout();
+        if (form.ClearCaches) ClearRuntimeCaches();
+
+        if (!libraryChanged)
+        {
+            statusLabel.Text = "Settings saved.";
+            return;
+        }
+        if (ScanRoots().Count == 0)
+        {
+            _games = [];
+            _stateStore.SaveManifest(_games);
+            _detailsCache.Clear();
+            ApplyFilter();
+            statusLabel.Text = "All library folders were removed.";
+            return;
+        }
+        statusLabel.Text = "Settings saved. Rescanning configured folders...";
+        await ScanAsync(ScanRoots(), merge: false);
+    }
+
+    private void ResetLibraryColumnLayout()
+    {
+        _settings.LibraryColumnOrder = [];
+        _settings.LibraryHiddenColumns = [];
+        if (_libraryColumnsReady)
+        {
+            _libraryColumnsReady = false;
+            EnsureLibraryColumns();
+            ApplyFilter();
+        }
+        statusLabel.Text = "Column layout reset.";
+    }
+
+    private void ClearRuntimeCaches()
+    {
+        _detailsCache.Clear();
+        _libraryThumbnails.Clear();
+        _libraryThumbnailAttempts.Clear();
+        statusLabel.Text = "Caches cleared.";
     }
 
     private void Exit_Click(object? sender, EventArgs e) => Close();
 
-    private void About_Click(object? sender, EventArgs e) =>
-        DarkMessageBox.ShowInformation(
-            "PS5 PKG Tool\n\nA DarkUI library manager for unpacked PS5 game dumps, filesystem images, and Sony CNT/FIH packages.\n" +
-            "Includes native exFAT, UFS2/FFPKG, PFSC and PFS frameworks for creating, verifying, extracting, editing, rebuilding, and directly browsing images without Python or mounted drives.",
-            "About PS5 PKG Tool");
+    private void About_Click(object? sender, EventArgs e)
+    {
+        using var form = new AboutForm(AppVersion());
+        form.ShowDialog(this);
+    }
 
-    private void txtSearch_TextChanged(object? sender, EventArgs e) => ApplyFilter();
+    private const string RepositoryUrl = "https://github.com/pearlxcore/PS5PkgTool";
+    private const string LatestReleaseApiUrl = "https://api.github.com/repos/pearlxcore/PS5PkgTool/releases/latest";
+    private const string KoFiUrl = "https://ko-fi.com/pearlxcore";
+
+    private static void OpenExternalUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            AppDialog.ShowError(ex.Message, "Open link");
+        }
+    }
+
+    private void menuHelpKofi_Click(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);
+
+    private async void menuHelpCheckUpdate_Click(object? sender, EventArgs e)
+    {
+        try
+        {
+            statusLabel.Text = "Checking for updates...";
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("PS5PKGTool");
+            string json = await client.GetStringAsync(LatestReleaseApiUrl);
+            using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(json);
+            string tag = document.RootElement.TryGetProperty("tag_name", out System.Text.Json.JsonElement tagElement)
+                ? tagElement.GetString() ?? string.Empty
+                : string.Empty;
+            string page = document.RootElement.TryGetProperty("html_url", out System.Text.Json.JsonElement urlElement)
+                ? urlElement.GetString() ?? RepositoryUrl
+                : RepositoryUrl;
+            string current = AppVersion();
+            string latest = tag.TrimStart('v', 'V').Trim();
+            if (latest.Length == 0)
+            {
+                AppDialog.ShowInformation("The latest release has no version tag.", "Check for updates");
+                return;
+            }
+            int comparison = CompareVersions(current, latest) ?? 0;
+            if (comparison < 0)
+            {
+                if (AppDialog.ShowInformation(
+                        $"A newer version is available.\n\nInstalled: {current}\nLatest: {latest}\n\nOpen the download page?",
+                        "Check for updates", DarkDialogButton.YesNo) == DialogResult.Yes)
+                    OpenExternalUrl(page);
+            }
+            else
+            {
+                AppDialog.ShowInformation("PS5 PKG Tool is up to date.", "Check for updates");
+            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            AppDialog.ShowInformation("PS5 PKG Tool is up to date.", "Check for updates");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            AppDialog.ShowError("Could not check for updates.\n\n" + ex.Message, "Check for updates");
+        }
+        finally
+        {
+            statusLabel.Text = "Ready";
+        }
+    }
+
 
     private void ApplyFilter()
     {
-        string query = txtSearch.Text.Trim();
-        _visibleGames = string.IsNullOrWhiteSpace(query)
-            ? _games.ToList()
-            : _games.Where(game =>
-                game.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
-                game.TitleId.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                game.ContentId.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                game.RootPath.Contains(query, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        string query = searchLibrary.SearchText.Trim();
+        _visibleGames = _games
+            .Where(MatchesFilters)
+            .Where(game => MatchesQuery(game, query))
+            .ToList();
 
-        var table = new DataTable();
-        table.Columns.Add("Title");
-        table.Columns.Add("Title ID");
-        table.Columns.Add("Source");
-        table.Columns.Add("Size", typeof(long));
-        table.Columns.Add("Version");
-        table.Columns.Add("Required Firmware");
-        table.Columns.Add("Features");
-        table.Columns.Add("DRM");
-        table.Columns.Add("Location");
-        foreach (Ps5GameInfo game in _visibleGames)
-            table.Rows.Add(game.Title, game.TitleId, game.SourceDescription,
-                game.SourceSize > 0 ? game.SourceSize : DBNull.Value, game.DisplayVersion, game.RequiredSystemSoftware,
-                string.Join(", ", game.DeclaredFeatures), game.DrmType, game.RootPath);
-        gridLibrary.DataSource = table;
+        PopulateLibraryGrid();
+
         statusCount.Text = $"{_visibleGames.Count:N0} of {_games.Count:N0} games";
+        if (lblFilterEmpty is not null)
+        {
+            lblFilterEmpty.Visible = _visibleGames.Count == 0 && _games.Count > 0;
+            if (lblFilterEmpty.Visible) lblFilterEmpty.BringToFront();
+        }
+        UpdateFilterBadges();
+        RebuildFilterChips();
         if (_visibleGames.Count == 0)
         {
             SetSelectedGame(null);
@@ -1762,19 +527,18 @@ public partial class MainForm : DarkForm
 
     private async void gridLibrary_SelectionChanged(object? sender, EventArgs e)
     {
-        if (gridLibrary.SelectedRows.Count == 0) return;
-        int rowIndex = gridLibrary.SelectedRows[0].Index;
-        if (rowIndex < 0 || rowIndex >= _visibleGames.Count) return;
-        Ps5GameInfo game = _visibleGames[rowIndex];
-        SetSelectedGame(game);
-        await ShowGameAsync(game);
-    }
-
-    private void gridLibrary_CellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
-    {
-        if (gridLibrary.Columns[e.ColumnIndex].Name != "Size") return;
-        e.Value = e.Value is long size && size > 0 ? FormatBytes(size) : string.Empty;
-        e.FormattingApplied = true;
+        if (_suppressLibrarySelection) return;
+        if (SelectedGame() is not { } game) return;
+        try
+        {
+            SetSelectedGame(game);
+            RefreshImageTools();
+            await ShowGameAsync(game);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Unable to open '{game.RootPath}': {ex.Message}");
+        }
     }
 
     private async Task ShowGameAsync(Ps5GameInfo game)
@@ -1783,6 +547,7 @@ public partial class MainForm : DarkForm
         txtRawMetadata.Text = PrettyJson(game.RawParamJson);
         ClearDeepDetails();
         statusLabel.Text = $"Loading details for {game.Title}...";
+        long sizeBefore = game.SourceSize;
 
         _detailCancellation?.Cancel();
         _detailCancellation?.Dispose();
@@ -1792,11 +557,33 @@ public partial class MainForm : DarkForm
         {
             if (!_detailsCache.TryGetValue(game.RootPath, out Ps5GameDetails? details))
             {
-                details = await _detailsLoader.LoadAsync(game, _detailCancellation.Token);
+                // Artwork is reported progressively: the icon first (cheap PNG), then the DDS
+                // backgrounds. Show each snapshot as it arrives so the Artwork tab fills in fast.
+                var artworkProgress = new Progress<Ps5Artwork>(snapshot =>
+                {
+                    if (version != _detailVersion) return;
+                    _currentArtwork = snapshot;
+                    if (tabsDetails.SelectedTab == tabArtwork) ApplyArtwork(snapshot);
+                });
+                details = await _detailsLoader.LoadAsync(game, _detailCancellation.Token, artworkProgress);
                 _detailsCache[game.RootPath] = details;
+                if (_currentArtwork is null)
+                    _currentArtwork = new Ps5Artwork(details.Icon, details.Background, details.Background1, details.Background2);
             }
             if (version != _detailVersion || _detailCancellation.IsCancellationRequested) return;
-            PopulateDetails(game, details);
+            _currentDetails = details;
+            _currentDetailsRoot = game.RootPath;
+            if (_currentArtwork is null)
+                _currentArtwork = new Ps5Artwork(details.Icon, details.Background, details.Background1, details.Background2);
+            _populatedDetailTabs.Clear();
+            PopulateActiveDetailTab();
+            // A loose dump's size is filled in during the details walk; refresh the overview and
+            // persist it so the next start shows it without re-walking.
+            if (game.SourceSize != sizeBefore)
+            {
+                PopulateOverview(game);
+                _stateStore.SaveManifest(_games);
+            }
             statusLabel.Text = details.Errors.Count == 0
                 ? $"Loaded {game.Title}."
                 : $"Loaded {game.Title} with {details.Errors.Count} detail warning(s).";
@@ -1806,8 +593,32 @@ public partial class MainForm : DarkForm
         {
             if (version != _detailVersion) return;
             statusLabel.Text = "Unable to load game details.";
-            DarkMessageBox.ShowError(ex.Message, "PS5 game details");
+            Logger.Warn($"Unable to read '{game.RootPath}': {ex.Message}");
         }
+    }
+
+    /// <summary>Runs a detail-load task and logs any failure instead of surfacing a dialog.</summary>
+    private static async Task RunSilentlyAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Suppressed read error: {ex.Message}");
+        }
+    }
+
+    private void btnCopyRawJson_Click(object? sender, EventArgs e)
+    {
+        if (txtRawMetadata.Text.Length == 0)
+        {
+            AppDialog.ShowInformation("There is no param.json to copy.", "Raw param.json");
+            return;
+        }
+        CopyText(txtRawMetadata.Text);
     }
 
     private void PopulateOverview(Ps5GameInfo game)
@@ -1868,7 +679,7 @@ public partial class MainForm : DarkForm
         {
             Add("Package Type", package.KindDisplayName);
             Add("Package Size", FormatBytes(package.FileSize));
-            Add("CNT Offset", $"0x{package.ContainerOffset:X}");
+            Add("CNT Offset", $"0x{package.EmbeddedCntOffset:X}");
             Add("CNT Entries", $"{package.Entries.Count:N0} ({package.EncryptedEntryCount:N0} encrypted)");
             Add("Embedded CNT", package.Entries.Count > 0
                 ? "Present"
@@ -1901,20 +712,482 @@ public partial class MainForm : DarkForm
         }
         foreach (string warning in game.DataWarnings) Add("Metadata Warning", warning);
         gridOverview.DataSource = table;
+        // The "Property" column keeps a fixed width; "Value" takes the rest.
+        if (gridOverview.Columns.Count >= 2)
+        {
+            gridOverview.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
+            gridOverview.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            gridOverview.Columns[0].Width = 220;
+            gridOverview.Columns[1].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        }
+        btnOverviewCopySelected.Enabled = false;
     }
 
-    private void PopulateDetails(Ps5GameInfo game, Ps5GameDetails details)
+    private void gridOverview_SelectionChanged(object? sender, EventArgs e) =>
+        btnOverviewCopySelected.Enabled = gridOverview.SelectedRows.Count > 0;
+
+    private void btnOverviewCopyAll_Click(object? sender, EventArgs e)
     {
-        ReplaceImage(pictureIcon, details.IconPng);
-        ReplaceImage(pictureBackground0, details.BackgroundPng);
-        ReplaceImage(pictureBackground1, details.Background1Png);
-        ReplaceImage(pictureBackground2, details.Background2Png);
-        PopulateTrophies(details.TrophySet);
-        PopulateActivities(details.Uds);
-        PopulateFiles(game, details.Files);
-        PopulateExecutable(details.Executable);
-        if (details.Errors.Count > 0)
-            lblExecutableSummary.Text += "  Warnings: " + string.Join(" | ", details.Errors);
+        if (gridOverview.DataSource is not DataTable table || table.Rows.Count == 0)
+        {
+            AppDialog.ShowInformation("There is no overview information to copy.", "Overview");
+            return;
+        }
+
+        var builder = new StringBuilder();
+        foreach (DataRow row in table.Rows)
+        {
+            string property = row[0]?.ToString() ?? string.Empty;
+            if (property.Length == 0) continue;
+            builder.Append(property).Append(": ").Append(row[1]?.ToString() ?? string.Empty).AppendLine();
+        }
+        CopyText(builder.ToString().TrimEnd());
+    }
+
+    private void btnOverviewCopySelected_Click(object? sender, EventArgs e)
+    {
+        if (gridOverview.SelectedRows.Count == 0 ||
+            gridOverview.SelectedRows[0].DataBoundItem is not DataRowView view) return;
+        string property = view.Row[0]?.ToString() ?? string.Empty;
+        string value = view.Row[1]?.ToString() ?? string.Empty;
+        CopyText($"{property}: {value}");
+    }
+
+    private void tabsDetails_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (tabsDetails.SelectedTab == tabFiles) BalanceFilePanes();
+            PopulateActiveDetailTab();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Unable to populate detail tab: {ex.Message}");
+        }
+    }
+
+    private void splitFileBrowser_SizeChanged(object? sender, EventArgs e) => BalanceFilePanes();
+
+    /// <summary>
+    /// Divides the Files tab into three equal-width panes: the folder tree, the file list, and the
+    /// file viewer. Re-applied whenever the split is resized so the panes stay balanced.
+    /// </summary>
+    private void BalanceFilePanes()
+    {
+        // Three equal panes: the outer split gives 1:2, the inner split halves the 2.
+        // DarkSplitContainer.SetPanelSize clamps each weight to its 40px minimum, so the
+        // weights must stay above 40 or the outer 1:2 collapses to 1:1.
+        splitFileBrowser.SetPanelSize(0, 100);
+        splitFileBrowser.SetPanelSize(1, 200);
+        splitFileContentPreview.SetPanelSize(0, 100);
+        splitFileContentPreview.SetPanelSize(1, 100);
+    }
+
+    private void PopulateActiveDetailTab()
+    {
+        if (_currentDetails is null || _selectedGame is null) return;
+        Ps5GameDetails details = _currentDetails;
+        string key = _currentDetailsRoot;
+
+        if (tabsDetails.SelectedTab == tabArtwork)
+        {
+            ApplyArtwork(_currentArtwork ??
+                new Ps5Artwork(details.Icon, details.Background, details.Background1, details.Background2));
+        }
+        else if (tabsDetails.SelectedTab == tabTrophies)
+        {
+            if (!_populatedDetailTabs.Add("trophies|" + key)) return;
+            PopulateTrophies(details.TrophySet);
+        }
+        else if (tabsDetails.SelectedTab == tabActivities)
+        {
+            if (!_populatedDetailTabs.Add("activities|" + key)) return;
+            PopulateActivities(details.Uds);
+        }
+        else if (tabsDetails.SelectedTab == tabFiles)
+        {
+            if (_populatedDetailTabs.Add("files|" + key))
+                PopulateFiles(_selectedGame, details.Files);
+            else
+                RefreshFileList();
+        }
+        else if (tabsDetails.SelectedTab == tabExecutable)
+        {
+            if (!_populatedDetailTabs.Add("executable|" + key)) return;
+            PopulateExecutable(details.Executable);
+            if (details.Errors.Count > 0)
+                lblExecutableSummary.Text += "  Warnings: " + string.Join(" | ", details.Errors);
+        }
+        else if (tabsDetails.SelectedTab == tabPackage)
+        {
+            if (!_populatedDetailTabs.Add("package|" + key)) return;
+            _ = RunSilentlyAsync(() => PopulatePackageAsync(_selectedGame, details));
+        }
+    }
+
+    private async Task PopulatePackageAsync(Ps5GameInfo game, Ps5GameDetails details)
+    {
+        if (!SourceExists(game))
+        {
+            gridPkgHeader.DataSource = null;
+            gridPkgSegments.DataSource = null;
+            gridPkgEntries.DataSource = null;
+            gridParamSfo.DataSource = null;
+            gridKeystone.DataSource = null;
+            gridSi.DataSource = null;
+            gridPlayGoChunks.DataSource = null;
+            gridPlayGoScenarios.DataSource = null;
+            gridPlayGoFiles.DataSource = null;
+            lblPlayGoSummary.Text = "The selected source was not found.";
+            Logger.Warn($"Package tab skipped: source not found '{game.RootPath}'.");
+            return;
+        }
+
+        SonyPkgSummary? package = game.Package;
+
+        var header = new DataTable();
+        header.Columns.Add("Property");
+        header.Columns.Add("Value");
+        void Add(string property, string value)
+        {
+            if (!string.IsNullOrEmpty(value)) header.Rows.Add(property, value);
+        }
+        Add("Kind", package?.KindDisplayName ?? "PS5 source");
+        Add("Location", game.RootPath);
+        if (package is not null)
+        {
+            Add("File size", FormatBytes(package.FileSize));
+            Add("Signed byte", package.SignedByte.HasValue ? $"0x{package.SignedByte:X2}" : string.Empty);
+            Add("Format version", package.FormatVersion?.ToString() ?? string.Empty);
+            Add("PFS offset", $"0x{package.PfsImageOffset:X}");
+            Add("PFS size", FormatBytes((long)package.PfsImageSize));
+            Add("PFS superblock offset", $"0x{package.PfsSuperblockOffset:X}");
+            Add("Embedded CNT offset", $"0x{package.EmbeddedCntOffset:X}");
+            Add("Header flags", $"0x{package.HeaderFlags:X8}");
+            Add("System entry count", package.SystemEntryCount.ToString());
+            Add("Body offset", $"0x{package.BodyOffset:X}");
+            Add("Body size", FormatBytes((long)package.BodySize));
+            Add("Content ID", package.ContentId);
+            Add("DRM type", $"0x{package.DrmType:X8}");
+            Add("Content type", ContentTypeText(package.ContentType));
+            Add("Content flags", $"0x{package.ContentFlags:X8}");
+            Add("CNT entries", package.Entries.Count.ToString("N0"));
+            Add("Encrypted entries", package.EncryptedEntryCount.ToString("N0"));
+            if (package.NestedPfs is { } pfs)
+            {
+                Add("PFS access", pfs.AccessState.ToString());
+                if (pfs.BlockSize > 0) Add("PFS block size", FormatBytes(pfs.BlockSize));
+                if (pfs.InodeCount > 0) Add("PFS inodes", pfs.InodeCount.ToString("N0"));
+                Add("PFS status", pfs.StatusMessage);
+            }
+        }
+        gridPkgHeader.DataSource = header;
+
+        var segments = new DataTable();
+        segments.Columns.Add("Name");
+        segments.Columns.Add("Offset");
+        segments.Columns.Add("Size");
+        segments.Columns.Add("Bytes", typeof(long));
+        segments.Columns.Add("Note");
+        if (package is not null)
+            foreach (SonyPkgSegment segment in package.Segments)
+                segments.Rows.Add(SegmentName(segment.Name), $"0x{segment.Offset:X}", FormatBytes(segment.Size),
+                    segment.Size, SegmentNote(segment.Name));
+        gridPkgSegments.DataSource = segments;
+
+        var entries = new DataTable();
+        entries.Columns.Add("Id");
+        entries.Columns.Add("Name");
+        entries.Columns.Add("Offset (CNT)");
+        entries.Columns.Add("Size");
+        entries.Columns.Add("Stored");
+        entries.Columns.Add("Encrypted", typeof(bool));
+        entries.Columns.Add("Key", typeof(int));
+        if (package is not null)
+            foreach (SonyPkgEntry entry in package.Entries.OrderBy(item => item.Id))
+                entries.Rows.Add($"0x{entry.Id:X4}", entry.DisplayName, $"0x{entry.DataOffset:X}",
+                    FormatBytes(entry.DataSize), FormatBytes(entry.StoredSize), entry.IsEncrypted, entry.KeyIndex);
+        gridPkgEntries.DataSource = entries;
+
+        byte[] sfoBytes = await ReadParamSfoAsync(game, package);
+        var sfo = new DataTable();
+        sfo.Columns.Add("Key");
+        sfo.Columns.Add("Format");
+        sfo.Columns.Add("Value");
+        foreach (Ps5SfoEntry entry in Ps5SfoReader.Read(sfoBytes))
+            sfo.Rows.Add(entry.Key, entry.Format, entry.Value);
+        gridParamSfo.DataSource = sfo;
+
+        var keystone = new DataTable();
+        keystone.Columns.Add("File");
+        keystone.Columns.Add("Status");
+        keystone.Columns.Add("Size");
+        keystone.Columns.Add("Leading bytes");
+        await AddExtraFileRowAsync(game, keystone, "sce_sys/keystone");
+        await AddExtraFileRowAsync(game, keystone, "sce_sys/nptitle.dat");
+        await AddExtraFileRowAsync(game, keystone, "sce_sys/about/right.sprx");
+        gridKeystone.DataSource = keystone;
+
+        var si = new DataTable();
+        si.Columns.Add("Member");
+        si.Columns.Add("Size");
+        si.Columns.Add("Bytes", typeof(long));
+        SonyPkgSegment? siSegment = package?.Segments.FirstOrDefault(segment =>
+            segment.Name.Equals("SI", StringComparison.OrdinalIgnoreCase));
+        if (siSegment is not null)
+            foreach (Ps5SiMember member in Ps5SiReader.List(game.RootPath, siSegment.Offset, siSegment.Size))
+                si.Rows.Add(member.Name, FormatBytes(member.Size), member.Size);
+        gridSi.DataSource = si;
+
+        await PopulatePlayGoAsync(game, details, siSegment);
+    }
+
+    private async Task PopulatePlayGoAsync(Ps5GameInfo game, Ps5GameDetails details, SonyPkgSegment? siSegment)
+    {
+        var chunks = new DataTable();
+        chunks.Columns.Add("Chunk", typeof(int));
+        chunks.Columns.Add("Label");
+        chunks.Columns.Add("Extents", typeof(int));
+        chunks.Columns.Add("Language mask");
+        chunks.Columns.Add("Size");
+        chunks.Columns.Add("Bytes", typeof(long));
+
+        var scenarios = new DataTable();
+        scenarios.Columns.Add("Scenario", typeof(int));
+        scenarios.Columns.Add("Label");
+        scenarios.Columns.Add("Initial", typeof(int));
+        scenarios.Columns.Add("Chunks", typeof(int));
+        scenarios.Columns.Add("Sequence");
+
+        var files = new DataTable();
+        files.Columns.Add("Path");
+        files.Columns.Add("Chunk", typeof(int));
+        files.Columns.Add("Path hash");
+
+        byte[]? plgx = null;
+        if (siSegment is not null)
+            plgx = await Task.Run(() => Ps5SiReader.ReadMember(
+                game.RootPath, siSegment.Offset, siSegment.Size, "playgo-chunk.dat"));
+        byte[] hashTable = await ReadGameFileAsync(game, "sce_sys/playgo-hash-table.dat");
+        byte[] ficm = await ReadGameFileAsync(game, "sce_sys/playgo-ficm.dat");
+        string[] relativePaths = details.Files.Files.Select(file => file.RelativePath).ToArray();
+        Ps5PlayGoSummary playGo = await Task.Run(() =>
+        {
+            IReadOnlyDictionary<ulong, string> pathMap = Ps5PlayGoReader.BuildPathMap(relativePaths);
+            return Ps5PlayGoReader.Read(plgx, hashTable, ficm, pathMap);
+        });
+
+        foreach (Ps5PlayGoChunk chunk in playGo.Chunks)
+            chunks.Rows.Add(chunk.Id, chunk.Label, chunk.ExtentCount, $"0x{chunk.LanguageMask:X16}",
+                FormatBytes(chunk.TotalBytes), chunk.TotalBytes);
+        foreach (Ps5PlayGoScenario scenario in playGo.Scenarios)
+            scenarios.Rows.Add(scenario.Id, scenario.Label, scenario.InitialChunkCount, scenario.Chunks.Count,
+                string.Join(" ", scenario.Chunks));
+        foreach (Ps5PlayGoFileChunk file in playGo.Files)
+            files.Rows.Add(file.Path, file.ChunkId, $"0x{file.PathHash:X16}");
+
+        gridPlayGoChunks.DataSource = chunks;
+        gridPlayGoScenarios.DataSource = scenarios;
+        gridPlayGoFiles.DataSource = files;
+
+        int resolved = playGo.Files.Count(file => !string.IsNullOrEmpty(file.Path));
+        if (playGo.Chunks.Count == 0 && playGo.Files.Count == 0)
+        {
+            lblPlayGoSummary.Text = string.IsNullOrEmpty(playGo.Notice)
+                ? "No PlayGo data found for this package."
+                : "No PlayGo data found for this package.   Note: " + playGo.Notice;
+            return;
+        }
+
+        StringBuilder summary = new();
+        summary.Append($"PlayGo v{playGo.VersionMajor}.{playGo.VersionMinor}   ");
+        summary.Append($"Header flags: 0x{playGo.HeaderFlags:X8}   ");
+        summary.Append($"Chunks: {playGo.Chunks.Count:N0}   Scenarios: {playGo.Scenarios.Count:N0}   ");
+        summary.Append($"Default scenario: {playGo.DefaultScenarioId}   Files mapped: {resolved:N0} / {playGo.Files.Count:N0}");
+        if (!string.IsNullOrEmpty(playGo.ContentId))
+            summary.Append($"   Content ID: {playGo.ContentId}");
+        if (!string.IsNullOrEmpty(playGo.Notice))
+            summary.Append($"   Note: {playGo.Notice}");
+        lblPlayGoSummary.Text = summary.ToString();
+    }
+
+    private static string ContentTypeText(uint contentType) =>
+        contentType == 0x20 ? "0x00000020  GD (game data)" : $"0x{contentType:X8}";
+
+    private static string SegmentName(string name) => name switch
+    {
+        "SC" => "SC (embedded CNT)",
+        "CNT" => "CNT (metadata container)",
+        "LIH" => "LIH (patch layer)",
+        _ => name
+    };
+
+    private static string SegmentNote(string name) => name switch
+    {
+        "SC" or "CNT" => "Block-aligned (64 KiB); not the logical CNT length",
+        "LIH" => "Patch layer header",
+        _ => string.Empty
+    };
+
+    private async Task<byte[]> ReadParamSfoAsync(Ps5GameInfo game, SonyPkgSummary? package)
+    {
+        // param.sfo is an outer CNT entry (id 0x1000) in Sony packages; the inner-PFS
+        // path is only a fallback for layouts where that entry is not available.
+        const uint ParamSfoEntryId = 0x1000;
+        const int MaximumSfoBytes = 1 << 20;
+        SonyPkgEntry? entry = package?.Entries.FirstOrDefault(candidate => candidate.Id == ParamSfoEntryId);
+        if (entry is not null && !entry.IsEncrypted && entry.DataSize > 0 && entry.DataSize <= MaximumSfoBytes)
+        {
+            try
+            {
+                return new SonyPkgReader().ReadEntryBytes(game.RootPath, package!, entry, MaximumSfoBytes);
+            }
+            catch (InvalidDataException)
+            {
+                // Fall back to the inner-PFS copy below.
+            }
+        }
+        return await ReadGameFileAsync(game, "sce_sys/param.sfo");
+    }
+
+    private static bool SourceExists(Ps5GameInfo game) =>
+        game.SourceKind == Ps5SourceKind.LooseDump ? Directory.Exists(game.RootPath) : File.Exists(game.RootPath);
+
+    private static async Task<byte[]> ReadGameFileAsync(Ps5GameInfo game, string path)
+    {
+        if (!SourceExists(game)) return [];
+        try
+        {
+            GameFileChunk chunk = await Task.Run(() =>
+                GameFileSystem.ReadFileChunk(game, path, 0, 4 * 1024 * 1024));
+            return chunk.Data;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
+                                   NotSupportedException or ArgumentException)
+        {
+            return [];
+        }
+    }
+
+    private static async Task AddExtraFileRowAsync(Ps5GameInfo game, DataTable table, string path)
+    {
+        byte[] bytes = await ReadGameFileAsync(game, path);
+        if (bytes.Length == 0)
+        {
+            table.Rows.Add(path, "not present", string.Empty, string.Empty);
+            return;
+        }
+        int leading = Math.Min(16, bytes.Length);
+        table.Rows.Add(path, "present", FormatBytes(bytes.Length), Convert.ToHexString(bytes.AsSpan(0, leading)));
+    }
+
+    private void ApplyArtwork(Ps5Artwork artwork)
+    {
+        ReplaceImage(pictureIcon, artwork.Icon);
+        ReplaceImage(pictureBackground0, artwork.Background);
+        ReplaceImage(pictureBackground1, artwork.Background1);
+        ReplaceImage(pictureBackground2, artwork.Background2);
+    }
+
+    private void btnArtworkSaveAll_Click(object? sender, EventArgs e)
+    {
+        if (_currentArtwork is null)
+        {
+            AppDialog.ShowInformation("Select a game first to save its artwork.", "Artwork");
+            return;
+        }
+
+        folderBrowserDialog.Description = "Select a folder for the artwork images";
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        string folder = folderBrowserDialog.SelectedPath;
+        int saved = 0;
+        foreach ((PictureBox control, string name) in ArtworkSlots())
+        {
+            Ps5ImageData? data = ArtworkForControl(control);
+            if (data is null || data.IsEmpty) continue;
+            try
+            {
+                SaveArtworkImage(data, Path.Combine(folder, name));
+                saved++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ExternalException)
+            {
+                AppDialog.ShowError(ex.Message, "Save artwork");
+                return;
+            }
+        }
+
+        if (saved == 0) AppDialog.ShowInformation("No artwork was available to save.", "Artwork");
+        else statusLabel.Text = $"Saved {saved} artwork image(s) to {folder}.";
+    }
+
+    private void menuArtworkSaveThis_Click(object? sender, EventArgs e)
+    {
+        if (contextArtwork.SourceControl is not PictureBox control) return;
+        Ps5ImageData? data = ArtworkForControl(control);
+        if (data is null || data.IsEmpty)
+        {
+            AppDialog.ShowInformation("This image is not available for this game.", "Artwork");
+            return;
+        }
+
+        artworkSaveDialog.FileName = ArtworkName(control);
+        if (artworkSaveDialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            SaveArtworkImage(data, artworkSaveDialog.FileName);
+            statusLabel.Text = $"Saved {Path.GetFileName(artworkSaveDialog.FileName)}.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ExternalException)
+        {
+            AppDialog.ShowError(ex.Message, "Save artwork");
+        }
+    }
+
+    private IEnumerable<(PictureBox Control, string Name)> ArtworkSlots()
+    {
+        yield return (pictureIcon, "icon0.png");
+        yield return (pictureBackground0, "pic0.png");
+        yield return (pictureBackground1, "pic1.png");
+        yield return (pictureBackground2, "pic2.png");
+    }
+
+    private Ps5ImageData? ArtworkForControl(Control? control) =>
+        control == pictureIcon ? _currentArtwork?.Icon
+        : control == pictureBackground0 ? _currentArtwork?.Background
+        : control == pictureBackground1 ? _currentArtwork?.Background1
+        : control == pictureBackground2 ? _currentArtwork?.Background2
+        : null;
+
+    private string ArtworkName(Control? control) =>
+        control == pictureIcon ? "icon0.png"
+        : control == pictureBackground0 ? "pic0.png"
+        : control == pictureBackground1 ? "pic1.png"
+        : control == pictureBackground2 ? "pic2.png"
+        : "artwork.png";
+
+    private static void SaveArtworkImage(Ps5ImageData data, string path)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+        string extension = Path.GetExtension(path).ToLowerInvariant();
+        if (!data.IsRgba && extension == ".png")
+        {
+            // PNG artwork is written exactly as stored.
+            File.WriteAllBytes(path, data.Bytes);
+            return;
+        }
+
+        ImageFormat format = extension switch
+        {
+            ".jpg" or ".jpeg" => ImageFormat.Jpeg,
+            ".bmp" => ImageFormat.Bmp,
+            _ => ImageFormat.Png
+        };
+        using Image image = data.IsRgba
+            ? BitmapFromRgba(data.Bytes, data.Width, data.Height)
+            : ImageFromBytes(data.Bytes) ?? throw new InvalidDataException("The artwork image could not be decoded.");
+        image.Save(path, format);
     }
 
     private void PopulateTrophies(Ps5TrophySet? set)
@@ -1933,7 +1206,7 @@ public partial class MainForm : DarkForm
         {
             foreach (Ps5Trophy trophy in set.Trophies)
             {
-                Image? icon = CreateGridImage(trophy.IconPng);
+                Image? icon = ToImage(trophy.Icon);
                 if (icon is not null) _trophyImages.Add(icon);
                 table.Rows.Add(trophy.Id, icon!, trophy.Grade, trophy.Hidden, trophy.Name, trophy.Description, trophy.UnlockCondition);
             }
@@ -1943,26 +1216,290 @@ public partial class MainForm : DarkForm
                                     $"Language: {set.SelectedLanguage} - UCP integrity: {(set.IntegrityValid ? "Valid" : "Failed")}";
         }
         else lblTrophySummary.Text = "No PS5 trophy archive was found.";
-        gridTrophies.DataSource = table;
+        _trophyView = table.DefaultView;
+        gridTrophies.DataSource = _trophyView;
+        ApplyTrophyFilter();
+    }
+
+    private void trophyFilter_Changed(object? sender, EventArgs e) => ApplyTrophyFilter();
+
+    private void ApplyTrophyFilter()
+    {
+        if (_trophyView is null) return;
+        var clauses = new List<string>();
+        var grades = new List<string>();
+        if (chkTrophyPlatinum.Checked) grades.Add("'Platinum'");
+        if (chkTrophyGold.Checked) grades.Add("'Gold'");
+        if (chkTrophySilver.Checked) grades.Add("'Silver'");
+        if (chkTrophyBronze.Checked) grades.Add("'Bronze'");
+        if (grades.Count > 0) clauses.Add($"Grade IN ({string.Join(",", grades)})");
+
+        string search = searchTrophy.SearchText.Trim();
+        if (search.Length > 0)
+        {
+            string escaped = search.Replace("'", "''").Replace("[", "[[]").Replace("*", "[*]").Replace("%", "[%]");
+            clauses.Add($"(Name LIKE '%{escaped}%' OR Description LIKE '%{escaped}%')");
+        }
+        if (!chkTrophyShowHidden.Checked) clauses.Add("Hidden = False");
+
+        try { _trophyView.RowFilter = string.Join(" AND ", clauses); }
+        catch (SyntaxErrorException) { _trophyView.RowFilter = string.Empty; }
+    }
+
+    private IReadOnlyList<Ps5Trophy> VisibleTrophies()
+    {
+        if (_currentDetails?.TrophySet is not { } set || _trophyView is null) return [];
+        var ids = new HashSet<int>();
+        foreach (DataRowView row in _trophyView)
+            if (row["ID"] is int id) ids.Add(id);
+        return set.Trophies.Where(trophy => ids.Contains(trophy.Id)).ToList();
+    }
+
+    private Ps5Trophy? SelectedTrophy()
+    {
+        if (_currentDetails?.TrophySet is not { } set || gridTrophies.SelectedRows.Count == 0) return null;
+        if (gridTrophies.SelectedRows[0].DataBoundItem is not DataRowView view) return null;
+        if (view["ID"] is not int id) return null;
+        return set.Trophies.FirstOrDefault(trophy => trophy.Id == id);
+    }
+
+    private void btnTrophySaveIcons_Click(object? sender, EventArgs e)
+    {
+        IReadOnlyList<Ps5Trophy> trophies = VisibleTrophies();
+        if (trophies.Count == 0)
+        {
+            AppDialog.ShowInformation("No trophies are available to save.", "Trophies");
+            return;
+        }
+
+        folderBrowserDialog.Description = "Select a folder for the trophy icons";
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        string folder = folderBrowserDialog.SelectedPath;
+        int saved = 0;
+        foreach (Ps5Trophy trophy in trophies)
+        {
+            if (trophy.IconPng is not { Length: > 0 }) continue;
+            try
+            {
+                File.WriteAllBytes(Path.Combine(folder, $"trop{trophy.Id:000}.png"), trophy.IconPng);
+                saved++;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                AppDialog.ShowError(ex.Message, "Save trophy icons");
+                return;
+            }
+        }
+        statusLabel.Text = saved == 0
+            ? "No trophy icons were available to save."
+            : $"Saved {saved} trophy icon(s) to {folder}.";
+    }
+
+    private void menuTrophySaveIcon_Click(object? sender, EventArgs e)
+    {
+        Ps5Trophy? trophy = SelectedTrophy();
+        if (trophy?.IconPng is not { Length: > 0 })
+        {
+            AppDialog.ShowInformation("This trophy has no icon to save.", "Trophies");
+            return;
+        }
+
+        artworkSaveDialog.FileName = $"trop{trophy.Id:000}.png";
+        if (artworkSaveDialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            File.WriteAllBytes(artworkSaveDialog.FileName, trophy.IconPng);
+            statusLabel.Text = $"Saved {Path.GetFileName(artworkSaveDialog.FileName)}.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppDialog.ShowError(ex.Message, "Save trophy icon");
+        }
+    }
+
+    private void btnTrophyExportCsv_Click(object? sender, EventArgs e)
+    {
+        if (_trophyView is null || _trophyView.Count == 0)
+        {
+            AppDialog.ShowInformation("There are no trophies to export.", "Trophies");
+            return;
+        }
+        if (trophyCsvSaveDialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine("ID,Grade,Hidden,Name,Description,Unlock Condition");
+            foreach (DataRowView row in _trophyView)
+            {
+                string[] fields =
+                [
+                    Convert.ToString(row["ID"]) ?? string.Empty,
+                    Convert.ToString(row["Grade"]) ?? string.Empty,
+                    Convert.ToString(row["Hidden"]) ?? string.Empty,
+                    Convert.ToString(row["Name"]) ?? string.Empty,
+                    Convert.ToString(row["Description"]) ?? string.Empty,
+                    Convert.ToString(row["Unlock Condition"]) ?? string.Empty
+                ];
+                builder.AppendLine(string.Join(',', fields.Select(Csv)));
+            }
+            File.WriteAllText(trophyCsvSaveDialog.FileName, builder.ToString(), new UTF8Encoding(true));
+            statusLabel.Text = $"Exported {_trophyView.Count:N0} trophies.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppDialog.ShowError(ex.Message, "Export trophies");
+        }
     }
 
     private void PopulateActivities(Ps5UdsSummary? uds)
     {
-        var table = new DataTable();
-        table.Columns.Add("Event");
-        table.Columns.Add("Type");
-        table.Columns.Add("Definition Group");
-        table.Columns.Add("Properties", typeof(int));
-        if (uds is not null)
+        _udsSummary = uds;
+        searchUds.SearchText = string.Empty;
+        if (uds is null)
         {
-            foreach (Ps5UdsEvent item in uds.Events)
-                table.Rows.Add(item.Name, item.Type, item.DefinitionGroup, item.PropertyCount);
-            lblActivitiesSummary.Text = $"Events: {uds.EventCount:N0}  |  Stats: {uds.StatCount:N0}  |  Enum groups: {uds.EnumGroupCount:N0}  |  " +
-                                        $"Extraction rules: {uds.ExtractionRuleCount:N0}  |  {uds.NpCommunicationId}  |  " +
-                                        $"UCP integrity: {(uds.IntegrityValid ? "Valid" : "Failed")}";
+            lblActivitiesSummary.Text = "No UDS activity archive was found.";
+            gridUdsEvents.DataSource = null;
+            gridUdsEventProperties.DataSource = null;
+            gridUdsStats.DataSource = null;
+            gridUdsEnums.DataSource = null;
+            gridUdsRules.DataSource = null;
+            return;
         }
-        else lblActivitiesSummary.Text = "No UDS activity archive was found.";
-        gridActivities.DataSource = table;
+
+        lblActivitiesSummary.Text = $"Events: {uds.EventCount:N0}  |  Stats: {uds.StatCount:N0}  |  Enum groups: {uds.EnumGroupCount:N0}  |  " +
+                                    $"Extraction rules: {uds.ExtractionRuleCount:N0}  |  {uds.NpCommunicationId}  |  " +
+                                    $"UCP integrity: {(uds.IntegrityValid ? "Valid" : "Failed")}";
+        RebuildUdsTables();
+    }
+
+    private void searchUds_SearchTextChanged(object? sender, EventArgs e) => RebuildUdsTables();
+
+    private void tabsUds_SelectedIndexChanged(object? sender, EventArgs e) => RebuildUdsTables();
+
+    private void gridUdsEvents_SelectionChanged(object? sender, EventArgs e) => PopulateEventProperties();
+
+    private void btnUdsCopyAll_Click(object? sender, EventArgs e) => CopyActiveUdsGrid(copyAll: true);
+
+    private void btnUdsCopySelected_Click(object? sender, EventArgs e) => CopyActiveUdsGrid(copyAll: false);
+
+    private void RebuildUdsTables()
+    {
+        if (_udsSummary is not { } uds) return;
+        string filter = searchUds.SearchText.Trim();
+
+        var events = new DataTable();
+        events.Columns.Add("Event");
+        events.Columns.Add("Type");
+        events.Columns.Add("Group");
+        events.Columns.Add("Props", typeof(int));
+        foreach (Ps5UdsEvent item in uds.Events)
+            if (Matches(filter, item.Name, item.Type, item.DefinitionGroup))
+                events.Rows.Add(item.Name, item.Type, item.DefinitionGroup, item.PropertyCount);
+        gridUdsEvents.DataSource = events;
+
+        var stats = new DataTable();
+        stats.Columns.Add("ID", typeof(int));
+        stats.Columns.Add("Name");
+        stats.Columns.Add("Group");
+        stats.Columns.Add("Type");
+        stats.Columns.Add("Aggregation");
+        stats.Columns.Add("Origin");
+        stats.Columns.Add("Enum", typeof(int));
+        stats.Columns.Add("Min");
+        stats.Columns.Add("Max");
+        stats.Columns.Add("Initial");
+        stats.Columns.Add("Trophy refs");
+        foreach (Ps5UdsStat stat in uds.Stats)
+            if (Matches(filter, stat.Name, stat.DefinitionGroup, stat.DataType, stat.Aggregation, stat.Origin,
+                    stat.StatId.ToString(), stat.SourceId))
+                stats.Rows.Add(stat.StatId, stat.Name, stat.DefinitionGroup, stat.DataType, stat.Aggregation,
+                    stat.Origin, stat.EnumId, stat.MinValue, stat.MaxValue, stat.InitialValue, TrophyRefs(stat.StatId));
+        gridUdsStats.DataSource = stats;
+
+        var enums = new DataTable();
+        enums.Columns.Add("Enum", typeof(int));
+        enums.Columns.Add("Group");
+        enums.Columns.Add("Source");
+        enums.Columns.Add("Values", typeof(int));
+        enums.Columns.Add("Sample");
+        foreach (Ps5UdsEnumGroup group in uds.EnumGroups)
+            if (Matches(filter, group.SourceId, group.DefinitionGroup, group.EnumId.ToString(),
+                    string.Join(' ', group.Values)))
+                enums.Rows.Add(group.EnumId, group.DefinitionGroup, group.SourceId, group.ValueCount,
+                    string.Join(", ", group.Values.Take(4)));
+        gridUdsEnums.DataSource = enums;
+
+        var rules = new DataTable();
+        rules.Columns.Add("Rule", typeof(int));
+        rules.Columns.Add("Group");
+        rules.Columns.Add("Event");
+        rules.Columns.Add("Condition");
+        rules.Columns.Add("Input");
+        rules.Columns.Add("Convert");
+        rules.Columns.Add("Output stat");
+        foreach (Ps5UdsRule rule in uds.Rules)
+            if (Matches(filter, rule.EventName, rule.DefinitionGroup, rule.OutputStatName, rule.SourceId, rule.Input, rule.Condition))
+                rules.Rows.Add(rule.RuleId, rule.DefinitionGroup, rule.EventName, rule.Condition, rule.Input, rule.Convert,
+                    $"{rule.OutputStatName} (#{rule.OutputStatId})");
+        gridUdsRules.DataSource = rules;
+
+        PopulateEventProperties();
+    }
+
+    private void PopulateEventProperties()
+    {
+        var table = new DataTable();
+        table.Columns.Add("Property");
+        table.Columns.Add("Type");
+        table.Columns.Add("Item type");
+        table.Columns.Add("Mapped");
+        if (_udsSummary is { } uds && gridUdsEvents.SelectedRows.Count > 0 &&
+            gridUdsEvents.SelectedRows[0].DataBoundItem is DataRowView view && view["Event"] is string name)
+        {
+            Ps5UdsEvent? selected = uds.Events.FirstOrDefault(item =>
+                string.Equals(item.Name, name, StringComparison.Ordinal));
+            if (selected is not null)
+                foreach (Ps5UdsProperty property in selected.Properties)
+                    table.Rows.Add(property.Path, property.DataType, property.ItemType, property.MappedProperty);
+        }
+        gridUdsEventProperties.DataSource = table;
+    }
+
+    private string TrophyRefs(int statId)
+    {
+        if (_currentDetails?.TrophySet is not { } set) return string.Empty;
+        List<int> ids = set.Trophies.Where(trophy => trophy.UdsStatId == statId).Select(trophy => trophy.Id).ToList();
+        return ids.Count == 0 ? string.Empty : string.Join(", ", ids);
+    }
+
+    private static bool Matches(string filter, params string?[] values) =>
+        filter.Length == 0 ||
+        values.Any(value => value is not null && value.Contains(filter, StringComparison.CurrentCultureIgnoreCase));
+
+    private DarkDataGridView ActiveUdsGrid() =>
+        tabsUds.SelectedTab == tabUdsStats ? gridUdsStats
+        : tabsUds.SelectedTab == tabUdsEnums ? gridUdsEnums
+        : tabsUds.SelectedTab == tabUdsRules ? gridUdsRules
+        : gridUdsEvents;
+
+    private void CopyActiveUdsGrid(bool copyAll)
+    {
+        DarkDataGridView grid = ActiveUdsGrid();
+        DataGridViewRow[] rows = (copyAll ? grid.Rows.Cast<DataGridViewRow>() : grid.SelectedRows.Cast<DataGridViewRow>()).ToArray();
+        var builder = new StringBuilder();
+        foreach (DataGridViewRow row in rows)
+        {
+            if (row.DataBoundItem is not DataRowView view) continue;
+            foreach (DataColumn column in view.DataView.Table.Columns)
+                builder.Append(column.ColumnName).Append(": ").Append(view.Row[column]?.ToString() ?? string.Empty).AppendLine();
+            builder.AppendLine();
+        }
+        if (builder.Length == 0)
+        {
+            AppDialog.ShowInformation("Nothing to copy.", "Activities & UDS");
+            return;
+        }
+        CopyText(builder.ToString().TrimEnd());
     }
 
     private void PopulateFiles(Ps5GameInfo game, Ps5FileInventory inventory)
@@ -1974,7 +1511,7 @@ public partial class MainForm : DarkForm
         treeFiles.BeginUpdate();
         treeFiles.Nodes.Clear();
 
-        var root = new TreeNode(game.Title) { Tag = string.Empty };
+        var root = new TreeNode(game.Title) { Tag = string.Empty, ImageIndex = FileIconProvider.Folder, SelectedImageIndex = FileIconProvider.Folder };
         treeFiles.Nodes.Add(root);
         _directoryNodes[string.Empty] = root;
 
@@ -1996,11 +1533,25 @@ public partial class MainForm : DarkForm
                 current = current.Length == 0 ? segment : Path.Combine(current, segment);
                 if (!_directoryNodes.TryGetValue(current, out TreeNode? node))
                 {
-                    node = new TreeNode(segment) { Tag = current };
+                    node = new TreeNode(segment) { Tag = current, ImageIndex = FileIconProvider.Folder, SelectedImageIndex = FileIconProvider.Folder };
                     parent.Nodes.Add(node);
                     _directoryNodes[current] = node;
                 }
                 parent = node;
+            }
+        }
+
+        _directorySizes.Clear();
+        foreach (KeyValuePair<string, List<Ps5FileInfo>> pair in _filesByDirectory)
+        {
+            long directSize = 0;
+            foreach (Ps5FileInfo file in pair.Value) directSize += file.Size;
+            string current = pair.Key;
+            while (true)
+            {
+                _directorySizes[current] = _directorySizes.GetValueOrDefault(current) + directSize;
+                if (current.Length == 0) break;
+                current = NormalizeDirectory(Path.GetDirectoryName(current));
             }
         }
 
@@ -2023,61 +1574,256 @@ public partial class MainForm : DarkForm
                 $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} logical content - read directly from UFS2 FFPKG",
             _ => $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} total - double-click folders to browse or files to reveal them"
         };
+        RefreshFileList();
     }
 
     private void RefreshFileList()
     {
         string directory = treeFiles.SelectedNode?.Tag as string ?? string.Empty;
-        string filter = txtFileFilter.Text.Trim();
+        string filter = searchFileFilter.SearchText.Trim();
+        var rows = new List<FileListRow>();
+
+        if (filter.Length == 0)
+        {
+            if (directory.Length > 0)
+            {
+                string parent = NormalizeDirectory(Path.GetDirectoryName(directory));
+                rows.Add(new FileListRow("..", "Folder", parent, string.Empty, 0,
+                    new FileBrowserEntry(parent, true), FileIconProvider.FolderOpen, true));
+            }
+
+            foreach (string child in _directoryNodes.Keys.Where(path =>
+                path.Length > 0 && NormalizeDirectory(Path.GetDirectoryName(path)).Equals(directory, StringComparison.OrdinalIgnoreCase)))
+            {
+                long size = GetDirectorySize(child);
+                rows.Add(new FileListRow(Path.GetFileName(child), "Folder", child, FormatBytes(size), size,
+                    new FileBrowserEntry(child, true), FileIconProvider.Folder, true));
+            }
+
+            if (_filesByDirectory.TryGetValue(directory, out List<Ps5FileInfo>? files))
+                foreach (Ps5FileInfo file in files)
+                    rows.Add(FileListRowFor(file));
+        }
+        else
+        {
+            // Recursive search: match folders and files anywhere in the tree.
+            foreach (string child in _directoryNodes.Keys.Where(path => path.Length > 0))
+            {
+                string name = Path.GetFileName(child);
+                if (!MatchesFileFilter(name, child, filter)) continue;
+                long size = GetDirectorySize(child);
+                rows.Add(new FileListRow(name, "Folder", child, FormatBytes(size), size,
+                    new FileBrowserEntry(child, true), FileIconProvider.Folder, true));
+            }
+
+            foreach (List<Ps5FileInfo> list in _filesByDirectory.Values)
+                foreach (Ps5FileInfo file in list)
+                    if (MatchesFileFilter(Path.GetFileName(file.RelativePath), file.RelativePath, filter))
+                        rows.Add(FileListRowFor(file));
+        }
+
+        rows.Sort(CompareFileRows);
+
         listFiles.BeginUpdate();
         listFiles.Items.Clear();
-
-        if (directory.Length > 0)
-        {
-            string parent = NormalizeDirectory(Path.GetDirectoryName(directory));
-            AddFileListItem("..", "Folder", parent, string.Empty, new FileBrowserEntry(parent, true));
-        }
-
-        IEnumerable<string> childDirectories = _directoryNodes.Keys
-            .Where(path => path.Length > 0 && NormalizeDirectory(Path.GetDirectoryName(path)).Equals(directory, StringComparison.OrdinalIgnoreCase))
-            .OrderBy(path => Path.GetFileName(path), StringComparer.CurrentCultureIgnoreCase);
-        foreach (string child in childDirectories)
-        {
-            string name = Path.GetFileName(child);
-            if (!MatchesFileFilter(name, child, filter)) continue;
-            AddFileListItem(name, "Folder", child, FormatBytes(GetDirectorySize(child)), new FileBrowserEntry(child, true));
-        }
-
-        if (_filesByDirectory.TryGetValue(directory, out List<Ps5FileInfo>? files))
-        {
-            foreach (Ps5FileInfo file in files.OrderBy(item => Path.GetFileName(item.RelativePath), StringComparer.CurrentCultureIgnoreCase))
-            {
-                string name = Path.GetFileName(file.RelativePath);
-                if (!MatchesFileFilter(name, file.RelativePath, filter)) continue;
-                string type = string.IsNullOrWhiteSpace(file.Extension) ? "File" : file.Extension.TrimStart('.').ToUpperInvariant() + " File";
-                if (file.IsEncrypted) type += " (Encrypted)";
-                AddFileListItem(name, type, file.RelativePath, FormatBytes(file.Size), new FileBrowserEntry(file.RelativePath, false));
-            }
-        }
-
+        foreach (FileListRow row in rows)
+            AddFileListItem(row.Name, row.Type, row.Path, row.SizeText, row.Entry, row.Icon);
         listFiles.EndUpdate();
         listFiles.RefreshLayout();
     }
 
-    private void AddFileListItem(string name, string type, string path, string size, FileBrowserEntry entry)
+    private static FileListRow FileListRowFor(Ps5FileInfo file)
     {
-        var item = new ListViewItem(name) { Tag = entry };
+        string name = Path.GetFileName(file.RelativePath);
+        string type = string.IsNullOrWhiteSpace(file.Extension) ? "File" : file.Extension.TrimStart('.').ToUpperInvariant() + " File";
+        if (file.IsEncrypted) type += " (Encrypted)";
+        return new FileListRow(name, type, file.RelativePath, FormatBytes(file.Size), file.Size,
+            new FileBrowserEntry(file.RelativePath, false, file.Size), FileIconProvider.ForEntry(name, false), false);
+    }
+
+    private int CompareFileRows(FileListRow left, FileListRow right)
+    {
+        int group = right.IsDirectory.CompareTo(left.IsDirectory); // folders first
+        if (group != 0) return group;
+        int result = _fileSortColumn switch
+        {
+            1 => string.Compare(left.Type, right.Type, StringComparison.CurrentCultureIgnoreCase),
+            2 => string.Compare(left.Path, right.Path, StringComparison.CurrentCultureIgnoreCase),
+            3 => left.Size.CompareTo(right.Size),
+            _ => string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase)
+        };
+        if (!_fileSortAscending) result = -result;
+        return result != 0 ? result : string.Compare(left.Name, right.Name, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private void listFiles_ColumnClick(object? sender, ColumnClickEventArgs e)
+    {
+        if (e.Column == _fileSortColumn) _fileSortAscending = !_fileSortAscending;
+        else { _fileSortColumn = e.Column; _fileSortAscending = true; }
+        RefreshFileList();
+    }
+
+    private List<(string RelativePath, long Size)> SelectedFileTargets()
+    {
+        var result = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (ListViewItem item in listFiles.SelectedItems)
+        {
+            if (item.Tag is not FileBrowserEntry entry) continue;
+            if (entry.IsDirectory)
+            {
+                foreach ((string relativePath, long size) in FilesUnder(entry.RelativePath))
+                    result[relativePath] = size;
+            }
+            else
+            {
+                result[entry.RelativePath] = entry.Size;
+            }
+        }
+        return result.Select(pair => (pair.Key, pair.Value)).ToList();
+    }
+
+    private List<(string RelativePath, long Size)> FilesUnder(string folder)
+    {
+        var result = new List<(string, long)>();
+        string prefix = folder.Length == 0 ? string.Empty : folder + Path.DirectorySeparatorChar;
+        foreach (List<Ps5FileInfo> list in _filesByDirectory.Values)
+            foreach (Ps5FileInfo file in list)
+                if (prefix.Length == 0 || file.RelativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    result.Add((file.RelativePath, file.Size));
+        return result;
+    }
+
+    private async void menuFileExtractSelected_Click(object? sender, EventArgs e)
+    {
+        List<(string RelativePath, long Size)> files = SelectedFileTargets();
+        if (files.Count == 0)
+        {
+            AppDialog.ShowInformation("Select one or more files to extract.", "Files");
+            return;
+        }
+        folderBrowserDialog.Description = "Select a folder for the extracted files";
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        await ExtractFilesAsync(files, folderBrowserDialog.SelectedPath);
+    }
+
+    private async void menuTreeExtract_Click(object? sender, EventArgs e)
+    {
+        if (treeFiles.SelectedNode?.Tag is not string folder) return;
+        List<(string RelativePath, long Size)> files = FilesUnder(folder);
+        if (files.Count == 0)
+        {
+            AppDialog.ShowInformation("There are no files under this folder.", "Files");
+            return;
+        }
+        folderBrowserDialog.Description = "Select a folder for the extracted files";
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        await ExtractFilesAsync(files, folderBrowserDialog.SelectedPath);
+    }
+
+    private async void btnFileExtractAll_Click(object? sender, EventArgs e)
+    {
+        List<(string RelativePath, long Size)> files = FilesUnder(string.Empty);
+        if (files.Count == 0)
+        {
+            AppDialog.ShowInformation("There are no files to extract.", "Files");
+            return;
+        }
+        folderBrowserDialog.Description = "Select a folder for the extracted package";
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        await ExtractFilesAsync(files, folderBrowserDialog.SelectedPath);
+    }
+
+    private async Task ExtractFilesAsync(IReadOnlyList<(string RelativePath, long Size)> files, string destination)
+    {
+        if (_selectedGame is not { } game || !IsBrowsableFilesystem(game.SourceKind) || _isFileBusy) return;
+        _fileCancellation?.Cancel();
+        _fileCancellation?.Dispose();
+        _fileCancellation = new CancellationTokenSource();
+        _isFileBusy = true;
+        UpdateOperationState();
+        string root = Path.GetFullPath(destination);
+        string rootPrefix = root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        long total = files.Sum(file => file.Size);
+        long completed = 0;
+        int extracted = 0;
+        try
+        {
+            foreach ((string relativePath, long size) in files)
+            {
+                _fileCancellation.Token.ThrowIfCancellationRequested();
+                string target = Path.GetFullPath(Path.Combine(root, relativePath));
+                if (!target.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+                    throw new IOException("The extraction path left the destination folder.");
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                long baseline = completed;
+                var progress = new Progress<long>(copied =>
+                    statusLabel.Text = $"Extracting {Path.GetFileName(relativePath)}: {FormatBytes(baseline + copied)} / {FormatBytes(total)}");
+                await Task.Run(() => GameFileSystem.ExtractFileAsync(game, relativePath, target, progress,
+                    _fileCancellation.Token), _fileCancellation.Token);
+                completed += size;
+                extracted++;
+            }
+            statusLabel.Text = $"Extracted {extracted:N0} file(s) to {destination}.";
+        }
+        catch (OperationCanceledException)
+        {
+            statusLabel.Text = $"Extraction cancelled after {extracted:N0} file(s).";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
+                                   NotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            statusLabel.Text = "Extraction failed.";
+            AppDialog.ShowError(ex.Message, "Extract files");
+        }
+        finally
+        {
+            _isFileBusy = false;
+            UpdateOperationState();
+        }
+    }
+
+    private async void listFiles_ItemDrag(object? sender, ItemDragEventArgs e)
+    {
+        if (_selectedGame is not { } game || !IsBrowsableFilesystem(game.SourceKind) || _isFileBusy) return;
+        List<(string RelativePath, long Size)> files = SelectedFileTargets();
+        if (files.Count == 0) return;
+
+        Directory.CreateDirectory(_previewDirectory);
+        string dragRoot = Path.Combine(_previewDirectory, "drag-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dragRoot);
+        var paths = new List<string>();
+        try
+        {
+            foreach ((string relativePath, long size) in files)
+            {
+                string target = Path.Combine(dragRoot, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                try
+                {
+                    await Task.Run(() => GameFileSystem.ExtractFileAsync(game, relativePath, target));
+                    paths.Add(target);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
+                {
+                }
+            }
+        }
+        catch (Exception) { }
+
+        if (paths.Count > 0)
+            listFiles.DoDragDrop(new DataObject(DataFormats.FileDrop, paths.ToArray()), DragDropEffects.Copy);
+    }
+
+    private void AddFileListItem(string name, string type, string path, string size, FileBrowserEntry entry, int iconIndex)
+    {
+        var item = new ListViewItem(name) { Tag = entry, ImageIndex = iconIndex };
         item.SubItems.Add(type);
         item.SubItems.Add(path);
         item.SubItems.Add(size);
         listFiles.Items.Add(item);
     }
 
-    private long GetDirectorySize(string directory) => _filesByDirectory
-        .Where(pair => pair.Key.Equals(directory, StringComparison.OrdinalIgnoreCase) ||
-                       pair.Key.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-        .SelectMany(pair => pair.Value)
-        .Sum(file => file.Size);
+    private long GetDirectorySize(string directory) => _directorySizes.GetValueOrDefault(directory);
 
     private static bool MatchesFileFilter(string name, string path, string filter) =>
         filter.Length == 0 ||
@@ -2101,9 +1847,32 @@ public partial class MainForm : DarkForm
 
     private void treeFiles_AfterSelect(object? sender, TreeViewEventArgs e) => RefreshFileList();
 
-    private void txtFileFilter_TextChanged(object? sender, EventArgs e) => RefreshFileList();
+    private void searchFileFilter_SearchTextChanged(object? sender, EventArgs e) => RefreshFileList();
 
-    private void btnClearFileFilter_Click(object? sender, EventArgs e) => txtFileFilter.Clear();
+    private void menuTreeExpand_Click(object? sender, EventArgs e) => treeFiles.SelectedNode?.Expand();
+
+    private void menuTreeCollapse_Click(object? sender, EventArgs e) => treeFiles.SelectedNode?.Collapse();
+
+    private void menuTreeExpandAll_Click(object? sender, EventArgs e) => treeFiles.ExpandAll();
+
+    private void menuTreeCollapseAll_Click(object? sender, EventArgs e) => treeFiles.CollapseAll();
+
+    private void menuTreeCopyPath_Click(object? sender, EventArgs e)
+    {
+        if (treeFiles.SelectedNode is not { } node) return;
+        string path = node.Tag as string ?? string.Empty;
+        CopyText(path.Length > 0 ? path : _currentGameRoot);
+    }
+
+    private void menuFileCopyPath_Click(object? sender, EventArgs e)
+    {
+        if (TryGetSelectedFile(out FileBrowserEntry entry, out _)) CopyText(entry.RelativePath);
+    }
+
+    private void menuFileCopyName_Click(object? sender, EventArgs e)
+    {
+        if (TryGetSelectedFile(out FileBrowserEntry entry, out _)) CopyText(Path.GetFileName(entry.RelativePath));
+    }
 
     private async void listFiles_SelectedIndexChanged(object? sender, EventArgs e)
     {
@@ -2117,27 +1886,37 @@ public partial class MainForm : DarkForm
         _filePreviewEntry = entry;
         _filePreviewInfo = file;
         string extension = file.Extension.ToLowerInvariant();
-        lblFileViewerInfo.Text = $"{Path.GetFileName(entry.RelativePath)}  •  {FormatBytes(file.Size)}";
+        AssetInspection inspection = await InspectAssetAsync(_selectedGame, entry, file, _filePreviewCancellation.Token);
+        string summary = BuildAssetSummary(entry, file, inspection);
+        lblFileViewerInfo.Text = summary;
         try
         {
-            if (IsMediaExtension(extension))
+            if (inspection.Category is AssetCategory.Audio or AssetCategory.Video || IsMediaExtension(extension))
             {
                 ShowMediaPreviewReady(file);
+                lblFileViewerInfo.Text = summary;
                 return;
             }
-            if (IsImageExtension(extension) && file.Size <= 256L * 1024 * 1024 && file.Size <= int.MaxValue)
+            bool image = inspection.Category == AssetCategory.Image || IsImageExtension(extension);
+            if (image && file.Size <= 256L * 1024 * 1024 && file.Size <= int.MaxValue)
             {
-                await LoadImageViewerAsync(_selectedGame, entry, file, extension, version,
-                    _filePreviewCancellation.Token);
+                await LoadImageViewerAsync(_selectedGame, entry, file,
+                    inspection.Format == "DDS" ? ".dds" : extension, version, _filePreviewCancellation.Token);
+                lblFileViewerInfo.Text = summary;
                 return;
             }
-            if (IsTextExtension(extension))
+            if (inspection.Category == AssetCategory.Text || IsTextExtension(extension))
             {
                 bool shown = await LoadTextViewerAsync(_selectedGame, entry, file, version,
                     _filePreviewCancellation.Token);
-                if (shown) return;
+                if (shown)
+                {
+                    lblFileViewerInfo.Text = summary;
+                    return;
+                }
             }
             await LoadHexViewerAsync(0, version, _filePreviewCancellation.Token);
+            lblFileViewerInfo.Text = summary;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
@@ -2146,6 +1925,33 @@ public partial class MainForm : DarkForm
             if (version == _filePreviewVersion)
                 lblFileViewerInfo.Text = $"Preview unavailable: {ex.Message}";
         }
+    }
+
+    private async Task<AssetInspection> InspectAssetAsync(Ps5GameInfo game, FileBrowserEntry entry,
+        Ps5FileInfo file, CancellationToken cancellationToken)
+    {
+        int count = checked((int)Math.Min(64, Math.Max(0, file.Size)));
+        if (count == 0) return AssetInspection.Unknown("Empty file");
+        try
+        {
+            GameFileChunk chunk = await Task.Run(() => GameFileSystem.ReadFileChunk(game, entry.RelativePath, 0,
+                count, cancellationToken), cancellationToken);
+            return AssetInspector.Inspect(entry.RelativePath, chunk.Data);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
+                                   NotSupportedException or ArgumentException)
+        {
+            return AssetInspection.Unknown(file.Extension);
+        }
+    }
+
+    private static string BuildAssetSummary(FileBrowserEntry entry, Ps5FileInfo file, AssetInspection inspection)
+    {
+        string name = Path.GetFileName(entry.RelativePath);
+        string metadata = inspection.Metadata.Count == 0
+            ? string.Empty
+            : "  |  " + string.Join(", ", inspection.Metadata.Select(item => $"{item.Name} {item.Value}"));
+        return $"{name}  |  {inspection.Format}  |  {FormatBytes(file.Size)}{metadata}";
     }
 
     private async Task LoadImageViewerAsync(Ps5GameInfo game, FileBrowserEntry entry, Ps5FileInfo file,
@@ -2166,7 +1972,7 @@ public partial class MainForm : DarkForm
         previous?.Dispose();
         pictureFileViewer.Visible = true;
         pictureFileViewer.BringToFront();
-        fileViewerCommands.Visible = false;
+        HideViewerCommandButtons();
         lblFileViewerInfo.Text = $"{Path.GetFileName(entry.RelativePath)}  •  Image  •  {FormatBytes(file.Size)}";
     }
 
@@ -2197,7 +2003,7 @@ public partial class MainForm : DarkForm
         txtFileViewer.SelectionLength = 0;
         txtFileViewer.Visible = true;
         txtFileViewer.BringToFront();
-        fileViewerCommands.Visible = false;
+        HideViewerCommandButtons();
         lblFileViewerInfo.Text = $"{Path.GetFileName(entry.RelativePath)}  •  Text  •  {FormatBytes(file.Size)}";
         return true;
     }
@@ -2208,7 +2014,7 @@ public partial class MainForm : DarkForm
         FileBrowserEntry? entry = _filePreviewEntry;
         if (game is null || entry is null) return;
         GameFileChunk chunk = await Task.Run(() => GameFileSystem.ReadFileChunk(game, entry.RelativePath, offset,
-            HexPreviewPageSize, cancellationToken), cancellationToken);
+            HexPreviewPageSizeBytes, cancellationToken), cancellationToken);
         if (version != _filePreviewVersion || cancellationToken.IsCancellationRequested) return;
         _hexPreviewOffset = chunk.Offset;
         txtHexViewer.Text = FormatHexPage(chunk);
@@ -2216,7 +2022,7 @@ public partial class MainForm : DarkForm
         txtHexViewer.SelectionLength = 0;
         txtHexViewer.Visible = true;
         txtHexViewer.BringToFront();
-        fileViewerCommands.Visible = true;
+        HideViewerCommandButtons();
         btnHexPrevious.Visible = true;
         btnHexPrevious.Enabled = chunk.HasPrevious;
         btnHexNext.Visible = true;
@@ -2256,9 +2062,20 @@ public partial class MainForm : DarkForm
     {
         mediaFileHost.Visible = true;
         mediaFileHost.BringToFront();
-        fileViewerCommands.Visible = true;
+        HideViewerCommandButtons();
         btnMediaLoad.Visible = true;
         lblFileViewerInfo.Text = $"{Path.GetFileName(file.RelativePath)}  •  Media  •  {FormatBytes(file.Size)}  •  Click Load & Play";
+    }
+
+    private void HideViewerCommandButtons()
+    {
+        btnMediaLoad.Visible = false;
+        btnMediaPlay.Visible = false;
+        btnMediaPause.Visible = false;
+        btnMediaStop.Visible = false;
+        btnHexPrevious.Visible = false;
+        btnHexNext.Visible = false;
+        lblHexPage.Visible = false;
     }
 
     private void ResetFileViewer()
@@ -2273,7 +2090,7 @@ public partial class MainForm : DarkForm
         txtHexViewer.Clear();
         txtHexViewer.Visible = false;
         mediaFileHost.Visible = false;
-        fileViewerCommands.Visible = false;
+        HideViewerCommandButtons();
         btnMediaLoad.Visible = false;
         btnMediaPlay.Visible = false;
         btnMediaPause.Visible = false;
@@ -2313,13 +2130,13 @@ public partial class MainForm : DarkForm
 
     private async void btnHexPrevious_Click(object? sender, EventArgs e)
     {
-        long offset = Math.Max(0, _hexPreviewOffset - HexPreviewPageSize);
+        long offset = Math.Max(0, _hexPreviewOffset - HexPreviewPageSizeBytes);
         await NavigateHexViewerAsync(offset);
     }
 
     private async void btnHexNext_Click(object? sender, EventArgs e)
     {
-        long offset = checked(_hexPreviewOffset + HexPreviewPageSize);
+        long offset = checked(_hexPreviewOffset + HexPreviewPageSizeBytes);
         await NavigateHexViewerAsync(offset);
     }
 
@@ -2385,19 +2202,27 @@ public partial class MainForm : DarkForm
         btnMediaPlay.Visible = true;
         btnMediaPause.Visible = true;
         btnMediaStop.Visible = true;
-        mediaFileViewer.Play();
+        MediaControl(viewer => viewer.Play());
         lblFileViewerInfo.Text = $"{Path.GetFileName(entry.RelativePath)}  •  Playing  •  {FormatBytes(file.Size)}";
     }
 
-    private void btnMediaPlay_Click(object? sender, EventArgs e) => mediaFileViewer.Play();
-    private void btnMediaPause_Click(object? sender, EventArgs e) => mediaFileViewer.Pause();
-    private void btnMediaStop_Click(object? sender, EventArgs e) => mediaFileViewer.Stop();
+    private void btnMediaPlay_Click(object? sender, EventArgs e) => MediaControl(viewer => viewer.Play());
+    private void btnMediaPause_Click(object? sender, EventArgs e) => MediaControl(viewer => viewer.Pause());
+    private void btnMediaStop_Click(object? sender, EventArgs e) => MediaControl(viewer => viewer.Stop());
+
+    private void MediaControl(Action<System.Windows.Controls.MediaElement> action)
+    {
+        try
+        {
+            action(mediaFileViewer);
+        }
+        catch (InvalidOperationException) { }
+    }
 
     private void mediaFileViewer_MediaFailed(object? sender, System.Windows.ExceptionRoutedEventArgs e)
     {
         statusLabel.Text = "The selected media format is not supported by the installed Windows codecs.";
-        DarkMessageBox.ShowWarning(e.ErrorException?.Message ??
-            "The selected media format is not supported by the installed Windows codecs.", "Media preview");
+        Logger.Warn($"Media preview failed: {e.ErrorException?.Message}");
     }
 
     private void StopMediaViewer(bool clearSource)
@@ -2457,6 +2282,9 @@ public partial class MainForm : DarkForm
             Ps5SourceKind.Ffpkg or Ps5SourceKind.SonyPackage;
         menuFileOpenContained.Enabled = hasFile && isBrowsableFilesystem && !_isFileBusy;
         menuFileExtractContained.Enabled = hasFile && isBrowsableFilesystem && !_isFileBusy;
+        menuFileCopyPath.Enabled = hasFile;
+        menuFileCopyName.Enabled = hasFile;
+        menuFileCopySeparator.Visible = hasFile;
         menuFileRevealContainer.Enabled = isContainer;
         menuFileContainerSeparator.Visible = isContainer;
         e.Cancel = !hasFile && !isContainer;
@@ -2529,7 +2357,7 @@ public partial class MainForm : DarkForm
                                    NotSupportedException or System.ComponentModel.Win32Exception)
         {
             statusLabel.Text = "Unable to extract or open the selected file.";
-            DarkMessageBox.ShowError(ex.Message, "Filesystem image browser");
+            AppDialog.ShowError(ex.Message, "Filesystem image browser");
             return false;
         }
         finally
@@ -2556,7 +2384,7 @@ public partial class MainForm : DarkForm
 
         if (extension is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".tif" or ".tiff" or ".ico")
         {
-            const long maximumImageBytes = 256L * 1024 * 1024;
+            long maximumImageBytes = Math.Max(1, _settings.MaxPreviewMb) * 1024L * 1024L;
             if (new FileInfo(path).Length <= maximumImageBytes)
             {
                 byte[] image = await File.ReadAllBytesAsync(path);
@@ -2567,7 +2395,7 @@ public partial class MainForm : DarkForm
 
         if (extension is ".json" or ".txt" or ".xml" or ".ini" or ".cfg" or ".log" or ".csv" or ".yaml" or ".yml")
         {
-            const long maximumTextBytes = 16L * 1024 * 1024;
+            long maximumTextBytes = Math.Max(1, _settings.MaxPreviewMb) * 1024L * 1024L;
             if (new FileInfo(path).Length <= maximumTextBytes)
             {
                 string text = await File.ReadAllTextAsync(path);
@@ -2584,7 +2412,7 @@ public partial class MainForm : DarkForm
         catch (System.ComponentModel.Win32Exception)
         {
             RevealInExplorer(path);
-            DarkMessageBox.ShowWarning(
+            AppDialog.ShowWarning(
                 $"Windows has no application associated with {extension.ToUpperInvariant()} files.\n\n" +
                 "The file was extracted successfully and selected in File Explorer.",
                 "No preview application");
@@ -2618,21 +2446,182 @@ public partial class MainForm : DarkForm
 
     private void PopulateExecutable(Ps5SelfInfo? executable)
     {
-        var table = new DataTable();
-        table.Columns.Add("Module");
-        table.Columns.Add("Kind");
-        table.Columns.Add("Size");
-        table.Columns.Add("Path");
-        if (executable is not null)
+        _selfInfo = executable;
+        searchExecutable.SearchText = string.Empty;
+        if (executable is null)
         {
-            foreach (Ps5ModuleInfo module in executable.Modules)
-                table.Rows.Add(module.Name, module.Kind, FormatBytes(module.Size), module.RelativePath);
-            lblExecutableSummary.Text = $"SELF {executable.SelfMagic} - {FormatBytes(executable.FileSize)} - embedded ELF at 0x{executable.ElfOffset:X} - " +
-                                        $"x86-64 machine 0x{executable.Machine:X4} - entry 0x{executable.EntryPoint:X} - " +
-                                        $"{executable.ProgramHeaderCount} program headers - {executable.Modules.Count} modules";
+            lblExecutableSummary.Text = "eboot.bin was not found.";
+            gridModules.DataSource = null;
+            gridElfPrograms.DataSource = null;
+            gridElfSections.DataSource = null;
+            gridSelfHeader.DataSource = null;
+            gridSelfSegments.DataSource = null;
+            return;
         }
-        else lblExecutableSummary.Text = "eboot.bin was not found.";
-        gridModules.DataSource = table;
+
+        var summary = new StringBuilder();
+        summary.Append($"SELF {executable.SelfMagic} - {FormatBytes(executable.FileSize)} - embedded ELF at 0x{executable.ElfOffset:X} - ");
+        summary.Append($"x86-64 machine 0x{executable.Machine:X4} - entry 0x{executable.EntryPoint:X} - ");
+        summary.Append($"{executable.ProgramHeaderCount} program headers - {executable.SectionHeaderCount} sections - {executable.Modules.Count} modules");
+        if (executable.SelfHeaderSize > 0)
+            summary.Append($"  |  SELF v{executable.SelfVersion}, type 0x{executable.SelfProgramType:X8}, header 0x{executable.SelfHeaderSize:X}, " +
+                           $"meta 0x{executable.SelfMetadataSize:X}, segments {executable.SelfSegmentCount}, flags 0x{executable.SelfFlags:X}");
+        lblExecutableSummary.Text = summary.ToString();
+
+        RebuildExecutableTables();
+    }
+
+    private void searchExecutable_SearchTextChanged(object? sender, EventArgs e) => RebuildExecutableTables();
+
+    private void tabsExecutable_SelectedIndexChanged(object? sender, EventArgs e) => RebuildExecutableTables();
+
+    private void RebuildExecutableTables()
+    {
+        if (_selfInfo is not { } executable) return;
+        string filter = searchExecutable.SearchText.Trim();
+
+        var modules = new DataTable();
+        modules.Columns.Add("Module");
+        modules.Columns.Add("Kind");
+        modules.Columns.Add("Size");
+        modules.Columns.Add("Path");
+        foreach (Ps5ModuleInfo module in executable.Modules)
+            if (Matches(filter, module.Name, module.Kind, module.RelativePath))
+                modules.Rows.Add(module.Name, module.Kind, FormatBytes(module.Size), module.RelativePath);
+        gridModules.DataSource = modules;
+
+        var programs = new DataTable();
+        programs.Columns.Add("Idx", typeof(int));
+        programs.Columns.Add("Type");
+        programs.Columns.Add("Flags");
+        programs.Columns.Add("Offset");
+        programs.Columns.Add("VAddr");
+        programs.Columns.Add("PAddr");
+        programs.Columns.Add("File size");
+        programs.Columns.Add("Mem size");
+        programs.Columns.Add("Align");
+        foreach (Ps5ElfProgramHeader program in executable.ProgramHeaders)
+            programs.Rows.Add(program.Index, ProgramTypeName(program.Type), $"0x{program.Flags:X}", $"0x{program.Offset:X}",
+                $"0x{program.VirtualAddress:X}", $"0x{program.PhysicalAddress:X}", FormatBytes(program.FileSize),
+                FormatBytes(program.MemorySize), $"0x{program.Align:X}");
+        gridElfPrograms.DataSource = programs;
+
+        var sections = new DataTable();
+        sections.Columns.Add("Idx", typeof(int));
+        sections.Columns.Add("Name");
+        sections.Columns.Add("Type");
+        sections.Columns.Add("Flags");
+        sections.Columns.Add("Address");
+        sections.Columns.Add("Offset");
+        sections.Columns.Add("Size");
+        foreach (Ps5ElfSectionHeader section in executable.SectionHeaders)
+            sections.Rows.Add(section.Index, $"0x{section.Name:X8}", $"0x{section.Type:X8}", $"0x{section.Flags:X}",
+                $"0x{section.Address:X}", $"0x{section.Offset:X}", FormatBytes(section.Size));
+        gridElfSections.DataSource = sections;
+
+        var header = new DataTable();
+        header.Columns.Add("Property");
+        header.Columns.Add("Value");
+        void Add(string property, string value)
+        {
+            if (!string.IsNullOrEmpty(value)) header.Rows.Add(property, value);
+        }
+        Add("SELF magic", executable.SelfMagic);
+        Add("SELF version", executable.SelfVersion.ToString());
+        Add("Program type", $"0x{executable.SelfProgramType:X8}");
+        Add("Header size", $"0x{executable.SelfHeaderSize:X}");
+        Add("Metadata size", $"0x{executable.SelfMetadataSize:X}");
+        Add("Declared file size", executable.SelfDeclaredFileSize > 0 ? FormatBytes((long)executable.SelfDeclaredFileSize) : string.Empty);
+        Add("Segment count", executable.SelfSegmentCount.ToString());
+        Add("Flags", $"0x{executable.SelfFlags:X}");
+        Add("ELF offset", $"0x{executable.ElfOffset:X}");
+        Add("ELF class", executable.ElfClass == 2 ? "ELF64" : executable.ElfClass.ToString());
+        Add("Machine", $"0x{executable.Machine:X4}");
+        Add("Entry point", $"0x{executable.EntryPoint:X}");
+        Add("Program headers", executable.ProgramHeaderCount.ToString());
+        Add("Sections", executable.SectionHeaderCount.ToString());
+        Add("File size", FormatBytes(executable.FileSize));
+        gridSelfHeader.DataSource = header;
+
+        var segments = new DataTable();
+        segments.Columns.Add("Idx", typeof(int));
+        segments.Columns.Add("Flags");
+        segments.Columns.Add("File offset");
+        segments.Columns.Add("File size");
+        segments.Columns.Add("Mem size");
+        foreach (Ps5SelfSegment segment in executable.SelfSegments)
+            segments.Rows.Add(segment.Index, $"0x{segment.Flags:X}", $"0x{segment.FileOffset:X}",
+                FormatBytes(segment.FileSize), FormatBytes(segment.MemorySize));
+        gridSelfSegments.DataSource = segments;
+    }
+
+    private static string ProgramTypeName(uint type) => type switch
+    {
+        0 => "PT_NULL",
+        1 => "PT_LOAD",
+        2 => "PT_DYNAMIC",
+        3 => "PT_INTERP",
+        4 => "PT_NOTE",
+        5 => "PT_SHLIB",
+        6 => "PT_PHDR",
+        7 => "PT_TLS",
+        _ => $"0x{type:X}"
+    };
+
+    private void btnExecExtract_Click(object? sender, EventArgs e)
+    {
+        if (_selfInfo is not { } executable)
+        {
+            AppDialog.ShowInformation("No executable information is loaded.", "Executable");
+            return;
+        }
+
+        var files = new List<(string RelativePath, long Size)>
+        {
+            ("eboot.bin", executable.FileSize)
+        };
+        foreach (Ps5ModuleInfo module in executable.Modules)
+            if (!string.IsNullOrWhiteSpace(module.RelativePath))
+                files.Add((module.RelativePath, module.Size));
+
+        folderBrowserDialog.Description = "Select a folder for eboot.bin and the modules";
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        _ = ExtractFilesAsync(files, folderBrowserDialog.SelectedPath);
+    }
+
+    private void btnExecCopyAll_Click(object? sender, EventArgs e) => CopyActiveExecGrid(copyAll: true);
+
+    private void btnExecCopySelected_Click(object? sender, EventArgs e) => CopyActiveExecGrid(copyAll: false);
+
+    private void CopyActiveExecGrid(bool copyAll)
+    {
+        IReadOnlyList<DarkDataGridView> grids = tabsExecutable.SelectedTab == tabExecElf
+            ? [gridElfPrograms, gridElfSections]
+            : tabsExecutable.SelectedTab == tabExecSelf
+                ? [gridSelfHeader, gridSelfSegments]
+                : [gridModules];
+
+        var builder = new StringBuilder();
+        foreach (DarkDataGridView grid in grids)
+        {
+            IEnumerable<DataGridViewRow> source = copyAll
+                ? grid.Rows.Cast<DataGridViewRow>()
+                : grid.SelectedRows.Cast<DataGridViewRow>();
+            foreach (DataGridViewRow row in source)
+            {
+                if (row.DataBoundItem is not DataRowView view) continue;
+                foreach (DataColumn column in view.DataView.Table.Columns)
+                    builder.Append(column.ColumnName).Append(": ").Append(view.Row[column]?.ToString() ?? string.Empty).AppendLine();
+                builder.AppendLine();
+            }
+        }
+
+        if (builder.Length == 0)
+        {
+            AppDialog.ShowInformation("Nothing to copy.", "Executable");
+            return;
+        }
+        CopyText(builder.ToString().TrimEnd());
     }
 
     private void ClearDetails()
@@ -2656,16 +2645,42 @@ public partial class MainForm : DarkForm
         ReplaceImage(pictureBackground1, null);
         ReplaceImage(pictureBackground2, null);
         gridTrophies.DataSource = null;
+        _trophyView = null;
         DisposeTrophyImages();
-        gridActivities.DataSource = null;
+        _udsSummary = null;
+        gridUdsEvents.DataSource = null;
+        gridUdsEventProperties.DataSource = null;
+        gridUdsStats.DataSource = null;
+        gridUdsEnums.DataSource = null;
+        gridUdsRules.DataSource = null;
         _currentGameRoot = string.Empty;
         _currentSourceIsContainer = false;
+        _currentDetails = null;
+        _currentArtwork = null;
+        _currentDetailsRoot = string.Empty;
+        _populatedDetailTabs.Clear();
         _directoryNodes.Clear();
         _filesByDirectory.Clear();
+        _directorySizes.Clear();
         treeFiles.Nodes.Clear();
         listFiles.Items.Clear();
-        txtFileFilter.Clear();
+        searchFileFilter.SearchText = string.Empty;
+        _selfInfo = null;
         gridModules.DataSource = null;
+        gridElfPrograms.DataSource = null;
+        gridElfSections.DataSource = null;
+        gridSelfHeader.DataSource = null;
+        gridSelfSegments.DataSource = null;
+        gridPkgHeader.DataSource = null;
+        gridPkgSegments.DataSource = null;
+        gridPkgEntries.DataSource = null;
+        gridParamSfo.DataSource = null;
+        gridKeystone.DataSource = null;
+        gridSi.DataSource = null;
+        gridPlayGoChunks.DataSource = null;
+        gridPlayGoScenarios.DataSource = null;
+        gridPlayGoFiles.DataSource = null;
+        lblPlayGoSummary.Text = "Select a game to inspect the PlayGo chunk map.";
         lblTrophySummary.Text = "Loading trophies...";
         lblActivitiesSummary.Text = "Loading activity definitions...";
         lblFilesSummary.Text = "Building file inventory...";
@@ -2690,17 +2705,48 @@ public partial class MainForm : DarkForm
         return new Bitmap(source);
     }
 
-    private static Image? CreateGridImage(byte[]? bytes)
-    {
-        using Image? source = ImageFromBytes(bytes);
-        return source is null ? null : new Bitmap(source, new Size(40, 40));
-    }
-
-    private static void ReplaceImage(PictureBox target, byte[]? bytes)
+    private static void ReplaceImage(PictureBox target, Ps5ImageData? data)
     {
         Image? previous = target.Image;
-        target.Image = ImageFromBytes(bytes);
+        target.Image = ToImage(data);
         previous?.Dispose();
+    }
+
+    private static Image? ToImage(Ps5ImageData? data)
+    {
+        if (data is null || data.Bytes.Length == 0) return null;
+        return data.IsRgba ? BitmapFromRgba(data.Bytes, data.Width, data.Height) : ImageFromBytes(data.Bytes);
+    }
+
+    // Builds a GDI+ bitmap straight from raw RGBA pixels (GDI+ 32bppArgb expects BGRA byte order),
+    // so a decoded DDS never has to be re-encoded to PNG and decoded again.
+    private static Bitmap BitmapFromRgba(byte[] rgba, int width, int height)
+    {
+        var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        BitmapData bits = bitmap.LockBits(new Rectangle(0, 0, width, height),
+            ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int rowBytes = width * 4;
+            byte[] row = new byte[rowBytes];
+            for (int y = 0; y < height; y++)
+            {
+                int source = y * rowBytes;
+                for (int x = 0; x < rowBytes; x += 4)
+                {
+                    row[x] = rgba[source + x + 2];
+                    row[x + 1] = rgba[source + x + 1];
+                    row[x + 2] = rgba[source + x];
+                    row[x + 3] = rgba[source + x + 3];
+                }
+                Marshal.Copy(row, 0, bits.Scan0 + y * bits.Stride, rowBytes);
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(bits);
+        }
+        return bitmap;
     }
 
     private void DisposeTrophyImages()
@@ -2720,8 +2766,8 @@ public partial class MainForm : DarkForm
 
     private void gridLibrary_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0 || e.RowIndex >= _visibleGames.Count) return;
-        Ps5GameInfo game = _visibleGames[e.RowIndex];
+        if (e.RowIndex < 0 || e.RowIndex >= gridLibrary.Rows.Count) return;
+        if (gridLibrary.Rows[e.RowIndex].Tag is not Ps5GameInfo game) return;
         if (game.SourceKind != Ps5SourceKind.LooseDump) RevealInExplorer(game.RootPath);
         else Process.Start(new ProcessStartInfo { FileName = game.RootPath, UseShellExecute = true });
     }
@@ -2733,12 +2779,25 @@ public partial class MainForm : DarkForm
         UseShellExecute = true
     });
 
+    private static void OpenOutputFolder(string path)
+    {
+        try
+        {
+            string target = Directory.Exists(path) ? path : Path.GetDirectoryName(path) ?? path;
+            if (Directory.Exists(target))
+                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{target}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException) { }
+    }
+
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
+        ShutdownTaskQueue();
+        CaptureLibraryColumnLayout();
+        SaveSettingsQuietly();
+        SaveWindowBounds();
         _scanCancellation?.Cancel();
         _detailCancellation?.Cancel();
-        _ffpfscCancellation?.Cancel();
-        _exfatCancellation?.Cancel();
         _fileCancellation?.Cancel();
         _filePreviewCancellation?.Cancel();
         StopMediaViewer(clearSource: true);
@@ -2749,10 +2808,6 @@ public partial class MainForm : DarkForm
         DisposeTrophyImages();
         _scanCancellation?.Dispose();
         _detailCancellation?.Dispose();
-        _ffpfscCancellation?.Dispose();
-        _exfatCancellation?.Dispose();
-        _ffpkgCancellation?.Dispose();
-        _sonyPkgCancellation?.Dispose();
         _fileCancellation?.Dispose();
         _filePreviewCancellation?.Dispose();
         contextFiles.Dispose();
@@ -2768,5 +2823,7 @@ public partial class MainForm : DarkForm
         Reveal
     }
 
-    private sealed record FileBrowserEntry(string RelativePath, bool IsDirectory);
+    private sealed record FileBrowserEntry(string RelativePath, bool IsDirectory, long Size = 0);
+    private sealed record FileListRow(string Name, string Type, string Path, string SizeText, long Size,
+        FileBrowserEntry Entry, int Icon, bool IsDirectory);
 }

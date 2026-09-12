@@ -26,7 +26,7 @@ public sealed partial class SonyPkgGameReader
         Ps5GameInfo game;
         if (paramEntry is not null && paramEntry.DataSize <= MaximumParamJsonSize)
         {
-            byte[] data = _packageReader.ReadEntryBytes(fullPath, package, paramEntry, MaximumParamJsonSize);
+            byte[] data = ReadParamBytes(fullPath, package, paramEntry);
             string raw = Encoding.UTF8.GetString(data).TrimStart('\uFEFF').TrimEnd('\0');
             game = _paramReader.ReadJson(raw, fullPath + "::sce_sys/param.json", fullPath, lastWrite);
         }
@@ -67,6 +67,13 @@ public sealed partial class SonyPkgGameReader
             game.DataWarnings.Add($"{package.EncryptedEntryCount:N0} CNT entr{(package.EncryptedEntryCount == 1 ? "y is" : "ies are")} encrypted.");
         return game;
     }
+
+    // Reads param.json through the already-parsed engine access when available, so the package is
+    // not re-parsed a third time just to read its metadata entry.
+    private byte[] ReadParamBytes(string fullPath, SonyPkgSummary package, SonyPkgEntry paramEntry) =>
+        package.NestedPfs?.EngineAccess is { } access
+            ? access.ReadCntEntry(paramEntry.Id, paramEntry.DataSize)
+            : _packageReader.ReadEntryBytes(fullPath, package, paramEntry, MaximumParamJsonSize);
 
     private static string ExtractTitleId(string contentId)
     {

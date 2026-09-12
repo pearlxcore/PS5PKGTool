@@ -56,10 +56,12 @@ public sealed class Ps5GameInfo
     public string DisplayVersion => string.IsNullOrWhiteSpace(ContentVersion) ? MasterVersion : ContentVersion;
     public string SourceDescription => SourceKind switch
     {
-        Ps5SourceKind.SonyPackage => Package?.KindDisplayName ?? "Sony PKG",
-        Ps5SourceKind.Ffpfsc => "FFPFSC image",
-        Ps5SourceKind.FilesystemImage => "exFAT filesystem image",
-        Ps5SourceKind.Ffpkg => "FFPKG (UFS2) image",
-        _ => "Unpacked dump"
+        Ps5SourceKind.SonyPackage => Package is { Kind: SonyPkgKind.FinalizedDebug }
+            ? "Debug PKG"
+            : Package?.KindDisplayName ?? "PKG",
+        Ps5SourceKind.Ffpfsc => "FFPFSC",
+        Ps5SourceKind.FilesystemImage => "exFAT",
+        Ps5SourceKind.Ffpkg => "FFPKG",
+        _ => "Dump Files"
     };
 }

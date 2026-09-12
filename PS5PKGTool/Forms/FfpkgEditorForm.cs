@@ -64,7 +64,7 @@ public partial class FfpkgEditorForm : DarkForm
         (string Path, bool IsDirectory)? selected = SelectedEntry();
         if (selected is null || selected.Value.IsDirectory)
         {
-            DarkMessageBox.ShowWarning("Select one file to replace.", "FFPKG editor");
+            AppDialog.ShowWarning("Select one file to replace.", "FFPKG editor");
             return;
         }
         if (replacementOpenDialog.ShowDialog(this) != DialogResult.OK) return;
@@ -97,7 +97,7 @@ public partial class FfpkgEditorForm : DarkForm
     {
         if (string.IsNullOrWhiteSpace(txtTarget.Text))
         {
-            DarkMessageBox.ShowWarning("Enter the full internal path for the new directory.", "FFPKG editor");
+            AppDialog.ShowWarning("Enter the full internal path for the new directory.", "FFPKG editor");
             return;
         }
         try
@@ -107,7 +107,7 @@ public partial class FfpkgEditorForm : DarkForm
         }
         catch (Exception ex) when (ex is IOException or ArgumentException)
         {
-            DarkMessageBox.ShowError(ex.Message, "Invalid internal path");
+            AppDialog.ShowError(ex.Message, "Invalid internal path");
         }
     }
 
@@ -115,7 +115,7 @@ public partial class FfpkgEditorForm : DarkForm
     {
         if (gridEntries.SelectedRows.Count == 0)
         {
-            DarkMessageBox.ShowWarning("Select one or more files or directories to delete.", "FFPKG editor");
+            AppDialog.ShowWarning("Select one or more files or directories to delete.", "FFPKG editor");
             return;
         }
         string[] paths = gridEntries.SelectedRows.Cast<DataGridViewRow>()
@@ -124,7 +124,7 @@ public partial class FfpkgEditorForm : DarkForm
             .OrderBy(path => path.Count(character => character == '/')).ToArray();
         paths = paths.Where(path => !paths.Any(parent => !parent.Equals(path, StringComparison.OrdinalIgnoreCase) &&
                          path.StartsWith(parent.TrimEnd('/') + '/', StringComparison.OrdinalIgnoreCase))).ToArray();
-        if (DarkMessageBox.ShowWarning($"Queue deletion of {paths.Length:N0} selected item(s)?\n\n" +
+        if (AppDialog.ShowWarning($"Queue deletion of {paths.Length:N0} selected item(s)?\n\n" +
                                        string.Join("\n", paths.Take(12)) +
                                        (paths.Length > 12 ? "\n..." : string.Empty),
                 "Queue FFPKG deletion?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
@@ -143,7 +143,7 @@ public partial class FfpkgEditorForm : DarkForm
     private async void btnApply_Click(object? sender, EventArgs e)
     {
         if (_operations.Count == 0) return;
-        if (DarkMessageBox.ShowWarning(
+        if (AppDialog.ShowWarning(
                 $"Apply {_operations.Count:N0} queued change(s)?\n\n" +
                 "All changes extract and rebuild the UFS2 image beside the original. The original is replaced only after " +
                 "full verification. Large game images require substantial free space and time.",
@@ -167,7 +167,7 @@ public partial class FfpkgEditorForm : DarkForm
                 _cancellation.Token);
             progressEdit.Value = progressEdit.Maximum;
             lblStatus.Text = $"Completed and verified {result.Verification.FileCount:N0} files.";
-            DarkMessageBox.ShowInformation(
+            AppDialog.ShowInformation(
                 $"All FFPKG changes were applied successfully.\n\n" +
                 $"Mode: Verified transactional UFS2 rebuild\n" +
                 $"Files: {result.Verification.FileCount:N0}\n" +
@@ -185,7 +185,7 @@ public partial class FfpkgEditorForm : DarkForm
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException)
         {
             lblStatus.Text = "No unverified changes were retained.";
-            DarkMessageBox.ShowError(ex.Message, "FFPKG edit failed");
+            AppDialog.ShowError(ex.Message, "FFPKG edit failed");
         }
         finally
         {
@@ -205,7 +205,7 @@ public partial class FfpkgEditorForm : DarkForm
             e.Cancel = true;
             return;
         }
-        if (_operations.Count > 0 && DarkMessageBox.ShowWarning(
+        if (_operations.Count > 0 && AppDialog.ShowWarning(
                 $"Discard {_operations.Count:N0} queued FFPKG change(s)?", "Close FFPKG editor?",
                 DarkDialogButton.YesNo) != DialogResult.Yes)
             e.Cancel = true;

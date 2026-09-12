@@ -37,6 +37,9 @@ namespace UFS2Tool
         public int BytesPerInode { get; set; } = 0;
         // Inodes per group (computed from BytesPerInode or default)
         public int InodesPerGroup { get; set; } = Ufs2Constants.DefaultInodesPerGroup;
+        // Auto-size overhead applied by CalculateImageSize (default 10% + 10 MiB).
+        public double SizeSlackPercent { get; set; } = 10.0;
+        public long SizeSlackBytes { get; set; } = 10 * 1024 * 1024;
 
         // -L volname
         public string VolumeName { get; set; } = "";
@@ -856,7 +859,7 @@ namespace UFS2Tool
         {
             // The recovery block is in the last sector before SBLOCK_UFS2.
             // struct fsrecovery occupies the last 20 bytes of that sector.
-            int recoveryBlockSize = 20; // 5 Ã— int32
+            int recoveryBlockSize = 20; // 5 Ã- int32
             long sectorBeforeSb = Ufs2Constants.SuperblockOffset - SectorSize;
             if (sectorBeforeSb < 0) return;
 
@@ -1607,7 +1610,7 @@ namespace UFS2Tool
         /// </summary>
         public long CalculateImageSize(long blockAlignedDirectorySize)
         {
-            long imageSize = (long)(blockAlignedDirectorySize * 1.10) + (10 * 1024 * 1024);
+            long imageSize = (long)(blockAlignedDirectorySize * (1.0 + SizeSlackPercent / 100.0)) + SizeSlackBytes;
             // Ensure minimum size (16 blocks)
             long minSize = BlockSize * 16;
             if (imageSize < minSize)
@@ -2205,7 +2208,7 @@ namespace UFS2Tool
                     WriteDirBlocks(fs, writer, dirBlocks, sb.BSize, sb.FSize,
                         dirInode, parentInode, subEntries);
 
-                    // Directory size is total blocks Ã— block size
+                    // Directory size is total blocks Ã- block size
                     long dirSize = (long)dirBlocksNeeded * sb.BSize;
 
                     // Write directory inode with correct nlink (2 + immediate subdirectory count)

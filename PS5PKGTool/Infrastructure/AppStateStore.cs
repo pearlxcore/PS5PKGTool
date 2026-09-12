@@ -7,6 +7,44 @@ public sealed class AppSettings
 {
     public List<string> LibraryFolders { get; set; } = [];
     public bool RecursiveScan { get; set; } = true;
+    public List<string> RecentFolders { get; set; } = [];
+    public List<string> ManualSources { get; set; } = [];
+    public int WindowWidth { get; set; }
+    public int WindowHeight { get; set; }
+    public bool WindowMaximized { get; set; }
+    public string LibrarySortColumn { get; set; } = "Title";
+    public bool LibrarySortAscending { get; set; } = true;
+    public List<string> LibraryColumnOrder { get; set; } = [];
+    public List<string> LibraryHiddenColumns { get; set; } = [];
+
+    // Appearance
+    public string Theme { get; set; } = "Default (Charcoal)";
+    public int GridRowHeight { get; set; } = 22;
+    public bool ShowThumbnails { get; set; } = true;
+    public bool ShowGridLines { get; set; } = true;
+    public string DefaultGroupBy { get; set; } = string.Empty;
+
+    // Library & scanning
+    public bool RefreshOnStartup { get; set; }
+
+    // Files & preview
+    public int MaxPreviewMb { get; set; } = 16;
+    public int HexPageKb { get; set; } = 16;
+
+    // Performance
+    public int ThumbnailCacheCount { get; set; } = 512;
+
+    // Paths & outputs
+    public string OutputDirectory { get; set; } = string.Empty;
+    public bool OpenOutputAfterTask { get; set; }
+
+    // Build defaults
+    public string DebugPasscode { get; set; } = string.Empty;
+
+    // Safety
+    public bool ConfirmDelete { get; set; } = true;
+    public bool ConfirmMove { get; set; } = true;
+    public bool PermanentDelete { get; set; }
 }
 
 public sealed class LibraryManifest

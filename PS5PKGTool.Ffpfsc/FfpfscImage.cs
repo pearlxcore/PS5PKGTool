@@ -325,6 +325,115 @@ public static class FfpfscImage
         };
     }
 
+    /// <summary>
+    /// Non-throwing verification that reports structural validity and PFSC decode success independently.
+    /// </summary>
+    public static async Task<FfpfscVerificationResult> TryVerifyAsync(string ffpfscPath,
+        string? originalSourcePath = null, IProgress<FfpfscProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        FfpfscInfo info;
+        try
+        {
+            await using var input = File.OpenRead(ffpfscPath);
+            info = Inspect(input);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or IOException or ArgumentException)
+        {
+            return new FfpfscVerificationResult
+            {
+                Info = null,
+                StructureValid = false,
+                EveryPfscBlockDecodes = false,
+                Error = ex.Message
+            };
+        }
+
+        try
+        {
+            return await VerifyAsync(ffpfscPath, originalSourcePath, progress, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or IOException or ArgumentException)
+        {
+            return new FfpfscVerificationResult
+            {
+                Info = info,
+                StructureValid = true,
+                EveryPfscBlockDecodes = false,
+                Error = ex.Message
+            };
+        }
+    }
+
+    private const int MaximumUnwrapDepth = 4;
+
+    /// <summary>
+    /// Extracts the full inner tree (exFAT or UFS2), unwrapping nested PFS containers.
+    /// Returns the number of files written.
+    /// </summary>
+    public static async Task<int> ExtractToDirectoryAsync(string ffpfscPath, string outputDirectory,
+        bool overwrite = false, IProgress<FfpfscProgress>? progress = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ffpfscPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        string outputFullPath = Path.GetFullPath(outputDirectory);
+        Directory.CreateDirectory(outputFullPath);
+        using FfpfscVolume volume = FfpfscVolume.Open(ffpfscPath);
+        return await ExtractVolumeToDirectoryAsync(volume, outputFullPath, overwrite, progress, cancellationToken, 0)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task<int> ExtractVolumeToDirectoryAsync(FfpfscVolume volume, string root, bool overwrite,
+        IProgress<FfpfscProgress>? progress, CancellationToken cancellationToken, int depth)
+    {
+        if (volume.InnerFilesystemKind == FfpfscInnerFilesystemKind.Pfs)
+        {
+            if (depth >= MaximumUnwrapDepth)
+                throw new InvalidDataException("The FFPFSC image nests more than four container layers.");
+            using FfpfscVolume nested = FfpfscVolume.Open(volume.PayloadStream,
+                volume.Path + "!" + volume.Info.InnerFileName, leaveOpen: true);
+            return await ExtractVolumeToDirectoryAsync(nested, root, overwrite, progress, cancellationToken,
+                depth + 1).ConfigureAwait(false);
+        }
+
+        long total = 0;
+        foreach (FfpfscVolumeEntry entry in volume.Entries)
+            if (!entry.IsDirectory) total += Math.Max(0, entry.Size);
+
+        long written = 0;
+        int count = 0;
+        foreach (FfpfscVolumeEntry entry in volume.Entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string relative = entry.Path.Replace('/', Path.DirectorySeparatorChar);
+            string target = Path.GetFullPath(Path.Combine(root, relative));
+            if (!string.Equals(target, root, StringComparison.OrdinalIgnoreCase) &&
+                !target.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"The inner path escapes the output folder: {entry.Path}");
+
+            if (entry.IsDirectory)
+            {
+                Directory.CreateDirectory(target);
+                continue;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            if (File.Exists(target) && !overwrite)
+                throw new IOException($"The output file already exists: {target}");
+            await using (Stream input = volume.OpenFile(entry.Path))
+            await using (var output = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None,
+                             0x10000, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
+                await input.CopyToAsync(output, 0x10000, cancellationToken).ConfigureAwait(false);
+                await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            written += Math.Max(0, entry.Size);
+            count++;
+            progress?.Report(new FfpfscProgress("Extracting", written, total));
+        }
+        return count;
+    }
+
     private static byte[] BuildHeader(int blockSize, bool caseInsensitive, long finalBlockCount,
         int inodeBlockCount, long timestamp)
     {

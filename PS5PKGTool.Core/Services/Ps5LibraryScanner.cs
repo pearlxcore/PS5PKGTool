@@ -27,11 +27,12 @@ public sealed class Ps5LibraryScanner
     private readonly FfpkgGameReader _ffpkgReader = new();
 
     public Task<Ps5ScanResult> ScanAsync(IEnumerable<string> libraryFolders, bool recursive,
+        IReadOnlyList<Ps5GameInfo>? cached = null,
         IProgress<Ps5ScanProgress>? progress = null, CancellationToken cancellationToken = default) =>
-        Task.Run(() => Scan(libraryFolders, recursive, progress, cancellationToken), cancellationToken);
+        Task.Run(() => Scan(libraryFolders, recursive, cached, progress, cancellationToken), cancellationToken);
 
     private Ps5ScanResult Scan(IEnumerable<string> libraryFolders, bool recursive,
-        IProgress<Ps5ScanProgress>? progress, CancellationToken cancellationToken)
+        IReadOnlyList<Ps5GameInfo>? cached, IProgress<Ps5ScanProgress>? progress, CancellationToken cancellationToken)
     {
         var result = new Ps5ScanResult();
         var paramPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -44,18 +45,25 @@ public sealed class Ps5LibraryScanner
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                foreach (string path in _locator.FindParamFiles(folder, recursive, cancellationToken)) paramPaths.Add(path);
-                foreach (string path in _locator.FindPackageFiles(folder, recursive, cancellationToken)) packagePaths.Add(path);
-                foreach (string path in _locator.FindFfpfscFiles(folder, recursive, cancellationToken)) ffpfscPaths.Add(path);
-                foreach (string path in _locator.FindFilesystemImageFiles(folder, recursive, cancellationToken))
-                    filesystemImagePaths.Add(path);
-                foreach (string path in _locator.FindFfpkgFiles(folder, recursive, cancellationToken)) ffpkgPaths.Add(path);
+                // One traversal per folder; every candidate kind is classified from the same walk.
+                Ps5DumpLocator.LocatedSources located = _locator.FindAll(folder, recursive, cancellationToken);
+                foreach (string path in located.ParamFiles) paramPaths.Add(path);
+                foreach (string path in located.Packages) packagePaths.Add(path);
+                foreach (string path in located.Ffpfsc) ffpfscPaths.Add(path);
+                foreach (string path in located.FilesystemImages) filesystemImagePaths.Add(path);
+                foreach (string path in located.Ffpkg) ffpkgPaths.Add(path);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 result.Errors.Add($"{folder}: {ex.Message}");
             }
         }
+
+        Dictionary<string, Ps5GameInfo> cachedByRoot = cached is null
+            ? new Dictionary<string, Ps5GameInfo>(StringComparer.OrdinalIgnoreCase)
+            : cached.Where(game => !string.IsNullOrWhiteSpace(game.RootPath))
+                .GroupBy(game => game.RootPath, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.OrdinalIgnoreCase);
 
         int processed = 0;
         var sources = paramPaths.Select(path => (Path: path, Kind: Ps5SourceKind.LooseDump))
@@ -71,6 +79,18 @@ public sealed class Ps5LibraryScanner
             progress?.Report(new Ps5ScanProgress { Processed = processed, Total = sources.Length, CurrentPath = path });
             try
             {
+                // Reuse the cached metadata when the source is unchanged (same root and timestamp),
+                // so a refresh only re-parses new or modified sources.
+                string rootPath = ResolveRootPath(path, kind);
+                DateTime stamp = ReadStamp(path);
+                if (cachedByRoot.TryGetValue(rootPath, out Ps5GameInfo? reuse) &&
+                    reuse.SourceKind == kind && reuse.LastWriteTimeUtc == stamp)
+                {
+                    result.Games.Add(reuse);
+                    processed++;
+                    continue;
+                }
+
                 Ps5GameInfo game = kind switch
                 {
                     Ps5SourceKind.SonyPackage => _packageReader.Read(path),
@@ -79,8 +99,6 @@ public sealed class Ps5LibraryScanner
                     Ps5SourceKind.Ffpkg => _ffpkgReader.Read(path),
                     _ => _paramReader.Read(path)
                 };
-                if (kind == Ps5SourceKind.LooseDump)
-                    game.SourceSize = CalculateDirectorySize(game.RootPath, cancellationToken);
                 result.Games.Add(game);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
@@ -94,27 +112,17 @@ public sealed class Ps5LibraryScanner
         return result;
     }
 
-    private static long CalculateDirectorySize(string rootPath, CancellationToken cancellationToken)
+    private static string ResolveRootPath(string path, Ps5SourceKind kind)
     {
-        var options = new EnumerationOptions
-        {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.ReparsePoint
-        };
-        long total = 0;
-        foreach (string filePath in Directory.EnumerateFiles(rootPath, "*", options))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                total = checked(total + new FileInfo(filePath).Length);
-            }
-            catch (FileNotFoundException) { }
-            catch (DirectoryNotFoundException) { }
-            catch (UnauthorizedAccessException) { }
-            catch (IOException) { }
-        }
-        return total;
+        if (kind != Ps5SourceKind.LooseDump) return path;
+        string? sceSys = Path.GetDirectoryName(path);
+        string? root = sceSys is null ? null : Path.GetDirectoryName(sceSys);
+        return string.IsNullOrEmpty(root) ? path : root;
+    }
+
+    private static DateTime ReadStamp(string path)
+    {
+        try { return File.GetLastWriteTimeUtc(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return DateTime.MinValue; }
     }
 }

@@ -1,9 +1,12 @@
+using PS5PKGTool.Core.Parsers;
+
 namespace PS5PKGTool.Core.Models;
 
 public enum SonyPkgKind
 {
     MetadataContainer,
     FinalizedDebug,
+    FinalizedPatch,
     FinalizedRetail
 }
 
@@ -11,7 +14,6 @@ public sealed class SonyPkgSummary
 {
     public SonyPkgKind Kind { get; init; }
     public long FileSize { get; init; }
-    public long ContainerOffset { get; init; }
     public byte? SignedByte { get; init; }
     public ushort? FormatVersion { get; init; }
     public ulong PfsImageOffset { get; init; }
@@ -27,14 +29,16 @@ public sealed class SonyPkgSummary
     public uint ContentType { get; init; }
     public uint ContentFlags { get; init; }
     public IReadOnlyList<SonyPkgEntry> Entries { get; init; } = [];
+    public IReadOnlyList<SonyPkgSegment> Segments { get; init; } = [];
     public SonyPfsSummary? NestedPfs { get; init; }
 
     public int EncryptedEntryCount => Entries.Count(entry => entry.IsEncrypted);
     public string KindDisplayName => Kind switch
     {
         SonyPkgKind.MetadataContainer => "PS5 CNT metadata",
-        SonyPkgKind.FinalizedDebug => "PS5 debug PKG",
-        SonyPkgKind.FinalizedRetail => "PS5 retail PKG",
+        SonyPkgKind.FinalizedDebug => "FPKG",
+        SonyPkgKind.FinalizedPatch => "Patch PKG",
+        SonyPkgKind.FinalizedRetail => "Retail PKG",
         _ => "PS5 PKG"
     };
 }
@@ -65,6 +69,7 @@ public sealed class SonyPfsSummary
     public string StatusMessage { get; init; } = string.Empty;
     public IReadOnlyList<SonyPfsEntry> Files { get; init; } = [];
     internal SonyPfsCryptoContext? CryptoContext { get; init; }
+    internal SonyEnginePackageAccess? EngineAccess { get; init; }
 }
 
 public sealed class SonyPfsEntry
@@ -94,5 +99,10 @@ public sealed class SonyPkgEntry
 
     public bool IsEncrypted => (Flags1 & 0x80000000u) != 0;
     public int KeyIndex => (int)((Flags2 >> 12) & 0x0F);
+
+    /// <summary>Stored size: encrypted payloads are 16-byte padded, plaintext entries are stored as-is.</summary>
+    public long StoredSize => IsEncrypted ? (long)((DataSize + 15u) & ~15u) : DataSize;
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? $"entry_0x{Id:X4}.bin" : Name;
 }
+
+public sealed record SonyPkgSegment(string Name, long Offset, long Size);

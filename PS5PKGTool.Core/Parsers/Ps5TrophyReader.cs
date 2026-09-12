@@ -6,6 +6,7 @@ namespace PS5PKGTool.Core.Parsers;
 
 public sealed class Ps5TrophyReader
 {
+    private const int TrophyIconSize = 40;
     private readonly UcpReader _ucp = new();
 
     public Ps5TrophySet? Read(string gameRoot, string preferredLanguage, CancellationToken cancellationToken = default)
@@ -54,6 +55,17 @@ public sealed class Ps5TrophyReader
                 _ = int.TryParse(idText, out int id);
                 localized.TryGetValue(idText, out var text);
                 UcpEntry? iconEntry = UcpReader.Find(archive, $"trop{idText}.png");
+                byte[]? iconPng = iconEntry is null ? null : _ucp.ReadEntry(archive, iconEntry);
+                int? udsStatId = null;
+                if (definition.TryGetProperty("unlockCondition", out JsonElement unlockCondition) &&
+                    unlockCondition.ValueKind == JsonValueKind.Object &&
+                    unlockCondition.TryGetProperty("udsStatId", out JsonElement statIdValue))
+                {
+                    string rawStat = statIdValue.ValueKind == JsonValueKind.String
+                        ? statIdValue.GetString() ?? string.Empty
+                        : statIdValue.GetRawText();
+                    if (int.TryParse(rawStat, out int parsedStatId)) udsStatId = parsedStatId;
+                }
                 trophies.Add(new Ps5Trophy
                 {
                     Id = id,
@@ -64,7 +76,11 @@ public sealed class Ps5TrophyReader
                     Description = text.Description ?? string.Empty,
                     PlatinumTrophyId = GetString(definition, "platinumTrophyId"),
                     UnlockCondition = FormatUnlockCondition(definition),
-                    IconPng = iconEntry is null ? null : _ucp.ReadEntry(archive, iconEntry)
+                    UdsStatId = udsStatId,
+                    IconPng = iconPng,
+                    Icon = iconPng is null
+                        ? null
+                        : Ps5ImageCodec.DecodePngToRgba(iconPng, TrophyIconSize, TrophyIconSize)
                 });
             }
         }

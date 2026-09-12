@@ -1,6 +1,7 @@
 using PS5PKGTool.Core.Builders;
 using PS5PKGTool.Core.Models;
 using PS5PKGTool.Core.Parsers;
+using ProsperoPkgTool.Containers;
 
 namespace PS5PKGTool.Core.Services;
 
@@ -22,36 +23,83 @@ public static class SonyPackageExtraction
         if (Directory.Exists(output)) throw new IOException("The extraction destination already exists: " + output);
         SonyPkgSummary package = new SonyPkgReader().Read(packagePath, passcode);
         SonyPfsSummary pfs = package.NestedPfs ?? throw new InvalidDataException("The package contains no indexed PFS image.");
-        if (pfs.AccessState != SonyPfsAccessState.PlaintextIndexed || pfs.Files.Any(file => file.Extents.Count == 0))
-            throw new InvalidDataException("The package contains compressed or unavailable files that cannot be extracted by the current reader.");
-        long total = pfs.Files.Sum(file => file.Size); long completed = 0;
         string staging = output + ".extracting." + Guid.NewGuid().ToString("N");
+        long completed = 0;
+        long total;
+        int fileCount;
         try
         {
             Directory.CreateDirectory(staging);
-            foreach (SonyPfsEntry entry in pfs.Files)
+            if (pfs.EngineAccess is { } engine)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                string target = ResolveContainedPath(staging, entry.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                await using var outputFile = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1024 * 1024, FileOptions.Asynchronous);
-                long position = 0;
-                while (position < entry.Size)
+                ProsperoInnerPfsReader.Entry[] files = engine.Files.ToArray();
+                if (files.Length == 0)
+                    throw new InvalidDataException("The package inner image could not be decoded for extraction.");
+                total = files.Sum(file => file.Size);
+                fileCount = files.Length;
+                foreach (ProsperoInnerPfsReader.Entry file in files)
                 {
-                    int count = checked((int)Math.Min(1024 * 1024, entry.Size - position));
-                    byte[] data = SonyPfsEntryDataReader.ReadRange(packagePath, package, pfs, entry, position, count);
-                    await outputFile.WriteAsync(data, cancellationToken).ConfigureAwait(false);
-                    position += count; completed += count;
-                    progress?.Report(new SonyPackageExtractProgress(completed, total, entry.RelativePath));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string relative = engine.ToRelativePath(file);
+                    if (relative.Length == 0) continue;
+                    string target = ResolveContainedPath(staging, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    await using var outputFile = new FileStream(target, FileMode.CreateNew, FileAccess.Write,
+                        FileShare.None, 1024 * 1024, FileOptions.Asynchronous);
+                    await using Stream input = engine.OpenInnerFile(file);
+                    byte[] buffer = new byte[1024 * 1024];
+                    long position = 0;
+                    while (position < file.Size)
+                    {
+                        int take = checked((int)Math.Min(buffer.Length, file.Size - position));
+                        int read = await input.ReadAsync(buffer.AsMemory(0, take), cancellationToken).ConfigureAwait(false);
+                        if (read <= 0) throw new EndOfStreamException($"Inner file '{relative}' ended unexpectedly.");
+                        await outputFile.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                        position += read;
+                        completed += read;
+                        progress?.Report(new SonyPackageExtractProgress(completed, total, relative));
+                    }
                 }
             }
+            else
+            {
+                if (pfs.AccessState != SonyPfsAccessState.PlaintextIndexed || pfs.Files.Any(file => file.Extents.Count == 0))
+                    throw new InvalidDataException("The package contains compressed or unavailable files that cannot be extracted by the current reader.");
+                total = pfs.Files.Sum(file => file.Size);
+                fileCount = pfs.Files.Count;
+                foreach (SonyPfsEntry entry in pfs.Files)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string target = ResolveContainedPath(staging, entry.RelativePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    await using var outputFile = new FileStream(target, FileMode.CreateNew, FileAccess.Write,
+                        FileShare.None, 1024 * 1024, FileOptions.Asynchronous);
+                    long position = 0;
+                    while (position < entry.Size)
+                    {
+                        int count = checked((int)Math.Min(1024 * 1024, entry.Size - position));
+                        byte[] data = SonyPfsEntryDataReader.ReadRange(packagePath, package, pfs, entry, position, count);
+                        await outputFile.WriteAsync(data, cancellationToken).ConfigureAwait(false);
+                        position += count;
+                        completed += count;
+                        progress?.Report(new SonyPackageExtractProgress(completed, total, entry.RelativePath));
+                    }
+                }
+            }
+
             Directory.Move(staging, output);
-            return new SonyPackageExtractResult { Destination = output, FileCount = pfs.Files.Count, ExtractedBytes = completed };
+            return new SonyPackageExtractResult { Destination = output, FileCount = fileCount, ExtractedBytes = completed };
         }
         catch
         {
             try { if (Directory.Exists(staging)) Directory.Delete(staging, true); } catch (IOException) { }
             throw;
+        }
+        finally
+        {
+            // This access is private to the extraction; dispose it so the source package is not
+            // left open (a large package holds a write-blocking handle while decoded).
+            pfs.EngineAccess?.Dispose();
         }
     }
 

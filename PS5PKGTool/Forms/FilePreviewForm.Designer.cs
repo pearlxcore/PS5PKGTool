@@ -5,9 +5,8 @@ namespace PS5PKGTool.Forms;
 partial class FilePreviewForm
 {
     private System.ComponentModel.IContainer? components = null;
-    private Panel previewPanel = null!;
     private PictureBox picturePreview = null!;
-    private DarkUI.Controls.DarkTextBox textPreview = null!;
+    private DarkUI.Controls.DarkRichTextBox textPreview = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -21,23 +20,12 @@ partial class FilePreviewForm
 
     private void InitializeComponent()
     {
+        System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FilePreviewForm));
         components = new System.ComponentModel.Container();
-        previewPanel = new Panel();
         picturePreview = new PictureBox();
-        textPreview = new DarkUI.Controls.DarkTextBox();
-        previewPanel.SuspendLayout();
+        textPreview = new DarkUI.Controls.DarkRichTextBox();
         ((System.ComponentModel.ISupportInitialize)picturePreview).BeginInit();
         SuspendLayout();
-        // 
-        // previewPanel
-        // 
-        previewPanel.BackColor = Color.FromArgb(37, 37, 38);
-        previewPanel.Controls.Add(textPreview);
-        previewPanel.Controls.Add(picturePreview);
-        previewPanel.Dock = DockStyle.Fill;
-        previewPanel.Name = "previewPanel";
-        previewPanel.Padding = new Padding(8);
-        previewPanel.TabIndex = 0;
         // 
         // picturePreview
         // 
@@ -50,12 +38,11 @@ partial class FilePreviewForm
         // 
         // textPreview
         // 
+        textPreview.DetectUrls = false;
         textPreview.Dock = DockStyle.Fill;
         textPreview.Font = new Font("Consolas", 10F);
-        textPreview.Multiline = true;
         textPreview.Name = "textPreview";
         textPreview.ReadOnly = true;
-        textPreview.ScrollBars = ScrollBars.Both;
         textPreview.TabIndex = 1;
         textPreview.Visible = false;
         textPreview.WordWrap = false;
@@ -65,19 +52,19 @@ partial class FilePreviewForm
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         ClientSize = new Size(960, 680);
-        Controls.Add(previewPanel);
+        Padding = new Padding(8);
+        Controls.Add(textPreview);
+        Controls.Add(picturePreview);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = true;
         MinimizeBox = false;
         MinimumSize = new Size(520, 380);
+        Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
         Name = "FilePreviewForm";
         ShowIcon = false;
         ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
         Text = "File Preview";
-        Controls.SetChildIndex(previewPanel, 0);
-        previewPanel.ResumeLayout(false);
-        previewPanel.PerformLayout();
         ((System.ComponentModel.ISupportInitialize)picturePreview).EndInit();
         ResumeLayout(false);
     }
