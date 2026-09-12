@@ -231,6 +231,11 @@ public partial class MainForm
         row.Cells["Features"].ToolTipText = string.Join(", ", game.DeclaredFeatures);
         row.Cells["FileName"].ToolTipText = game.RootPath;
         row.Cells["Location"].ToolTipText = game.RootPath;
+        row.Cells["Size"].ToolTipText = game.SourceSize > 0
+            ? FormatBytes(game.SourceSize)
+            : game.SourceKind == Ps5SourceKind.LooseDump
+                ? "Open this dump to calculate its size."
+                : string.Empty;
 
         if (SourceExists(game))
         {
@@ -244,6 +249,20 @@ public partial class MainForm
             row.Cells["Source"].ToolTipText = "Source not found: " + game.RootPath;
             row.DefaultCellStyle.ForeColor = Color.FromArgb(208, 128, 128);
             row.DefaultCellStyle.SelectionForeColor = Color.FromArgb(255, 190, 190);
+        }
+    }
+
+    private void RefreshLibrarySizeCell(Ps5GameInfo game)
+    {
+        foreach (DataGridViewRow row in gridLibrary.Rows)
+        {
+            if (row.Tag is Ps5GameInfo candidate &&
+                string.Equals(candidate.RootPath, game.RootPath, StringComparison.OrdinalIgnoreCase))
+            {
+                row.Cells["Size"].Value = game.SourceSize > 0 ? FormatBytes(game.SourceSize) : string.Empty;
+                row.Cells["Size"].ToolTipText = game.SourceSize > 0 ? FormatBytes(game.SourceSize) : string.Empty;
+                return;
+            }
         }
     }
 

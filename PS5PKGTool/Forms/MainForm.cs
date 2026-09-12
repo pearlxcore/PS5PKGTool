@@ -606,11 +606,12 @@ public partial class MainForm : DarkForm
                 _currentArtwork = new Ps5Artwork(details.Icon, details.Background, details.Background1, details.Background2);
             _populatedDetailTabs.Clear();
             PopulateActiveDetailTab();
-            // A loose dump's size is filled in during the details walk; refresh the overview and
-            // persist it so the next start shows it without re-walking.
+            // A loose dump's size is filled in during the details walk; refresh the overview, the
+            // library row and persist it so the next start shows it without re-walking.
             if (game.SourceSize != sizeBefore)
             {
                 PopulateOverview(game);
+                RefreshLibrarySizeCell(game);
                 _stateStore.SaveManifest(_games);
             }
             statusLabel.Text = details.Errors.Count == 0

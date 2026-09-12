@@ -53,6 +53,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 ### Fixes
 
 - Dark text viewers (Raw param.json, hex, and file preview) now fill their tab when first shown on a tab that was not selected at load time.
+- Opening a loose dump now updates its Size in the library list immediately instead of staying blank until a refresh; dumps whose size is not known yet show a tooltip.
 
 ### Notes
 
