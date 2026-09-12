@@ -32,6 +32,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - param.sfo is read from the outer CNT entry first, with the inner image used only as a fallback.
 - PlayGo chunks, scenarios, and per file chunk assignments are read through the engine PlayGoChunkReader, with a lenient fallback and a diagnostic note for user files the strict engine reader rejects.
 - Configurable Content ID and passcode, with an optional seed for byte reproducible builds.
+- Engine refresh (ProsperoPkgTool a13fd5a, builder side): more tolerant param.json parsing, NAPS padding RUN re-anchors, imagedigs on-disk byte order, FIH content-version BCD, param.json packaged verbatim, and a fixed single-chunk PlayGo profile.
 - Retail packages are recognized but need matching key material to decode.
 
 ### Tasks
