@@ -105,9 +105,9 @@ The app is written to `PS5PKGTool\bin\Release\net10.0-windows\PS5 PKG Tool.exe`.
 
 # Credit
 
-- [Robin Perris](https://github.com/RobinPerris) (DarkUI)
-- [SvenGDK](https://github.com/SvenGDK) (UFS2Tool and LibProsperoPkg, UFS2/FFPKG format work)
-- [PSBrew / Renan Barreto](https://github.com/PSBrew/MkPFS) (MkPFS, PFS and PFSC/FFPFSC format work)
-- [kerrdec97](https://github.com/PSBrew/ps5-exfat-builder) (ps5-exfat-builder, exFAT format work)
-- [strongt1me](https://github.com/strongt1me/PS5-Dump-Image-Converter) (PS5 Dump and Image Converter)
+- Robin Perris
+- SvenGDK
+- PSBrew / Renan Barreto
+- kerrdec97
+- strongt1me
 - Sony
