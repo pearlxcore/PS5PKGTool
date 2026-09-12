@@ -99,7 +99,7 @@ The app is written to `PS5PKGTool\bin\Release\net10.0-windows\PS5 PKG Tool.exe`.
 
 # Screenshot
 
-<img width="2560" height="1392" alt="4" src="https://github.com/user-attachments/assets/ddd9ed79-1433-46a3-9a80-1a1da583af02" />
+<img width="2560" height="1392" alt="4" src="https://github.com/user-attachments/assets/78d56b78-cdf9-4fcf-8697-aa86f3406a7f" />
 <img width="2560" height="1392" alt="3" src="https://github.com/user-attachments/assets/40c5a909-dfd6-4689-aae2-1cf08f745405" />
 <img width="2560" height="1392" alt="2" src="https://github.com/user-attachments/assets/ffadd58d-59d6-4857-818e-b28b8c647f29" />
 <img width="2560" height="1392" alt="1" src="https://github.com/user-attachments/assets/60fe6674-76d9-4a93-a9e2-44c7f6b3ef58" />
