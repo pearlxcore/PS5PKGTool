@@ -1,10 +1,5 @@
 # PS5 PKG Tool
 
-[![Github All Releases](https://img.shields.io/github/downloads/pearlxcore/PS5PkgTool/total.svg)](https://github.com/pearlxcore/PS5PkgTool/releases/latest)
-[![License](https://img.shields.io/github/license/pearlxcore/PS5PkgTool.svg)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/pearlxcore/PS5PkgTool.svg)](https://github.com/pearlxcore/PS5PkgTool)
-[![.NET](https://img.shields.io/badge/.NET-10-blue)]()
-
 A Windows app for managing your PS5 dump and image collection, reading PS5 packages, and building or converting images.
 
 Suggestions are welcome. Report bugs [here](https://github.com/pearlxcore/PS5PkgTool/issues).
