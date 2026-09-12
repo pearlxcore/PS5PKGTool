@@ -231,6 +231,20 @@ public partial class MainForm
         row.Cells["Features"].ToolTipText = string.Join(", ", game.DeclaredFeatures);
         row.Cells["FileName"].ToolTipText = game.RootPath;
         row.Cells["Location"].ToolTipText = game.RootPath;
+
+        if (SourceExists(game))
+        {
+            row.Cells["Source"].ToolTipText = string.Empty;
+            row.DefaultCellStyle.ForeColor = Color.Empty;
+            row.DefaultCellStyle.SelectionForeColor = Color.Empty;
+        }
+        else
+        {
+            row.Cells["Source"].Value = "Missing";
+            row.Cells["Source"].ToolTipText = "Source not found: " + game.RootPath;
+            row.DefaultCellStyle.ForeColor = Color.FromArgb(208, 128, 128);
+            row.DefaultCellStyle.SelectionForeColor = Color.FromArgb(255, 190, 190);
+        }
     }
 
     private void ConfigureGroupHeaderColumn()

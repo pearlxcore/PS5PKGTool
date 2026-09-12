@@ -226,6 +226,19 @@ public partial class MainForm
         statusLabel.Text = "Library list emptied. Use Refresh to scan again.";
     }
 
+    private void menuRemoveMissing_Click(object? sender, EventArgs e)
+    {
+        int removed = _games.RemoveAll(game => !SourceExists(game));
+        if (removed == 0)
+        {
+            AppDialog.ShowInformation("No cached library items are missing.", "Remove missing items");
+            return;
+        }
+        _stateStore.SaveManifest(_games);
+        ApplyFilter();
+        statusLabel.Text = $"Removed {removed:N0} missing item(s).";
+    }
+
     private void SetGroupBy(string key)
     {
         _libraryGroupBy = key;

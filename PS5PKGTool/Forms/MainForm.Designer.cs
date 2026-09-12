@@ -12,7 +12,8 @@ partial class MainForm
     private ToolStripMenuItem menuOpenPackage = null!;
     private ToolStripMenuItem menuRefresh = null!;
     private ToolStripMenuItem menuSaveManifest = null!;
-    private ToolStripMenuItem menuEmptyList = null!;
+        private ToolStripMenuItem menuEmptyList = null!;
+        private ToolStripMenuItem menuRemoveMissing = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuSeparator = null!;
     private ToolStripMenuItem menuSettings = null!;
     private ToolStripMenuItem menuExit = null!;
@@ -345,6 +346,7 @@ partial class MainForm
         menuRefresh = new ToolStripMenuItem();
         menuSaveManifest = new ToolStripMenuItem();
         menuEmptyList = new ToolStripMenuItem();
+        menuRemoveMissing = new ToolStripMenuItem();
         menuSeparator = new DarkUI.Controls.DarkToolStripSeparator();
         menuSettings = new ToolStripMenuItem();
         menuExit = new ToolStripMenuItem();
@@ -783,7 +785,7 @@ partial class MainForm
         // menuFile
         // 
         menuFile.BackColor = Color.FromArgb(60, 63, 65);
-        menuFile.DropDownItems.AddRange(new ToolStripItem[] { menuAddFolder, menuOpenDump, menuOpenPackage, menuRecent, menuRefresh, menuSaveManifest, menuEmptyList, menuSeparator, menuSettings, menuExit });
+        menuFile.DropDownItems.AddRange(new ToolStripItem[] { menuAddFolder, menuOpenDump, menuOpenPackage, menuRecent, menuRefresh, menuSaveManifest, menuEmptyList, menuRemoveMissing, menuSeparator, menuSettings, menuExit });
         menuFile.ForeColor = Color.FromArgb(220, 220, 220);
         menuFile.Name = "menuFile";
         menuFile.Size = new Size(37, 20);
@@ -836,6 +838,13 @@ partial class MainForm
         menuEmptyList.Size = new Size(233, 22);
         menuEmptyList.Text = "Empty List";
         menuEmptyList.Click += menuEmptyList_Click;
+        // 
+        // menuRemoveMissing
+        // 
+        menuRemoveMissing.Name = "menuRemoveMissing";
+        menuRemoveMissing.Size = new Size(233, 22);
+        menuRemoveMissing.Text = "Remove Missing Items";
+        menuRemoveMissing.Click += menuRemoveMissing_Click;
         // 
         // menuSeparator
         // 

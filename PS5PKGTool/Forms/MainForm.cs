@@ -118,9 +118,13 @@ public partial class MainForm : DarkForm
         _games = configured.OrderBy(game => game.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
         _stateStore.SaveManifest(_games);
         ApplyFilter();
-        statusLabel.Text = _games.Count == 0
-            ? "Add a PS5 dump, PKG, FFPFSC, FFPKG, or exFAT library folder, then choose Refresh."
-            : "Loaded cached library. Choose Refresh to rescan folders.";
+        int missing = _games.Count(game => !SourceExists(game));
+        if (_games.Count == 0)
+            statusLabel.Text = "Add a PS5 dump, PKG, FFPFSC, FFPKG, or exFAT library folder, then choose Refresh.";
+        else if (missing > 0)
+            statusLabel.Text = $"Loaded cached library. {missing:N0} item(s) not found; choose Refresh to rescan.";
+        else
+            statusLabel.Text = "Loaded cached library. Choose Refresh to rescan folders.";
 
         if (!string.IsNullOrWhiteSpace(_pendingExternalPath))
         {
@@ -137,6 +141,31 @@ public partial class MainForm : DarkForm
         {
             await ScanAsync(ScanRoots(), merge: false);
         }
+
+        int missingNow = _games.Count(game => !SourceExists(game));
+        if (missingNow > 0)
+            BeginInvoke(new Action(() => NotifyMissingSources(missingNow)));
+    }
+
+    private void NotifyMissingSources(int missing)
+    {
+        string[] names = _games
+            .Where(game => !SourceExists(game))
+            .Select(game => string.IsNullOrWhiteSpace(game.Title) ? Path.GetFileName(game.RootPath) : game.Title)
+            .Take(8)
+            .ToArray();
+        var message = new StringBuilder();
+        message.Append(missing == 1
+            ? "1 library item could not be found (deleted, moved, or its drive is offline):"
+            : $"{missing:N0} library items could not be found (deleted, moved, or their drive is offline):");
+        message.AppendLine();
+        message.AppendLine();
+        foreach (string name in names) message.AppendLine("  - " + name);
+        if (missing > names.Length)
+            message.AppendLine($"  ... and {missing - names.Length:N0} more");
+        message.AppendLine();
+        message.Append("They are marked as Missing until the next Refresh. Use File > Remove Missing Items to drop them now.");
+        AppMessageBox.Show(this, "Missing library items", message.ToString(), AppMessageType.Warning, AppMessageButtons.OK);
     }
 
     private void ApplyRuntimeSettings()
