@@ -10,7 +10,8 @@ Suggestions are welcome. Report bugs [here](https://github.com/pearlxcore/PS5Pkg
 
 # Support My Work
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/pearlxcore)
+[![ko-fi](https://github.com/user-attachments/assets/be9cc4be-3352-4bd5-8086-05c30930f81d)](https://ko-fi.com/R6R524N7X)
+[![paypal](https://user-images.githubusercontent.com/36906814/102657760-39d1ce00-41b1-11eb-96fe-c10e2d9b3f39.png)](https://www.paypal.com/paypalme/pearlxcoree)
 
 # Requirement
 
