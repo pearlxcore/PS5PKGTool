@@ -95,12 +95,6 @@ dotnet build .\PS5PKGTool.slnx -c Release
 
 The app is written to `PS5PKGTool\bin\Release\net10.0-windows\PS5 PKG Tool.exe`.
 
-Native and round trip checks are available through the smoke tests:
-
-```
-PS5PKGTool.SmokeTests.exe --native-only
-```
-
 # Download
 
 [**Download Latest Release**](https://github.com/pearlxcore/PS5PkgTool/releases/latest)
