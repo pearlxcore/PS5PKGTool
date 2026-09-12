@@ -8,7 +8,7 @@ namespace PS5PKGTool.Forms;
 public partial class AboutForm : DarkUI.Forms.DarkForm
 {
     private const string GitHubUrl = "https://github.com/pearlxcore/PS5PkgTool";
-    private const string KoFiUrl = "https://ko-fi.com/pearlxcore";
+    private const string KoFiUrl = "https://ko-fi.com/R6R524N7X";
     private const string IssuesUrl = "https://github.com/pearlxcore/PS5PkgTool/issues";
 
     public AboutForm(string version)

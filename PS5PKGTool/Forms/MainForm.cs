@@ -463,7 +463,8 @@ public partial class MainForm : DarkForm
 
     private const string RepositoryUrl = "https://github.com/pearlxcore/PS5PkgTool";
     private const string LatestReleaseApiUrl = "https://api.github.com/repos/pearlxcore/PS5PkgTool/releases/latest";
-    private const string KoFiUrl = "https://ko-fi.com/pearlxcore";
+    private const string KoFiUrl = "https://ko-fi.com/R6R524N7X";
+    private const string PayPalUrl = "https://www.paypal.com/paypalme/pearlxcoree";
 
     private static void OpenExternalUrl(string url)
     {
@@ -478,6 +479,8 @@ public partial class MainForm : DarkForm
     }
 
     private void menuHelpKofi_Click(object? sender, EventArgs e) => OpenExternalUrl(KoFiUrl);
+
+    private void menuHelpPayPal_Click(object? sender, EventArgs e) => OpenExternalUrl(PayPalUrl);
 
     private async void menuHelpCheckUpdate_Click(object? sender, EventArgs e)
     {

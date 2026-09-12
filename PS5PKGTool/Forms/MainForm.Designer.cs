@@ -22,7 +22,8 @@ partial class MainForm
     private ToolStripMenuItem menuRecent = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuHelpSeparator = null!;
     private ToolStripMenuItem menuHelpCheckUpdate = null!;
-    private ToolStripMenuItem menuHelpKofi = null!;
+        private ToolStripMenuItem menuHelpKofi = null!;
+        private ToolStripMenuItem menuHelpPayPal = null!;
     private DarkUI.Controls.DarkContextMenu contextLibrary = null!;
     private ToolStripMenuItem menuLibraryReveal = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuLibrarySeparator1 = null!;
@@ -355,6 +356,7 @@ partial class MainForm
         menuHelpSeparator = new DarkUI.Controls.DarkToolStripSeparator();
         menuHelpCheckUpdate = new ToolStripMenuItem();
         menuHelpKofi = new ToolStripMenuItem();
+        menuHelpPayPal = new ToolStripMenuItem();
         contextLibrary = new DarkUI.Controls.DarkContextMenu();
         menuLibraryReveal = new ToolStripMenuItem();
         menuLibrarySeparator1 = new DarkUI.Controls.DarkToolStripSeparator();
@@ -868,7 +870,7 @@ partial class MainForm
         // menuHelp
         // 
         menuHelp.BackColor = Color.FromArgb(60, 63, 65);
-        menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout, menuHelpSeparator, menuHelpCheckUpdate, menuHelpKofi });
+        menuHelp.DropDownItems.AddRange(new ToolStripItem[] { menuAbout, menuHelpSeparator, menuHelpCheckUpdate, menuHelpKofi, menuHelpPayPal });
         menuHelp.ForeColor = Color.FromArgb(220, 220, 220);
         menuHelp.Name = "menuHelp";
         menuHelp.Size = new Size(44, 20);
@@ -899,6 +901,13 @@ partial class MainForm
         menuHelpKofi.Size = new Size(223, 22);
         menuHelpKofi.Text = "Buy me a Ko-fi";
         menuHelpKofi.Click += menuHelpKofi_Click;
+        // 
+        // menuHelpPayPal
+        // 
+        menuHelpPayPal.Name = "menuHelpPayPal";
+        menuHelpPayPal.Size = new Size(223, 22);
+        menuHelpPayPal.Text = "Support via PayPal";
+        menuHelpPayPal.Click += menuHelpPayPal_Click;
         // 
         // contextLibrary
         // 

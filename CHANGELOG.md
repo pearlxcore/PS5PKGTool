@@ -47,7 +47,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - Tabbed settings for Library, Appearance, Viewing, Paths and Build, Safety, and Maintenance.
 - Live theme preview, grid options, preview and cache limits, output folder, default debug passcode, and confirmation prompts.
 - Export and import settings, reset settings, clear caches, and open the log folder.
-- Help menu with Check for Updates and Buy me a Ko-fi, plus an About dialog.
+- Help menu with Check for Updates, Buy me a Ko-fi, and Support via PayPal, plus an About dialog.
 - GPL-3.0 licensed, with third party notices.
 
 ### Fixes
