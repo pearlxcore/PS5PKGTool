@@ -127,7 +127,7 @@ public partial class MainForm
         return task;
     }
 
-    private static void LogTaskStatus(QueuedPackageTask task)
+    private void LogTaskStatus(QueuedPackageTask task)
     {
         switch (task.Status)
         {
@@ -140,6 +140,14 @@ public partial class MainForm
             case PackageTaskStatus.Failed:
                 Logger.Error($"Task failed: {task.DisplayName}: {task.Message}");
                 if (task.Failure is not null) Logger.Error(task.Failure.ToString());
+                if (task.Failure is not null && Ps5DiskSpace.IsInsufficient(task.Failure))
+                {
+                    string message = Ps5DiskSpace.Describe(task.Failure);
+                    RunOnUi(() => AppDialog.ShowError(
+                        "Not enough free disk space to complete the build.\n\n" + message +
+                        "\n\nFree space, or choose a different workspace or output volume.",
+                        "Package build"));
+                }
                 break;
             case PackageTaskStatus.Cancelled:
                 Logger.Warn($"Task cancelled: {task.DisplayName}");
@@ -683,8 +691,10 @@ public partial class MainForm
         if (passcode.Length == 0) passcode = SonyDebugPackageCredentials.DefaultPasscode;
         bool overwrite = GetBool(fields, "overwrite");
         ulong? sdkVersionOverride = GetSdkOverride(fields);
+        string tempText = Get(fields, "temp");
+        string? tempDirectory = tempText.Length > 0 ? tempText : null;
         return (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-            sdkVersionOverride, progress, token);
+            sdkVersionOverride, tempDirectory, progress, token);
     }
 
     private static ulong? GetSdkOverride(Dictionary<string, string> fields)

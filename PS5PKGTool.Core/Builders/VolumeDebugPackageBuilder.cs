@@ -100,6 +100,7 @@ public static class VolumeDebugPackageBuilder
 
         var log = new DebugPackageBuildLog
         {
+            Log = options.Log ?? (_ => { }),
             Progress = new RelayProgress<ProsperoBuildProgress>(value =>
                 progress?.Report(new SonyDebugPackageProgress(value.Stage, value.Done, value.Total, string.Empty)))
         };
@@ -114,6 +115,7 @@ public static class VolumeDebugPackageBuilder
             OuterSeed = options.Seed,
             DeterministicEntryKeys = options.Seed is { Length: 16 },
             SdkVersionOverride = options.SdkVersionOverride,
+            TempDirectory = options.TempDirectory,
             SceSysFiles = sceSys,
             Log = log
         });

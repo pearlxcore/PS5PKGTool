@@ -21,6 +21,12 @@ public sealed class ProsperoDebugPackageBuildOptions
     /// <summary>Optional full 64-bit executable SDK id to stamp (param.json + .sceversion).
     /// Null preserves the source metadata.</summary>
     public ulong? SdkVersionOverride { get; init; }
+
+    /// <summary>Optional workspace folder for the multi-GiB file-backed path. Null uses the system temp folder.</summary>
+    public string? TempDirectory { get; init; }
+
+    /// <summary>Optional sink for engine log lines (free-space warnings, stale workspace sweep).</summary>
+    public Action<string>? Log { get; init; }
 }
 
 /// <summary>
@@ -110,6 +116,7 @@ public static class ProsperoDebugPackageBuilder
 
         var log = new DebugPackageBuildLog
         {
+            Log = options.Log ?? (_ => { }),
             Progress = new RelayProgress<ProsperoBuildProgress>(value =>
                 progress?.Report(new SonyDebugPackageProgress(value.Stage, value.Done, value.Total, string.Empty)))
         };
@@ -124,6 +131,7 @@ public static class ProsperoDebugPackageBuilder
             OuterSeed = options.Seed,
             DeterministicEntryKeys = options.Seed is { Length: 16 },
             SdkVersionOverride = options.SdkVersionOverride,
+            TempDirectory = options.TempDirectory,
             SceSysFiles = sceSys,
             Log = log
         });

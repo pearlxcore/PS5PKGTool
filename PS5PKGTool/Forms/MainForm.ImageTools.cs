@@ -5,6 +5,7 @@ using PS5PKGTool.Core.Parsers;
 using PS5PKGTool.Core.Services;
 using PS5PKGTool.Core.Tasks;
 using PS5PKGTool.Ffpfsc;
+using PS5PKGTool.Infrastructure;
 using UFS2Tool;
 
 namespace PS5PKGTool.Forms;
@@ -295,6 +296,9 @@ public partial class MainForm
         txtImagePasscode.Visible = showPasscode;
         chkImageSdkOverride.Visible = showDebug;
         cboImageSdk.Visible = showDebug && chkImageSdkOverride.Checked;
+        lblImageTemp.Visible = showDebug;
+        txtImageTemp.Visible = showDebug;
+        btnImageTempBrowse.Visible = showDebug;
         bool showOutput = convert || extract;
         lblImageOutput.Visible = showOutput;
         txtImageOutput.Visible = showOutput;
@@ -367,6 +371,16 @@ public partial class MainForm
         if (imageSaveDialog.ShowDialog(this) == DialogResult.OK)
             txtImageOutput.Text = imageSaveDialog.FileName;
     }
+
+    private void btnImageTempBrowse_Click(object? sender, EventArgs e)
+    {
+        folderBrowserDialog.Description = "Select the temporary workspace folder";
+        if (!string.IsNullOrWhiteSpace(txtImageTemp.Text) && Directory.Exists(txtImageTemp.Text))
+            folderBrowserDialog.SelectedPath = txtImageTemp.Text;
+        if (folderBrowserDialog.ShowDialog(this) == DialogResult.OK)
+            txtImageTemp.Text = folderBrowserDialog.SelectedPath;
+    }
+
 
     private void btnImageRun_Click(object? sender, EventArgs e)
     {
@@ -765,25 +779,57 @@ public partial class MainForm
         string passcode = ImagePasscode();
         bool overwrite = chkImageOverwrite.Checked;
         ulong? sdkVersionOverride = SelectedSdkOverride();
+        string? tempDirectory = string.IsNullOrWhiteSpace(txtImageTemp.Text) ? null : txtImageTemp.Text.Trim();
+
+        // Best-effort free-space preflight before a long build; the engine re-checks exactly and
+        // throws ProsperoInsufficientSpaceException, which the task failure path surfaces as a dialog.
+        Ps5DiskSpaceCheck space = Ps5DiskSpace.Check(EstimateBuildPayload(source), output, tempDirectory);
+        if (space.Status == Ps5DiskSpaceStatus.Insufficient)
+        {
+            AppDialog.ShowError("Not enough free disk space to build this package.\n\n" + space.Message +
+                "\n\nFree space, or choose a different workspace or output volume.", "Build package");
+            return;
+        }
+        if (space.Status == Ps5DiskSpaceStatus.NearLimit)
+            AppDialog.ShowWarning("Low free disk space for this build.\n\n" + space.Message, "Build package");
 
         lblImageStatus.Text = "Queued: package build. See the Tasks tab.";
         EnqueueTask(PackageTaskTypes.ImageBuildPackage, $"Build package from {Path.GetFileName(source)}",
             (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-                sdkVersionOverride, progress, token),
+                sdkVersionOverride, tempDirectory, progress, token),
             sourcePath: source, outputPath: output,
             operation: "Build package", sourceFormat: ImageFormatLabel(source), targetFormat: "FPKG",
             stagePlan: PackageTaskPlans.BuildPackage,
             payload: Payload(("source", source), ("output", output), ("contentId", contentId),
                 ("passcode", passcode), ("overwrite", overwrite.ToString()),
-                ("sdk", sdkVersionOverride?.ToString("X16"))),
+                ("sdk", sdkVersionOverride?.ToString("X16")), ("temp", tempDirectory)),
             onFinished: task => lblImageStatus.Text = task.Status == PackageTaskStatus.Completed
                 ? $"Built package {Path.GetFileName(output)}."
                 : $"Package build {StatusText(task.Status).ToLowerInvariant()}.");
     }
 
+    private static long EstimateBuildPayload(string source)
+    {
+        try
+        {
+            if (Directory.Exists(source))
+            {
+                long total = 0;
+                foreach (string file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+                    total += new FileInfo(file).Length;
+                return total;
+            }
+            if (File.Exists(source)) return new FileInfo(source).Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+        return 0;
+    }
+
     private static async Task BuildPackageFromSourceAsync(string source, string output, string contentId,
-        string passcode, bool overwrite, ulong? sdkVersionOverride, IProgress<PackageTaskProgress> progress,
-        CancellationToken token)
+        string passcode, bool overwrite, ulong? sdkVersionOverride, string? tempDirectory,
+        IProgress<PackageTaskProgress> progress, CancellationToken token)
     {
         if (!overwrite && File.Exists(output))
             throw new IOException($"The output file already exists: {output}");
@@ -794,7 +840,9 @@ public partial class MainForm
         {
             ContentId = contentId,
             Passcode = passcode,
-            SdkVersionOverride = sdkVersionOverride
+            SdkVersionOverride = sdkVersionOverride,
+            TempDirectory = tempDirectory,
+            Log = Logger.Info
         };
         var bridge = new Progress<SonyDebugPackageProgress>(value =>
             progress.Report(new PackageTaskProgress(value.Stage, 0, 0, value.CompletedBytes, value.TotalBytes,

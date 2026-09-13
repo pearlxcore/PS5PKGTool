@@ -25,6 +25,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - Extract, verify, edit files, repair, refresh AMPR, and rebuild images.
 - Build a debug package (FPKG) from a dump or image, and convert a debug package to exFAT, FFPKG, or FFPFSC.
 - Optional SDK version override when building a debug package: pick an SDK release and it is stamped into param.json and each fake-signed module's .sceversion; off by default.
+- Optional workspace folder for building a debug package, with a free-space check before the build starts; blank uses the system temp folder.
 - Built on managed exFAT, UFS2/FFPKG, PFSC, and PFS implementations.
 
 ### Packages
@@ -36,6 +37,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - PlayGo chunks, scenarios, and per file chunk assignments are read through the engine PlayGoChunkReader, with a lenient fallback and a diagnostic note for user files the strict engine reader rejects.
 - Configurable Content ID and passcode, with an optional seed for byte reproducible builds.
 - Engine refresh (ProsperoPkgTool a13fd5a, builder side): more tolerant param.json parsing, NAPS padding RUN re-anchors, imagedigs on-disk byte order, FIH content-version BCD, param.json packaged verbatim, and a fixed single-chunk PlayGo profile.
+- Engine refresh (ProsperoPkgTool 7c50180, operational): the free-space preflight blocks a build that cannot fit with a clear dialog and warns first when space is low; stale build workspaces are swept; the Kraken decoder now reads verbatim and restarted sub-chunks. Produced packages are unchanged.
 - Retail packages are recognized but need matching key material to decode.
 
 ### Tasks

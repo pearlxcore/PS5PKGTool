@@ -15,6 +15,12 @@ public sealed class SonyDebugPackageBuildOptions
     /// <summary>Optional full 64-bit executable SDK id to stamp (param.json + .sceversion).
     /// Null preserves the source metadata.</summary>
     public ulong? SdkVersionOverride { get; init; }
+
+    /// <summary>Optional workspace folder for the multi-GiB file-backed path. Null uses the system temp folder.</summary>
+    public string? TempDirectory { get; init; }
+
+    /// <summary>Optional sink for engine log lines (free-space warnings, stale workspace sweep).</summary>
+    public Action<string>? Log { get; init; }
 }
 
 public readonly record struct SonyDebugPackageProgress(string Stage, long CompletedBytes,
@@ -54,7 +60,9 @@ public static class SonyDebugPackageBuilder
                 ContentId = options.ContentId,
                 Passcode = options.Passcode,
                 Seed = options.Seed,
-                SdkVersionOverride = options.SdkVersionOverride
+                SdkVersionOverride = options.SdkVersionOverride,
+                TempDirectory = options.TempDirectory,
+                Log = options.Log
             },
             progress, cancellationToken).ConfigureAwait(false);
     }

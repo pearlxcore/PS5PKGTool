@@ -321,6 +321,9 @@ partial class MainForm
     private DarkUI.Controls.DarkTextBox txtImagePasscode = null!;
     private DarkUI.Controls.DarkCheckBox chkImageSdkOverride = null!;
     private DarkUI.Controls.DarkComboBox cboImageSdk = null!;
+    private DarkUI.Controls.DarkLabel lblImageTemp = null!;
+    private DarkUI.Controls.DarkTextBox txtImageTemp = null!;
+    private DarkUI.Controls.DarkButton btnImageTempBrowse = null!;
     private OpenFileDialog openImageDialog = null!;
     private SaveFileDialog imageSaveDialog = null!;
     private DarkUI.Controls.DarkStatusStrip statusMain = null!;
@@ -657,6 +660,9 @@ partial class MainForm
         txtImagePasscode = new DarkUI.Controls.DarkTextBox();
         chkImageSdkOverride = new DarkUI.Controls.DarkCheckBox();
         cboImageSdk = new DarkUI.Controls.DarkComboBox();
+        lblImageTemp = new DarkUI.Controls.DarkLabel();
+        txtImageTemp = new DarkUI.Controls.DarkTextBox();
+        btnImageTempBrowse = new DarkUI.Controls.DarkButton();
         openImageDialog = new OpenFileDialog();
         imageSaveDialog = new SaveFileDialog();
         trophyCsvSaveDialog = new SaveFileDialog();
@@ -3258,6 +3264,9 @@ partial class MainForm
         tabWorkspaceTools.Controls.Add(txtImagePasscode);
         tabWorkspaceTools.Controls.Add(chkImageSdkOverride);
         tabWorkspaceTools.Controls.Add(cboImageSdk);
+        tabWorkspaceTools.Controls.Add(lblImageTemp);
+        tabWorkspaceTools.Controls.Add(txtImageTemp);
+        tabWorkspaceTools.Controls.Add(btnImageTempBrowse);
         tabWorkspaceTools.Controls.Add(chkImageAmpr);
         tabWorkspaceTools.Controls.Add(btnImageRun);
         tabWorkspaceTools.Controls.Add(btnImageCancel);
@@ -3582,6 +3591,34 @@ partial class MainForm
         cboImageSdk.Visible = false;
         cboImageSdk.Size = new Size(140, 24);
         cboImageSdk.TabIndex = 37;
+        // 
+        // lblImageTemp
+        // 
+        lblImageTemp.Location = new Point(8, 254);
+        lblImageTemp.Name = "lblImageTemp";
+        lblImageTemp.Visible = false;
+        lblImageTemp.Size = new Size(130, 15);
+        lblImageTemp.TabIndex = 38;
+        lblImageTemp.Text = "Workspace folder:";
+        // 
+        // txtImageTemp
+        // 
+        txtImageTemp.Location = new Point(140, 250);
+        txtImageTemp.Name = "txtImageTemp";
+        txtImageTemp.Visible = false;
+        txtImageTemp.PlaceholderText = "Blank = %TEMP%";
+        txtImageTemp.Size = new Size(700, 24);
+        txtImageTemp.TabIndex = 39;
+        // 
+        // btnImageTempBrowse
+        // 
+        btnImageTempBrowse.Location = new Point(848, 248);
+        btnImageTempBrowse.Name = "btnImageTempBrowse";
+        btnImageTempBrowse.Visible = false;
+        btnImageTempBrowse.Size = new Size(100, 26);
+        btnImageTempBrowse.TabIndex = 40;
+        btnImageTempBrowse.Text = "Browse...";
+        btnImageTempBrowse.Click += btnImageTempBrowse_Click;
         // 
         // btnImageRun
         // 
