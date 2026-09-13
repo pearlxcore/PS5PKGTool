@@ -293,6 +293,8 @@ public partial class MainForm
         txtImageContentId.Visible = showDebug;
         lblImagePasscode.Visible = showPasscode;
         txtImagePasscode.Visible = showPasscode;
+        chkImageSdkOverride.Visible = showDebug;
+        cboImageSdk.Visible = showDebug && chkImageSdkOverride.Checked;
         bool showOutput = convert || extract;
         lblImageOutput.Visible = showOutput;
         txtImageOutput.Visible = showOutput;
@@ -728,6 +730,23 @@ public partial class MainForm
                 : $"Rebuild {StatusText(task.Status).ToLowerInvariant()}.");
     }
 
+    private void InitializeImageSdkList()
+    {
+        cboImageSdk.Items.Clear();
+        foreach (Ps5SdkVersions.Release release in Ps5SdkVersions.Releases)
+            cboImageSdk.Items.Add(release.Version);
+        int index = cboImageSdk.Items.IndexOf("9.00.00.40");
+        cboImageSdk.SelectedIndex = index >= 0
+            ? index
+            : cboImageSdk.Items.Count > 0 ? cboImageSdk.Items.Count - 1 : -1;
+    }
+
+    private ulong? SelectedSdkOverride() =>
+        chkImageSdkOverride.Checked ? Ps5SdkVersions.ExecutableVersionAt(cboImageSdk.SelectedIndex) : null;
+
+    private void chkImageSdkOverride_CheckedChanged(object? sender, EventArgs e) =>
+        cboImageSdk.Visible = chkImageSdkOverride.Visible && chkImageSdkOverride.Checked;
+
     private void RunImageBuildPackage()
     {
         string source = _imageSourcePath!;
@@ -745,30 +764,38 @@ public partial class MainForm
         }
         string passcode = ImagePasscode();
         bool overwrite = chkImageOverwrite.Checked;
+        ulong? sdkVersionOverride = SelectedSdkOverride();
 
         lblImageStatus.Text = "Queued: package build. See the Tasks tab.";
         EnqueueTask(PackageTaskTypes.ImageBuildPackage, $"Build package from {Path.GetFileName(source)}",
             (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-                progress, token),
+                sdkVersionOverride, progress, token),
             sourcePath: source, outputPath: output,
             operation: "Build package", sourceFormat: ImageFormatLabel(source), targetFormat: "FPKG",
             stagePlan: PackageTaskPlans.BuildPackage,
             payload: Payload(("source", source), ("output", output), ("contentId", contentId),
-                ("passcode", passcode), ("overwrite", overwrite.ToString())),
+                ("passcode", passcode), ("overwrite", overwrite.ToString()),
+                ("sdk", sdkVersionOverride?.ToString("X16"))),
             onFinished: task => lblImageStatus.Text = task.Status == PackageTaskStatus.Completed
                 ? $"Built package {Path.GetFileName(output)}."
                 : $"Package build {StatusText(task.Status).ToLowerInvariant()}.");
     }
 
     private static async Task BuildPackageFromSourceAsync(string source, string output, string contentId,
-        string passcode, bool overwrite, IProgress<PackageTaskProgress> progress, CancellationToken token)
+        string passcode, bool overwrite, ulong? sdkVersionOverride, IProgress<PackageTaskProgress> progress,
+        CancellationToken token)
     {
         if (!overwrite && File.Exists(output))
             throw new IOException($"The output file already exists: {output}");
         // Build to a sibling partial file and move it into place on success, so a failed build
         // cannot leave a half-written .pkg that looks valid.
         string partial = output + ".partial-" + Guid.NewGuid().ToString("N");
-        var options = new SonyDebugPackageBuildOptions { ContentId = contentId, Passcode = passcode };
+        var options = new SonyDebugPackageBuildOptions
+        {
+            ContentId = contentId,
+            Passcode = passcode,
+            SdkVersionOverride = sdkVersionOverride
+        };
         var bridge = new Progress<SonyDebugPackageProgress>(value =>
             progress.Report(new PackageTaskProgress(value.Stage, 0, 0, value.CompletedBytes, value.TotalBytes,
                 0, 0, value.CurrentPath)));

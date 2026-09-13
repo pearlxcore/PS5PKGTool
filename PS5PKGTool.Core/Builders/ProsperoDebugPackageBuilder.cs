@@ -17,6 +17,10 @@ public sealed class ProsperoDebugPackageBuildOptions
     /// (deterministic CNT entry keys, fixed outer PFS seed); otherwise the engine randomizes.
     /// </summary>
     public byte[]? Seed { get; init; }
+
+    /// <summary>Optional full 64-bit executable SDK id to stamp (param.json + .sceversion).
+    /// Null preserves the source metadata.</summary>
+    public ulong? SdkVersionOverride { get; init; }
 }
 
 /// <summary>
@@ -119,6 +123,7 @@ public static class ProsperoDebugPackageBuilder
             Compression = ProsperoInnerCompressionMode.Stored,
             OuterSeed = options.Seed,
             DeterministicEntryKeys = options.Seed is { Length: 16 },
+            SdkVersionOverride = options.SdkVersionOverride,
             SceSysFiles = sceSys,
             Log = log
         });

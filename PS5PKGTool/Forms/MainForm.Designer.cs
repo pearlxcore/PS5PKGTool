@@ -319,6 +319,8 @@ partial class MainForm
     private DarkUI.Controls.DarkTextBox txtImageContentId = null!;
     private DarkUI.Controls.DarkLabel lblImagePasscode = null!;
     private DarkUI.Controls.DarkTextBox txtImagePasscode = null!;
+    private DarkUI.Controls.DarkCheckBox chkImageSdkOverride = null!;
+    private DarkUI.Controls.DarkComboBox cboImageSdk = null!;
     private OpenFileDialog openImageDialog = null!;
     private SaveFileDialog imageSaveDialog = null!;
     private DarkUI.Controls.DarkStatusStrip statusMain = null!;
@@ -653,6 +655,8 @@ partial class MainForm
         txtImageContentId = new DarkUI.Controls.DarkTextBox();
         lblImagePasscode = new DarkUI.Controls.DarkLabel();
         txtImagePasscode = new DarkUI.Controls.DarkTextBox();
+        chkImageSdkOverride = new DarkUI.Controls.DarkCheckBox();
+        cboImageSdk = new DarkUI.Controls.DarkComboBox();
         openImageDialog = new OpenFileDialog();
         imageSaveDialog = new SaveFileDialog();
         trophyCsvSaveDialog = new SaveFileDialog();
@@ -3252,6 +3256,8 @@ partial class MainForm
         tabWorkspaceTools.Controls.Add(txtImageContentId);
         tabWorkspaceTools.Controls.Add(lblImagePasscode);
         tabWorkspaceTools.Controls.Add(txtImagePasscode);
+        tabWorkspaceTools.Controls.Add(chkImageSdkOverride);
+        tabWorkspaceTools.Controls.Add(cboImageSdk);
         tabWorkspaceTools.Controls.Add(chkImageAmpr);
         tabWorkspaceTools.Controls.Add(btnImageRun);
         tabWorkspaceTools.Controls.Add(btnImageCancel);
@@ -3556,7 +3562,27 @@ partial class MainForm
         txtImagePasscode.PlaceholderText = "Blank = default 32 zero passcode";
         txtImagePasscode.Size = new Size(280, 24);
         txtImagePasscode.TabIndex = 35;
-        //         // 
+        // 
+        // chkImageSdkOverride
+        // 
+        chkImageSdkOverride.AutoSize = true;
+        chkImageSdkOverride.Location = new Point(830, 132);
+        chkImageSdkOverride.Name = "chkImageSdkOverride";
+        chkImageSdkOverride.Visible = false;
+        chkImageSdkOverride.Size = new Size(150, 19);
+        chkImageSdkOverride.TabIndex = 36;
+        chkImageSdkOverride.Text = "Override SDK version";
+        chkImageSdkOverride.CheckedChanged += chkImageSdkOverride_CheckedChanged;
+        // 
+        // cboImageSdk
+        // 
+        cboImageSdk.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboImageSdk.Location = new Point(990, 128);
+        cboImageSdk.Name = "cboImageSdk";
+        cboImageSdk.Visible = false;
+        cboImageSdk.Size = new Size(140, 24);
+        cboImageSdk.TabIndex = 37;
+        // 
         // btnImageRun
         // 
         btnImageRun.Location = new Point(8, 168);

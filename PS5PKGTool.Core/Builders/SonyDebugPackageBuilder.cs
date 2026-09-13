@@ -11,6 +11,10 @@ public sealed class SonyDebugPackageBuildOptions
 
     /// <summary>Optional 16-byte outer-PFS seed for a byte-reproducible package.</summary>
     public byte[]? Seed { get; init; }
+
+    /// <summary>Optional full 64-bit executable SDK id to stamp (param.json + .sceversion).
+    /// Null preserves the source metadata.</summary>
+    public ulong? SdkVersionOverride { get; init; }
 }
 
 public readonly record struct SonyDebugPackageProgress(string Stage, long CompletedBytes,
@@ -49,7 +53,8 @@ public static class SonyDebugPackageBuilder
             {
                 ContentId = options.ContentId,
                 Passcode = options.Passcode,
-                Seed = options.Seed
+                Seed = options.Seed,
+                SdkVersionOverride = options.SdkVersionOverride
             },
             progress, cancellationToken).ConfigureAwait(false);
     }

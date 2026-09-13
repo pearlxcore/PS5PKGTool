@@ -84,6 +84,7 @@ public partial class MainForm : DarkForm
         InitializeLibraryTools();
         InitializeLog();
         RefreshImageTools();
+        InitializeImageSdkList();
         _pendingExternalPath = externalPath;
     }
 

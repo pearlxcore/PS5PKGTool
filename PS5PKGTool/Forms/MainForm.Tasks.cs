@@ -682,8 +682,18 @@ public partial class MainForm
         if (source.Length == 0 || output.Length == 0 || contentId.Length == 0) return null;
         if (passcode.Length == 0) passcode = SonyDebugPackageCredentials.DefaultPasscode;
         bool overwrite = GetBool(fields, "overwrite");
+        ulong? sdkVersionOverride = GetSdkOverride(fields);
         return (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-            progress, token);
+            sdkVersionOverride, progress, token);
+    }
+
+    private static ulong? GetSdkOverride(Dictionary<string, string> fields)
+    {
+        string value = Get(fields, "sdk");
+        return value.Length > 0 && ulong.TryParse(value, System.Globalization.NumberStyles.AllowHexSpecifier,
+            System.Globalization.CultureInfo.InvariantCulture, out ulong parsed)
+            ? parsed
+            : null;
     }
 
     private static Func<IProgress<PackageTaskProgress>, CancellationToken, Task>? RebuildExfatCreate(

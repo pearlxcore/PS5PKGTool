@@ -113,6 +113,7 @@ public static class VolumeDebugPackageBuilder
             Compression = ProsperoInnerCompressionMode.Stored,
             OuterSeed = options.Seed,
             DeterministicEntryKeys = options.Seed is { Length: 16 },
+            SdkVersionOverride = options.SdkVersionOverride,
             SceSysFiles = sceSys,
             Log = log
         });

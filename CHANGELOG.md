@@ -24,6 +24,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - Convert between dump folders and exFAT, FFPKG (UFS2), and FFPFSC images.
 - Extract, verify, edit files, repair, refresh AMPR, and rebuild images.
 - Build a debug package (FPKG) from a dump or image, and convert a debug package to exFAT, FFPKG, or FFPFSC.
+- Optional SDK version override when building a debug package: pick an SDK release and it is stamped into param.json and each fake-signed module's .sceversion; off by default.
 - Built on managed exFAT, UFS2/FFPKG, PFSC, and PFS implementations.
 
 ### Packages
