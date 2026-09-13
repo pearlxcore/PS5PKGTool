@@ -299,6 +299,7 @@ public partial class MainForm
         SaveSettingsQuietly();
         _stateStore.SaveManifest(_games);
         ApplyFilter();
+        Logger.Info($"Moved {moved:N0} source(s); skipped {skipped:N0}.");
         statusLabel.Text = $"Moved {moved:N0} source(s); skipped {skipped:N0}.";
         if (moved == 0 && skipped > 0)
             AppDialog.ShowWarning("No sources were moved. Check the log for details.", "Move to folder");
@@ -307,12 +308,21 @@ public partial class MainForm
     private void RewriteGamePath(Ps5GameInfo game, string source, string target)
     {
         game.RootPath = target;
-        if (game.ParamPath.StartsWith(source, StringComparison.OrdinalIgnoreCase))
-            game.ParamPath = target + game.ParamPath[source.Length..];
+        game.ParamPath = ReplacePathPrefix(game.ParamPath, source, target);
         ReplaceSettingPath(_settings.LibraryFolders, source, target);
         ReplaceSettingPath(_settings.ManualSources, source, target);
         ReplaceSettingPath(_settings.RecentFolders, source, target);
         _detailsCache.Remove(source);
+        _libraryThumbnails.TryRemove(source, out _);
+        _libraryThumbnailAttempts.TryRemove(source, out _);
+    }
+
+    private static string ReplacePathPrefix(string value, string source, string target)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length <= source.Length) return value;
+        if (!value.StartsWith(source, StringComparison.OrdinalIgnoreCase)) return value;
+        char next = value[source.Length];
+        return next is '\\' or '/' or ':' ? target + value[source.Length..] : value;
     }
 
     // ---------------------------------------------------------------- delete to recycle bin
@@ -367,6 +377,7 @@ public partial class MainForm
         SaveSettingsQuietly();
         _stateStore.SaveManifest(_games);
         ApplyFilter();
+        Logger.Info($"Deleted {deleted:N0} source(s); skipped {skipped:N0}.");
         statusLabel.Text = $"Deleted {deleted:N0} source(s); skipped {skipped:N0}.";
     }
 

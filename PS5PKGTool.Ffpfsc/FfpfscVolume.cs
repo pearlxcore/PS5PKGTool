@@ -58,13 +58,16 @@ public sealed class FfpfscVolume : IDisposable
                     InnerFilesystemKind = FfpfscInnerFilesystemKind.Pfs;
                     Entries = [new FfpfscVolumeEntry(Info.InnerFileName, false, Info.LogicalLength)];
                     break;
-                default:
+                case Ps5ImageFormat.Exfat:
                     _exfat = new ExfatVolume(_decoded, leaveOpen: true);
                     InnerFilesystemKind = FfpfscInnerFilesystemKind.Exfat;
                     Entries = _exfat.Entries
                         .Select(entry => new FfpfscVolumeEntry(entry.Path, entry.IsDirectory, entry.Size))
                         .ToArray();
                     break;
+                default:
+                    throw new InvalidDataException(
+                        "The FFPFSC inner payload is not a recognised filesystem (exFAT, UFS2, or PFS).");
             }
         }
         catch
@@ -104,7 +107,13 @@ public sealed class FfpfscVolume : IDisposable
         return Entries.FirstOrDefault(entry => entry.Path.Equals(normalized, StringComparison.OrdinalIgnoreCase));
     }
 
-    public Stream OpenFile(string path) => _ufs2 is not null ? _ufs2.OpenFile(path) : _exfat!.OpenFile(path);
+    public Stream OpenFile(string path)
+    {
+        if (_ufs2 is not null) return _ufs2.OpenFile(path);
+        if (_exfat is not null) return _exfat.OpenFile(path);
+        throw new InvalidOperationException(
+            "The FFPFSC inner payload is a nested PFS container, not a file tree.");
+    }
 
     public byte[] ReadAllBytes(string path, int maximumBytes = 256 * 1024 * 1024)
     {

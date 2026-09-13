@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace PS5PKGTool.Core.Models;
 
 public enum Ps5SourceKind
@@ -54,6 +56,28 @@ public sealed class Ps5GameInfo
     public SonyPkgSummary? Package { get; set; }
 
     public string DisplayVersion => string.IsNullOrWhiteSpace(ContentVersion) ? MasterVersion : ContentVersion;
+
+    /// <summary>
+    /// Best-effort console generation inferred from the product code (the first four title ID
+    /// characters, or the content ID's title segment). Items read by this app are PS5; a PS4 code
+    /// such as CUSA, PCAS, or PLAS is reported as PS4.
+    /// </summary>
+    [JsonIgnore]
+    public string Platform
+    {
+        get
+        {
+            string code = TitleId.Length >= 4
+                ? TitleId[..4].ToUpperInvariant()
+                : ContentId.Length >= 11 ? ContentId.Substring(7, 4).ToUpperInvariant() : string.Empty;
+            return code.StartsWith("CU", StringComparison.Ordinal) ||
+                   code.StartsWith("PC", StringComparison.Ordinal) ||
+                   code.StartsWith("PL", StringComparison.Ordinal)
+                ? "PS4"
+                : "PS5";
+        }
+    }
+
     public string SourceDescription => SourceKind switch
     {
         Ps5SourceKind.SonyPackage => Package is { Kind: SonyPkgKind.FinalizedDebug }

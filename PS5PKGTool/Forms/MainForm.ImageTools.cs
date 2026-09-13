@@ -763,17 +763,30 @@ public partial class MainForm
     private static async Task BuildPackageFromSourceAsync(string source, string output, string contentId,
         string passcode, bool overwrite, IProgress<PackageTaskProgress> progress, CancellationToken token)
     {
-        if (overwrite && File.Exists(output)) File.Delete(output);
+        if (!overwrite && File.Exists(output))
+            throw new IOException($"The output file already exists: {output}");
+        // Build to a sibling partial file and move it into place on success, so a failed build
+        // cannot leave a half-written .pkg that looks valid.
+        string partial = output + ".partial-" + Guid.NewGuid().ToString("N");
         var options = new SonyDebugPackageBuildOptions { ContentId = contentId, Passcode = passcode };
         var bridge = new Progress<SonyDebugPackageProgress>(value =>
             progress.Report(new PackageTaskProgress(value.Stage, 0, 0, value.CompletedBytes, value.TotalBytes,
                 0, 0, value.CurrentPath)));
-        if (Directory.Exists(source))
-            await SonyDebugPackageBuilder.CreateFromDirectoryAsync(source, output, options, bridge, token)
-                .ConfigureAwait(false);
-        else
-            await VolumeDebugPackageBuilder.CreateFromImageAsync(source, output, options, bridge, token)
-                .ConfigureAwait(false);
+        try
+        {
+            if (Directory.Exists(source))
+                await SonyDebugPackageBuilder.CreateFromDirectoryAsync(source, partial, options, bridge, token)
+                    .ConfigureAwait(false);
+            else
+                await VolumeDebugPackageBuilder.CreateFromImageAsync(source, partial, options, bridge, token)
+                    .ConfigureAwait(false);
+            File.Move(partial, output, overwrite: true);
+        }
+        catch
+        {
+            TryDeleteFile(partial);
+            throw;
+        }
     }
 
     private void SuggestImageContentId()

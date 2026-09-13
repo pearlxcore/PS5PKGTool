@@ -18,6 +18,10 @@ partial class SettingsForm
     private DarkUI.Controls.DarkTabPage tabDiagnostics = null!;
     private DarkUI.Controls.DarkCheckBox chkRefreshOnStartup = null!;
     private DarkUI.Controls.DarkCheckBox chkRecursive = null!;
+    private DarkUI.Controls.DarkLabel lblRenameFormat = null!;
+    private DarkUI.Controls.DarkTextBox txtRenameFormat = null!;
+    private DarkUI.Controls.DarkLabel lblRenameTokens = null!;
+    private DarkUI.Controls.DarkLabel lblRenameTokens2 = null!;
     private DarkUI.Controls.DarkLabel lblAppearanceInfo = null!;
     private DarkUI.Controls.DarkLabel lblTheme = null!;
     private DarkUI.Controls.DarkComboBox cboTheme = null!;
@@ -78,6 +82,10 @@ partial class SettingsForm
         btnRemove = new DarkUI.Controls.DarkButton();
         chkRefreshOnStartup = new DarkUI.Controls.DarkCheckBox();
         chkRecursive = new DarkUI.Controls.DarkCheckBox();
+        lblRenameFormat = new DarkUI.Controls.DarkLabel();
+        txtRenameFormat = new DarkUI.Controls.DarkTextBox();
+        lblRenameTokens = new DarkUI.Controls.DarkLabel();
+        lblRenameTokens2 = new DarkUI.Controls.DarkLabel();
         tabAppearance = new DarkUI.Controls.DarkTabPage();
         lblAppearanceInfo = new DarkUI.Controls.DarkLabel();
         lblTheme = new DarkUI.Controls.DarkLabel();
@@ -161,6 +169,10 @@ partial class SettingsForm
         tabLibrary.Controls.Add(btnRemove);
         tabLibrary.Controls.Add(chkRecursive);
         tabLibrary.Controls.Add(chkRefreshOnStartup);
+        tabLibrary.Controls.Add(lblRenameFormat);
+        tabLibrary.Controls.Add(txtRenameFormat);
+        tabLibrary.Controls.Add(lblRenameTokens);
+        tabLibrary.Controls.Add(lblRenameTokens2);
         tabLibrary.Location = new Point(4, 26);
         tabLibrary.Name = "tabLibrary";
         tabLibrary.Size = new Size(688, 342);
@@ -222,6 +234,38 @@ partial class SettingsForm
         chkRefreshOnStartup.Size = new Size(220, 19);
         chkRefreshOnStartup.TabIndex = 5;
         chkRefreshOnStartup.Text = "Refresh library on startup";
+        // 
+        // lblRenameFormat
+        // 
+        lblRenameFormat.Location = new Point(360, 268);
+        lblRenameFormat.Name = "lblRenameFormat";
+        lblRenameFormat.Size = new Size(320, 15);
+        lblRenameFormat.TabIndex = 6;
+        lblRenameFormat.Text = "Rename format";
+        // 
+        // txtRenameFormat
+        // 
+        txtRenameFormat.Location = new Point(360, 286);
+        txtRenameFormat.Name = "txtRenameFormat";
+        txtRenameFormat.PlaceholderText = "{TITLE} [{TITLE_ID}]";
+        txtRenameFormat.Size = new Size(320, 23);
+        txtRenameFormat.TabIndex = 7;
+        // 
+        // lblRenameTokens
+        // 
+        lblRenameTokens.Location = new Point(360, 314);
+        lblRenameTokens.Name = "lblRenameTokens";
+        lblRenameTokens.Size = new Size(320, 13);
+        lblRenameTokens.TabIndex = 8;
+        lblRenameTokens.Text = "Tokens: {TITLE} {TITLE_ID} {CONTENT_ID} {PLATFORM} {CATEGORY} {REGION}";
+        // 
+        // lblRenameTokens2
+        // 
+        lblRenameTokens2.Location = new Point(360, 328);
+        lblRenameTokens2.Name = "lblRenameTokens2";
+        lblRenameTokens2.Size = new Size(320, 13);
+        lblRenameTokens2.TabIndex = 9;
+        lblRenameTokens2.Text = "{VERSION} {SYSTEM_VERSION} {SOURCE} {SIZE} {LANGUAGE} {DRM} {DATE}";
         // 
         // tabAppearance
         // 

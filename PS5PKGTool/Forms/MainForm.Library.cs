@@ -22,6 +22,8 @@ public partial class MainForm
         _groupItems.Add((menuLibraryGroupRegion, "region"));
         _groupItems.Add((menuLibraryGroupSource, "source"));
         _groupItems.Add((menuLibraryGroupFirmware, "firmware"));
+        BuildRenamePresetMenu(menuLibraryRename, all: false);
+        BuildRenamePresetMenu(menuLibraryRenameAll, all: true);
     }
 
     private void menuLibraryReveal_Click(object? sender, EventArgs e)
@@ -36,27 +38,6 @@ public partial class MainForm
     private void menuLibraryCopyContentId_Click(object? sender, EventArgs e) => CopyText(SelectedGame()?.ContentId);
 
     private void menuLibraryCopyPath_Click(object? sender, EventArgs e) => CopyText(SelectedGame()?.RootPath);
-
-    private void menuLibraryRenameTitle_Click(object? sender, EventArgs e) => RenameSelected(game => game.Title);
-
-    private void menuLibraryRenameTitleId_Click(object? sender, EventArgs e) =>
-        RenameSelected(game => $"{game.Title} [{game.TitleId}]");
-
-    private void menuLibraryRenameTitleIdOnly_Click(object? sender, EventArgs e) => RenameSelected(game => game.TitleId);
-
-    private void menuLibraryRenameContentId_Click(object? sender, EventArgs e) => RenameSelected(game => game.ContentId);
-
-    private void menuLibraryRenameCustom_Click(object? sender, EventArgs e)
-    {
-        if (SelectedGame() is not { } game) return;
-        string? name = PromptText("Rename", "Enter a new name:", Path.GetFileNameWithoutExtension(game.RootPath));
-        if (name is not null) RenameGame(game, name);
-    }
-
-    private void RenameSelected(Func<Ps5GameInfo, string> selector)
-    {
-        if (SelectedGame() is { } game) RenameGame(game, selector(game));
-    }
 
     private void menuLibraryGroupNone_Click(object? sender, EventArgs e) => SetGroupBy(string.Empty);
 
@@ -86,8 +67,10 @@ public partial class MainForm
         menuLibraryCopyContentId.Enabled = hasGame;
         menuLibraryCopyPath.Enabled = hasGame;
         menuLibraryCopyFileName.Enabled = hasGame;
-        // Rename, Move, and Find Duplicates are disabled for v1.0.0.
-        menuLibraryRename.Enabled = false;
+        // Move and Find Duplicates are disabled for v1.0.0.
+        menuLibraryRename.Enabled = hasGame;
+        menuLibraryRenameAll.Enabled = _games.Count > 0;
+        menuLibraryRenameByPriority.Enabled = hasGame;
         menuLibrarySaveArtwork.Enabled = hasGame;
         menuLibraryMove.Enabled = false;
         menuLibraryDelete.Enabled = hasGame;
@@ -197,6 +180,7 @@ public partial class MainForm
     private void menuSaveManifest_Click(object? sender, EventArgs e)
     {
         _stateStore.SaveManifest(_games);
+        Logger.Info($"Manifest saved with {_games.Count:N0} game(s).");
         statusLabel.Text = $"Saved manifest with {_games.Count:N0} game(s).";
     }
 
@@ -224,6 +208,7 @@ public partial class MainForm
         ApplyFilter();
         statusCount.Text = "0 games";
         statusLabel.Text = "Library list emptied. Use Refresh to scan again.";
+        Logger.Info("Library list emptied.");
     }
 
     private void menuRemoveMissing_Click(object? sender, EventArgs e)
@@ -347,55 +332,6 @@ public partial class MainForm
             statusLabel.Text = "Copied to clipboard.";
         }
         catch (ExternalException) { }
-    }
-
-    private void RenameGame(Ps5GameInfo game, string newBaseName)
-    {
-        string baseName = MakeSafeFileName(newBaseName);
-        if (baseName.Length == 0)
-        {
-            AppDialog.ShowWarning("Enter a non-empty name.", "Rename");
-            return;
-        }
-        string source = game.RootPath;
-        bool directory = Directory.Exists(source);
-        bool file = File.Exists(source);
-        if (!directory && !file)
-        {
-            AppDialog.ShowWarning("The source path no longer exists.", "Rename");
-            return;
-        }
-        string? parent = Path.GetDirectoryName(source);
-        if (string.IsNullOrEmpty(parent)) return;
-        string target = Path.Combine(parent, directory ? baseName : baseName + Path.GetExtension(source));
-        if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase)) return;
-        if (File.Exists(target) || Directory.Exists(target))
-        {
-            AppDialog.ShowWarning("A file or folder with that name already exists.", "Rename");
-            return;
-        }
-
-        try
-        {
-            if (directory) Directory.Move(source, target);
-            else File.Move(source, target);
-            game.RootPath = target;
-            if (game.ParamPath.StartsWith(source, StringComparison.OrdinalIgnoreCase))
-                game.ParamPath = target + game.ParamPath[source.Length..];
-            ReplaceSettingPath(_settings.LibraryFolders, source, target);
-            ReplaceSettingPath(_settings.ManualSources, source, target);
-            ReplaceSettingPath(_settings.RecentFolders, source, target);
-            SaveSettingsQuietly();
-            _detailsCache.Remove(source);
-            _stateStore.SaveManifest(_games);
-            ApplyFilter();
-            statusLabel.Text = $"Renamed to {Path.GetFileName(target)}.";
-            AppDialog.ShowInformation($"Renamed successfully:\n{target}", "Rename complete");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            AppDialog.ShowError(ex.Message, "Rename");
-        }
     }
 
     private void FindDuplicates()

@@ -57,7 +57,8 @@ public static class VolumeDebugPackageBuilder
             sourceFiles++;
 
             string relative = entry.Path;
-            bool publishing = SourceFolderValidator.IsPublishingArtifact(relative);
+            bool publishing = SourceFolderValidator.IsPublishingArtifact(relative) ||
+                Path.GetExtension(relative).Equals(".gp4", StringComparison.OrdinalIgnoreCase);
             bool underSceSys = relative.StartsWith("sce_sys/", StringComparison.OrdinalIgnoreCase);
             string sceRelative = underSceSys ? relative["sce_sys/".Length..] : string.Empty;
 
@@ -146,7 +147,7 @@ public static class VolumeDebugPackageBuilder
                     {
                         volume.Dispose();
                         throw new InvalidDataException(
-                            "The FFPFSC image wraps a nested PFS payload, which cannot be read as a file tree.");
+                            "The FFPFSC inner payload is a nested PFS container, not a file tree.");
                     }
                     entries = volume.Entries
                         .Select(item => new VolumeFile(Normalize(item.Path), item.IsDirectory, false, item.Size))
@@ -164,7 +165,7 @@ public static class VolumeDebugPackageBuilder
                     open = volume.OpenFile;
                     return volume;
                 }
-                default:
+                case Ps5ImageFormat.Exfat:
                 {
                     var volume = new ExfatVolume(stream, leaveOpen: false);
                     entries = volume.Entries
@@ -173,6 +174,8 @@ public static class VolumeDebugPackageBuilder
                     open = volume.OpenFile;
                     return volume;
                 }
+                default:
+                    throw new InvalidDataException($"Unrecognised PS5 image format: {imagePath}");
             }
         }
         catch

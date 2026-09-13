@@ -15,6 +15,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - Right click actions: copy, rename, move into folders, delete to the Recycle Bin, and save artwork.
 - Detail tabs for Overview, Artwork, Trophies, Activities, Files, Executable, Raw, and Package.
 - File browser with image, text, hex, and media previews, plus per file and whole folder extraction.
+- Rename files and dump root folders from preset or custom token formats (for example {TITLE} [{TITLE_ID}] [{VERSION}]), with tokens for {TITLE_ID}, {CONTENT_ID}, {PLATFORM}, {CATEGORY}, {REGION}, {VERSION}, {SYSTEM_VERSION}, {SOURCE}, and more. Includes Rename All and Rename by install order for packages.
 - Cached items whose source was deleted or moved are marked as Missing (Source column) and reported at startup, with File > Remove Missing Items to drop them; a Refresh prunes them.
 
 ### Image tools
@@ -49,6 +50,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - Live theme preview, grid options, preview and cache limits, output folder, default debug passcode, and confirmation prompts.
 - Export and import settings, reset settings, clear caches, and open the log folder.
 - Help menu with Check for Updates, Buy me a Ko-fi, and Support via PayPal, plus an About dialog.
+- Log tab that shows live operations, warnings, and errors in a console view, with a level filter, auto-scroll, clear, and open log folder. The log file stays the full record.
 - GPL-3.0 licensed, with third party notices.
 
 ### Fixes

@@ -34,12 +34,8 @@ partial class MainForm
     private ToolStripMenuItem menuLibraryCopyPath = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuLibrarySeparator2 = null!;
     private ToolStripMenuItem menuLibraryRename = null!;
-    private ToolStripMenuItem menuLibraryRenameTitle = null!;
-    private ToolStripMenuItem menuLibraryRenameTitleId = null!;
-    private ToolStripMenuItem menuLibraryRenameTitleIdOnly = null!;
-    private ToolStripMenuItem menuLibraryRenameContentId = null!;
-    private DarkUI.Controls.DarkToolStripSeparator menuLibraryRenameSeparator = null!;
-    private ToolStripMenuItem menuLibraryRenameCustom = null!;
+    private ToolStripMenuItem menuLibraryRenameAll = null!;
+    private ToolStripMenuItem menuLibraryRenameByPriority = null!;
     private ToolStripMenuItem menuLibraryGroupBy = null!;
     private ToolStripMenuItem menuLibraryGroupNone = null!;
     private ToolStripMenuItem menuLibraryGroupTitleId = null!;
@@ -84,7 +80,14 @@ partial class MainForm
     private DarkUI.Controls.DarkTabControl tabsWorkspace = null!;
     private DarkUI.Controls.DarkTabPage tabWorkspaceGeneral = null!;
     private DarkUI.Controls.DarkTabPage tabWorkspaceTools = null!;
-    private DarkUI.Controls.DarkTabPage tabTasks = null!;
+        private DarkUI.Controls.DarkTabPage tabTasks = null!;
+        private DarkUI.Controls.DarkTabPage tabLog = null!;
+        private DarkUI.Controls.DarkLabel lblLogLevel = null!;
+        private DarkUI.Controls.DarkComboBox cboLogLevel = null!;
+        private DarkUI.Controls.DarkCheckBox chkLogAutoScroll = null!;
+        private DarkUI.Controls.DarkButton btnLogClear = null!;
+        private DarkUI.Controls.DarkButton btnLogOpenFolder = null!;
+        private DarkUI.Controls.DarkRichTextBox txtLogView = null!;
     private DarkUI.Controls.DarkTableLayoutPanel tasksLayout = null!;
     private DarkUI.Controls.DarkCheckBox chkTaskAutoStart = null!;
     private DarkUI.Controls.DarkButton btnTaskStart = null!;
@@ -367,12 +370,8 @@ partial class MainForm
         menuLibraryCopyFileName = new ToolStripMenuItem();
         menuLibraryCopyPath = new ToolStripMenuItem();
         menuLibraryRename = new ToolStripMenuItem();
-        menuLibraryRenameTitle = new ToolStripMenuItem();
-        menuLibraryRenameTitleId = new ToolStripMenuItem();
-        menuLibraryRenameTitleIdOnly = new ToolStripMenuItem();
-        menuLibraryRenameContentId = new ToolStripMenuItem();
-        menuLibraryRenameSeparator = new DarkUI.Controls.DarkToolStripSeparator();
-        menuLibraryRenameCustom = new ToolStripMenuItem();
+        menuLibraryRenameAll = new ToolStripMenuItem();
+        menuLibraryRenameByPriority = new ToolStripMenuItem();
         menuLibraryMove = new ToolStripMenuItem();
         menuLibraryMoveTitle = new ToolStripMenuItem();
         menuLibraryMoveTitleId = new ToolStripMenuItem();
@@ -629,6 +628,13 @@ partial class MainForm
         menuTaskSeparator1 = new DarkUI.Controls.DarkToolStripSeparator();
         menuTaskOpen = new ToolStripMenuItem();
         menuTaskClear = new ToolStripMenuItem();
+        tabLog = new DarkUI.Controls.DarkTabPage();
+        lblLogLevel = new DarkUI.Controls.DarkLabel();
+        cboLogLevel = new DarkUI.Controls.DarkComboBox();
+        chkLogAutoScroll = new DarkUI.Controls.DarkCheckBox();
+        btnLogClear = new DarkUI.Controls.DarkButton();
+        btnLogOpenFolder = new DarkUI.Controls.DarkButton();
+        txtLogView = new DarkUI.Controls.DarkRichTextBox();
         colFileName = new ColumnHeader();
         colFileType = new ColumnHeader();
         colFilePath = new ColumnHeader();
@@ -757,6 +763,7 @@ partial class MainForm
         ((System.ComponentModel.ISupportInitialize)nudImageGain).BeginInit();
         ((System.ComponentModel.ISupportInitialize)nudImageMinFree).BeginInit();
         tabTasks.SuspendLayout();
+        tabLog.SuspendLayout();
         tasksLayout.SuspendLayout();
         splitTasks.SuspendLayout();
         splitTasksPane1.SuspendLayout();
@@ -911,7 +918,7 @@ partial class MainForm
         // 
         // contextLibrary
         // 
-        contextLibrary.Items.AddRange(new ToolStripItem[] { menuLibraryReveal, menuLibrarySeparator1, menuLibraryCopy, menuLibraryRename, menuLibraryMove, menuLibraryDelete, menuLibrarySeparator2, menuLibrarySaveArtwork, menuLibraryExport, menuLibrarySeparator3, menuLibraryGroupBy, menuLibraryDuplicates, menuLibrarySeparator5, menuLibraryGroupExport, menuLibraryGroupArtwork });
+        contextLibrary.Items.AddRange(new ToolStripItem[] { menuLibraryReveal, menuLibrarySeparator1, menuLibraryCopy, menuLibraryRename, menuLibraryRenameAll, menuLibraryRenameByPriority, menuLibraryMove, menuLibraryDelete, menuLibrarySeparator2, menuLibrarySaveArtwork, menuLibraryExport, menuLibrarySeparator3, menuLibraryGroupBy, menuLibraryDuplicates, menuLibrarySeparator5, menuLibraryGroupExport, menuLibraryGroupArtwork });
         contextLibrary.Name = "contextLibrary";
         contextLibrary.Size = new Size(278, 369);
         contextLibrary.Opening += contextLibrary_Opening;
@@ -990,52 +997,27 @@ partial class MainForm
         // menuLibraryRename
         // 
         menuLibraryRename.BackColor = Color.FromArgb(60, 63, 65);
-        menuLibraryRename.DropDownItems.AddRange(new ToolStripItem[] { menuLibraryRenameTitle, menuLibraryRenameTitleId, menuLibraryRenameTitleIdOnly, menuLibraryRenameContentId, menuLibraryRenameSeparator, menuLibraryRenameCustom });
         menuLibraryRename.ForeColor = Color.FromArgb(220, 220, 220);
         menuLibraryRename.Name = "menuLibraryRename";
-        menuLibraryRename.Enabled = false;
         menuLibraryRename.Size = new Size(277, 22);
-        menuLibraryRename.Text = "Rename (Coming soon)";
+        menuLibraryRename.Text = "Rename";
         // 
-        // menuLibraryRenameTitle
+        // menuLibraryRenameAll
         // 
-        menuLibraryRenameTitle.Name = "menuLibraryRenameTitle";
-        menuLibraryRenameTitle.Size = new Size(145, 22);
-        menuLibraryRenameTitle.Text = "Title";
-        menuLibraryRenameTitle.Click += menuLibraryRenameTitle_Click;
+        menuLibraryRenameAll.BackColor = Color.FromArgb(60, 63, 65);
+        menuLibraryRenameAll.ForeColor = Color.FromArgb(220, 220, 220);
+        menuLibraryRenameAll.Name = "menuLibraryRenameAll";
+        menuLibraryRenameAll.Size = new Size(277, 22);
+        menuLibraryRenameAll.Text = "Rename All";
         // 
-        // menuLibraryRenameTitleId
+        // menuLibraryRenameByPriority
         // 
-        menuLibraryRenameTitleId.Name = "menuLibraryRenameTitleId";
-        menuLibraryRenameTitleId.Size = new Size(145, 22);
-        menuLibraryRenameTitleId.Text = "Title [Title ID]";
-        menuLibraryRenameTitleId.Click += menuLibraryRenameTitleId_Click;
-        // 
-        // menuLibraryRenameTitleIdOnly
-        // 
-        menuLibraryRenameTitleIdOnly.Name = "menuLibraryRenameTitleIdOnly";
-        menuLibraryRenameTitleIdOnly.Size = new Size(145, 22);
-        menuLibraryRenameTitleIdOnly.Text = "Title ID";
-        menuLibraryRenameTitleIdOnly.Click += menuLibraryRenameTitleIdOnly_Click;
-        // 
-        // menuLibraryRenameContentId
-        // 
-        menuLibraryRenameContentId.Name = "menuLibraryRenameContentId";
-        menuLibraryRenameContentId.Size = new Size(145, 22);
-        menuLibraryRenameContentId.Text = "Content ID";
-        menuLibraryRenameContentId.Click += menuLibraryRenameContentId_Click;
-        // 
-        // menuLibraryRenameSeparator
-        // 
-        menuLibraryRenameSeparator.Name = "menuLibraryRenameSeparator";
-        menuLibraryRenameSeparator.Size = new Size(142, 6);
-        // 
-        // menuLibraryRenameCustom
-        // 
-        menuLibraryRenameCustom.Name = "menuLibraryRenameCustom";
-        menuLibraryRenameCustom.Size = new Size(145, 22);
-        menuLibraryRenameCustom.Text = "Custom...";
-        menuLibraryRenameCustom.Click += menuLibraryRenameCustom_Click;
+        menuLibraryRenameByPriority.BackColor = Color.FromArgb(60, 63, 65);
+        menuLibraryRenameByPriority.ForeColor = Color.FromArgb(220, 220, 220);
+        menuLibraryRenameByPriority.Name = "menuLibraryRenameByPriority";
+        menuLibraryRenameByPriority.Size = new Size(277, 22);
+        menuLibraryRenameByPriority.Text = "Rename by Install Order (packages)";
+        menuLibraryRenameByPriority.Click += menuLibraryRenameByPriority_Click;
         // 
         // menuLibraryMove
         // 
@@ -1427,6 +1409,7 @@ partial class MainForm
         tabsWorkspace.Controls.Add(tabWorkspaceGeneral);
         tabsWorkspace.Controls.Add(tabWorkspaceTools);
         tabsWorkspace.Controls.Add(tabTasks);
+        tabsWorkspace.Controls.Add(tabLog);
         tabsWorkspace.Dock = DockStyle.Fill;
         tabsWorkspace.ItemSize = new Size(80, 28);
         tabsWorkspace.Location = new Point(0, 0);
@@ -3604,6 +3587,81 @@ partial class MainForm
         tabTasks.TabIndex = 2;
         tabTasks.Text = "Tasks";
         // 
+        // tabLog
+        // 
+        tabLog.BackColor = Color.FromArgb(60, 63, 65);
+        tabLog.Controls.Add(txtLogView);
+        tabLog.Controls.Add(lblLogLevel);
+        tabLog.Controls.Add(cboLogLevel);
+        tabLog.Controls.Add(chkLogAutoScroll);
+        tabLog.Controls.Add(btnLogClear);
+        tabLog.Controls.Add(btnLogOpenFolder);
+        tabLog.Location = new Point(4, 32);
+        tabLog.Name = "tabLog";
+        tabLog.Padding = new Padding(0, 36, 0, 0);
+        tabLog.Size = new Size(1376, 479);
+        tabLog.TabIndex = 3;
+        tabLog.Text = "Log";
+        // 
+        // lblLogLevel
+        // 
+        lblLogLevel.Location = new Point(8, 10);
+        lblLogLevel.Name = "lblLogLevel";
+        lblLogLevel.Size = new Size(44, 15);
+        lblLogLevel.TabIndex = 0;
+        lblLogLevel.Text = "Show:";
+        // 
+        // cboLogLevel
+        // 
+        cboLogLevel.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboLogLevel.Items.AddRange(new object[] { "All", "Info", "Warning", "Error" });
+        cboLogLevel.Location = new Point(54, 6);
+        cboLogLevel.Name = "cboLogLevel";
+        cboLogLevel.SelectedIndex = 0;
+        cboLogLevel.Size = new Size(110, 24);
+        cboLogLevel.TabIndex = 1;
+        cboLogLevel.SelectedIndexChanged += cboLogLevel_SelectedIndexChanged;
+        // 
+        // chkLogAutoScroll
+        // 
+        chkLogAutoScroll.AutoSize = true;
+        chkLogAutoScroll.Location = new Point(178, 9);
+        chkLogAutoScroll.Name = "chkLogAutoScroll";
+        chkLogAutoScroll.Size = new Size(90, 19);
+        chkLogAutoScroll.TabIndex = 2;
+        chkLogAutoScroll.Text = "Auto-scroll";
+        chkLogAutoScroll.CheckedChanged += chkLogAutoScroll_CheckedChanged;
+        // 
+        // btnLogClear
+        // 
+        btnLogClear.Location = new Point(286, 5);
+        btnLogClear.Name = "btnLogClear";
+        btnLogClear.Size = new Size(70, 26);
+        btnLogClear.TabIndex = 3;
+        btnLogClear.Text = "Clear";
+        btnLogClear.Click += btnLogClear_Click;
+        // 
+        // btnLogOpenFolder
+        // 
+        btnLogOpenFolder.Location = new Point(364, 5);
+        btnLogOpenFolder.Name = "btnLogOpenFolder";
+        btnLogOpenFolder.Size = new Size(130, 26);
+        btnLogOpenFolder.TabIndex = 4;
+        btnLogOpenFolder.Text = "Open log folder";
+        btnLogOpenFolder.Click += btnLogOpenFolder_Click;
+        // 
+        // txtLogView
+        // 
+        txtLogView.DetectUrls = false;
+        txtLogView.Dock = DockStyle.Fill;
+        txtLogView.Font = new Font("Consolas", 9F);
+        txtLogView.Location = new Point(0, 36);
+        txtLogView.Name = "txtLogView";
+        txtLogView.ReadOnly = true;
+        txtLogView.Size = new Size(1376, 443);
+        txtLogView.TabIndex = 5;
+        txtLogView.WordWrap = false;
+        // 
         // tasksLayout
         // 
         tasksLayout.ColumnCount = 10;
@@ -4228,6 +4286,7 @@ partial class MainForm
         ((System.ComponentModel.ISupportInitialize)nudImageGain).EndInit();
         ((System.ComponentModel.ISupportInitialize)nudImageMinFree).EndInit();
         tabTasks.ResumeLayout(false);
+        tabLog.ResumeLayout(false);
         tasksLayout.ResumeLayout(false);
         tasksLayout.PerformLayout();
         splitTasks.ResumeLayout(false);

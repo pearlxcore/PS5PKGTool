@@ -6,6 +6,7 @@ using PS5PKGTool.Core.Builders;
 using PS5PKGTool.Core.Services;
 using PS5PKGTool.Core.Tasks;
 using PS5PKGTool.Ffpfsc;
+using PS5PKGTool.Infrastructure;
 using UFS2Tool;
 
 namespace PS5PKGTool.Forms;
@@ -101,9 +102,15 @@ public partial class MainForm
             StagePlan = stagePlan ?? [],
             Execute = execute
         };
+        PackageTaskStatus lastLoggedStatus = PackageTaskStatus.Queued;
         task.Changed += (sender, args) =>
         {
             TaskQueue_Changed(sender, args);
+            if (task.Status != lastLoggedStatus)
+            {
+                LogTaskStatus(task);
+                lastLoggedStatus = task.Status;
+            }
             if (task.IsTerminal && _notifiedTasks.Add(task.Id))
                 RunOnUi(() => onFinished?.Invoke(task));
             if (task.IsTerminal && task.Status == PackageTaskStatus.Completed &&
@@ -112,11 +119,31 @@ public partial class MainForm
                 RunOnUi(() => OpenOutputFolder(task.OutputPath));
         };
         _taskQueue.Enqueue(task);
+        Logger.Info($"Queued task: {displayName}");
         _taskRefreshPending = true;
         if (tabTasks is not null) tabsWorkspace.SelectedTab = tabTasks;
         _autoFollowRunning = true;
         RefreshTaskGrid();
         return task;
+    }
+
+    private static void LogTaskStatus(QueuedPackageTask task)
+    {
+        switch (task.Status)
+        {
+            case PackageTaskStatus.Running:
+                Logger.Info($"Task started: {task.DisplayName}");
+                break;
+            case PackageTaskStatus.Completed:
+                Logger.Info($"Task completed: {task.DisplayName}");
+                break;
+            case PackageTaskStatus.Failed:
+                Logger.Error($"Task failed: {task.DisplayName}: {task.Message}");
+                break;
+            case PackageTaskStatus.Cancelled:
+                Logger.Warn($"Task cancelled: {task.DisplayName}");
+                break;
+        }
     }
 
     private void RunOnUi(Action action)

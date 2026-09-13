@@ -36,6 +36,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
     {
         chkRecursive.Checked = Settings.RecursiveScan;
         chkRefreshOnStartup.Checked = Settings.RefreshOnStartup;
+        txtRenameFormat.Text = Settings.RenameFormat;
 
         SelectCombo(cboTheme, Settings.Theme);
         nudRowHeight.Value = Clamp(Settings.GridRowHeight, nudRowHeight);
@@ -63,6 +64,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         Settings.LibraryFolders = lstFolders.Items.Cast<string>().ToList();
         Settings.RecursiveScan = chkRecursive.Checked;
         Settings.RefreshOnStartup = chkRefreshOnStartup.Checked;
+        Settings.RenameFormat = txtRenameFormat.Text.Trim();
 
         Settings.Theme = cboTheme.SelectedItem as string ?? Settings.Theme;
         Settings.GridRowHeight = (int)nudRowHeight.Value;
@@ -199,6 +201,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
     private void btnSave_Click(object? sender, EventArgs e)
     {
         SaveFromControls();
+        Logger.Info("Settings saved.");
         DialogResult = DialogResult.OK;
         Close();
     }

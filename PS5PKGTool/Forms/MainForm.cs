@@ -82,6 +82,7 @@ public partial class MainForm : DarkForm
         FileIconProvider.Populate(imageListFiles);
         InitializeTaskQueue();
         InitializeLibraryTools();
+        InitializeLog();
         RefreshImageTools();
         _pendingExternalPath = externalPath;
     }
@@ -99,6 +100,7 @@ public partial class MainForm : DarkForm
     {
         _settings = _stateStore.LoadSettings();
         _settings.ManualSources.RemoveAll(path => !File.Exists(path) && !Directory.Exists(path));
+        chkLogAutoScroll.Checked = _settings.LogAutoScroll;
         RestoreWindowBounds();
         ApplyRuntimeSettings();
         ApplyDefaultGrouping();
@@ -117,6 +119,7 @@ public partial class MainForm : DarkForm
         }
         _games = configured.OrderBy(game => game.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
         _stateStore.SaveManifest(_games);
+        Logger.Info($"Loaded cached library: {_games.Count:N0} game(s).");
         ApplyFilter();
         int missing = _games.Count(game => !SourceExists(game));
         if (_games.Count == 0)
@@ -2826,6 +2829,7 @@ public partial class MainForm : DarkForm
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
         ShutdownTaskQueue();
+        ShutdownLog();
         CaptureLibraryColumnLayout();
         SaveSettingsQuietly();
         SaveWindowBounds();

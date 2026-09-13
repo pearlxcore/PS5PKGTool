@@ -26,6 +26,8 @@ public sealed class AppSettings
 
     // Library & scanning
     public bool RefreshOnStartup { get; set; }
+    public string RenameFormat { get; set; } = "{TITLE} [{TITLE_ID}]";
+    public bool LogAutoScroll { get; set; } = true;
 
     // Files & preview
     public int MaxPreviewMb { get; set; } = 16;
