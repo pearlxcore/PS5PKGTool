@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using PS5PKGTool.Core.Models;
+using ProsperoPkgTool.Crypto;
 
 namespace PS5PKGTool.Core.Parsers;
 
@@ -18,10 +19,12 @@ internal static class SonyPfsCrypto
         byte[] paddedContentId = new byte[48];
         Encoding.ASCII.GetBytes(contentId).CopyTo(paddedContentId, 0);
         byte[] input = new byte[96];
-        SHA3_256.HashData(index).CopyTo(input, 0);
-        SHA3_256.HashData(paddedContentId).CopyTo(input, 32);
+        // Use the engine's managed SHA3-256: the BCL SHA3_256 throws PlatformNotSupportedException on
+        // Windows builds without CNG SHA-3 support, and this runs at the start of every package build.
+        Sha3.Sha3_256(index).CopyTo(input, 0);
+        Sha3.Sha3_256(paddedContentId).CopyTo(input, 32);
         Encoding.ASCII.GetBytes(passcode).CopyTo(input, 64);
-        return SHA3_256.HashData(input);
+        return Sha3.Sha3_256(input);
     }
 
     public static SonyPfsCryptoContext DeriveContext(byte[] ekpfs, ReadOnlySpan<byte> seed,

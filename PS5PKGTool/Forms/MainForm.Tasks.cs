@@ -139,6 +139,7 @@ public partial class MainForm
                 break;
             case PackageTaskStatus.Failed:
                 Logger.Error($"Task failed: {task.DisplayName}: {task.Message}");
+                if (task.Failure is not null) Logger.Error(task.Failure.ToString());
                 break;
             case PackageTaskStatus.Cancelled:
                 Logger.Warn($"Task cancelled: {task.DisplayName}");

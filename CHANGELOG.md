@@ -56,6 +56,8 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 
 ### Fixes
 
+- Package builds no longer depend on the OS SHA3 provider. The EKPFS key now uses the engine's managed SHA3-256, which fixes "Operation is not supported on this platform" on Windows builds without CNG SHA-3 (for example Windows Server or older Windows 10 LTSC).
+- Failed tasks now record and log the full exception (type and stack), and the task row shows the exception type.
 - Dark text viewers (Raw param.json, hex, and file preview) now fill their tab when first shown on a tab that was not selected at load time.
 - Opening a loose dump now updates its Size in the library list immediately instead of staying blank until a refresh; dumps whose size is not known yet show a tooltip.
 

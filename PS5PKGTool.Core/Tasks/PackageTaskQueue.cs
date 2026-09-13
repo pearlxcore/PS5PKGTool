@@ -304,7 +304,8 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            task.Apply(PackageTaskStatus.Failed, ex.Message);
+            task.Failure = ex;
+            task.Apply(PackageTaskStatus.Failed, $"{ex.GetType().Name}: {ex.Message}");
         }
         finally
         {

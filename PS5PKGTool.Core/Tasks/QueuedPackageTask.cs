@@ -184,6 +184,9 @@ public sealed class QueuedPackageTask
     public PackageTaskStatus Status { get; internal set; } = PackageTaskStatus.Queued;
     public PackageTaskProgress Progress { get; internal set; }
     public string Message { get; internal set; } = string.Empty;
+
+    /// <summary>The exception that failed the task, when there was one, for diagnostics.</summary>
+    public Exception? Failure { get; internal set; }
     public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
     public DateTime? StartedUtc { get; internal set; }
     public DateTime? CompletedUtc { get; internal set; }
