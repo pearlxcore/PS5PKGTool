@@ -17,6 +17,7 @@ First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 
 - File browser with image, text, hex, and media previews, plus per file and whole folder extraction.
 - Rename files and dump root folders from preset or custom token formats (for example {TITLE} [{TITLE_ID}] [{VERSION}]), with tokens for {TITLE_ID}, {CONTENT_ID}, {PLATFORM}, {CATEGORY}, {REGION}, {VERSION}, {SYSTEM_VERSION}, {SOURCE}, and more. Includes Rename All and Rename by install order for packages.
 - Cached items whose source was deleted or moved are marked as Missing (Source column) and reported at startup, with File > Remove Missing Items to drop them; a Refresh prunes them.
+- Move items into a chosen destination folder, grouped by Title, Title ID, Category, Region, or Source, or all into one folder. Same drive uses a fast rename; across drives it copies, verifies, then deletes. Files and dump folders are both supported, collisions are skipped with a warning, and the destination can be added to the library.
 
 ### Image tools
 

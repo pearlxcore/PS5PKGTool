@@ -72,7 +72,7 @@ public partial class MainForm
         menuLibraryRenameAll.Enabled = _games.Count > 0;
         menuLibraryRenameByPriority.Enabled = hasGame;
         menuLibrarySaveArtwork.Enabled = hasGame;
-        menuLibraryMove.Enabled = false;
+        menuLibraryMove.Enabled = hasGame;
         menuLibraryDelete.Enabled = hasGame;
         menuLibraryDuplicates.Enabled = false;
 

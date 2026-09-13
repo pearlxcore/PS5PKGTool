@@ -16,4 +16,5 @@ public static class PackageTaskTypes
     public const string ImageConvert = "Convert image";
     public const string ImageVerify = "Verify image";
     public const string ImageBuildPackage = "Build package";
+    public const string LibraryMove = "Move";
 }

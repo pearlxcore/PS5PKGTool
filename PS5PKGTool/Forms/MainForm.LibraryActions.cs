@@ -240,69 +240,190 @@ public partial class MainForm
         statusLabel.Text = "Queued: package extraction. See the Tasks tab.";
     }
 
-    // ---------------------------------------------------------------- move into folders
+    // ---------------------------------------------------------------- move to folder
 
-    private void menuLibraryMoveTitle_Click(object? sender, EventArgs e) => MoveSelected(game => game.Title);
-    private void menuLibraryMoveTitleId_Click(object? sender, EventArgs e) => MoveSelected(game => game.TitleId);
-    private void menuLibraryMoveCategory_Click(object? sender, EventArgs e) => MoveSelected(game => CategoryOf(game));
-    private void menuLibraryMoveRegion_Click(object? sender, EventArgs e) => MoveSelected(game => RegionOf(game));
+    private enum MoveMode { Title, TitleId, Category, Region, Source, Flat }
 
-    private void menuLibraryMoveSingle_Click(object? sender, EventArgs e)
+    private sealed class MoveOutcome
     {
-        string? folder = PromptText("Move to folder", "Folder name (created next to each source):", "PS5");
-        if (!string.IsNullOrWhiteSpace(folder)) MoveSelected(_ => folder);
+        public List<(Ps5GameInfo Game, string Source, string Target)> Moved { get; } = [];
+        public List<string> Skipped { get; } = [];
     }
 
-    private void MoveSelected(Func<Ps5GameInfo, string> folderSelector)
+    private void menuLibraryMoveTitle_Click(object? sender, EventArgs e) => MoveGamesToFolder(MoveMode.Title);
+    private void menuLibraryMoveTitleId_Click(object? sender, EventArgs e) => MoveGamesToFolder(MoveMode.TitleId);
+    private void menuLibraryMoveCategory_Click(object? sender, EventArgs e) => MoveGamesToFolder(MoveMode.Category);
+    private void menuLibraryMoveRegion_Click(object? sender, EventArgs e) => MoveGamesToFolder(MoveMode.Region);
+    private void menuLibraryMoveSource_Click(object? sender, EventArgs e) => MoveGamesToFolder(MoveMode.Source);
+    private void menuLibraryMoveSingle_Click(object? sender, EventArgs e) => MoveGamesToFolder(MoveMode.Flat);
+
+    private static string MoveModeLabel(MoveMode mode) => mode switch
+    {
+        MoveMode.TitleId => "Title ID",
+        MoveMode.Category => "Category",
+        MoveMode.Region => "Region",
+        MoveMode.Source => "Source",
+        MoveMode.Flat => "a single folder",
+        _ => "Title"
+    };
+
+    private void MoveGamesToFolder(MoveMode mode)
     {
         List<Ps5GameInfo> games = SelectedGames().ToList();
-        if (games.Count == 0) return;
+        if (games.Count == 0)
+        {
+            AppDialog.ShowInformation("Select one or more items to move.", "Move to folder");
+            return;
+        }
+
+        folderBrowserDialog.Description = "Select the destination folder";
+        if (!string.IsNullOrEmpty(_settings.OutputDirectory) && Directory.Exists(_settings.OutputDirectory))
+            folderBrowserDialog.SelectedPath = _settings.OutputDirectory;
+        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
+        string destinationRoot = folderBrowserDialog.SelectedPath;
+
+        bool addToLibrary = false;
+        if (!IsUnderLibrary(destinationRoot) && !IsManualSource(destinationRoot))
+            addToLibrary = AppDialog.ShowWarning(
+                $"Add this folder to the library so the moved items stay listed?\n\n{destinationRoot}",
+                "Move to folder", DarkDialogButton.YesNo) == DialogResult.Yes;
+
+        string modeLabel = MoveModeLabel(mode);
         if (_settings.ConfirmMove && AppDialog.ShowWarning(
-                $"Move {games.Count:N0} source(s) into subfolders next to each source?\n\n" +
-                string.Join(Environment.NewLine, games.Select(game => "  " + game.RootPath)),
-                "Move to folder") != DialogResult.OK)
+                $"Move {games.Count:N0} source(s) into:\n\n{destinationRoot}\n\nGrouped by: {modeLabel}\n\nProceed?",
+                "Move to folder", DarkDialogButton.YesNo) != DialogResult.Yes)
             return;
 
-        int moved = 0;
-        int skipped = 0;
+        var snapshot = games.ToList();
+        var outcome = new MoveOutcome();
+        EnqueueTask(PackageTaskTypes.LibraryMove, $"Move {snapshot.Count:N0} item(s) by {modeLabel}",
+            (progress, token) =>
+            {
+                MoveWorker(snapshot, destinationRoot, mode, outcome, progress, token);
+                return Task.CompletedTask;
+            },
+            sourcePath: string.Empty, outputPath: destinationRoot,
+            operation: "Move", sourceFormat: "library", targetFormat: modeLabel,
+            stagePlan: PackageTaskPlans.Single,
+            onFinished: _ => CompleteMove(outcome, destinationRoot, addToLibrary, modeLabel));
+    }
+
+    private void CompleteMove(MoveOutcome outcome, string destinationRoot, bool addToLibrary, string modeLabel)
+    {
+        foreach ((Ps5GameInfo game, string source, string target) in outcome.Moved)
+            RewriteGamePath(game, source, target);
+        if (addToLibrary &&
+            !_settings.LibraryFolders.Contains(destinationRoot, StringComparer.OrdinalIgnoreCase))
+            _settings.LibraryFolders.Add(destinationRoot);
+        if (outcome.Moved.Count > 0) SaveSettingsQuietly();
+        _stateStore.SaveManifest(_games);
+        ApplyFilter();
+        Logger.Info($"Move by {modeLabel}: {outcome.Moved.Count:N0} moved, {outcome.Skipped.Count:N0} skipped.");
+        statusLabel.Text = $"Moved {outcome.Moved.Count:N0} item(s); skipped {outcome.Skipped.Count:N0}.";
+        if (outcome.Moved.Count == 0 && outcome.Skipped.Count > 0)
+            AppDialog.ShowWarning("No items were moved. Check the log for details.", "Move to folder");
+    }
+
+    private static void MoveWorker(IReadOnlyList<Ps5GameInfo> games, string destinationRoot, MoveMode mode,
+        MoveOutcome outcome, IProgress<PackageTaskProgress> progress, CancellationToken token)
+    {
+        int total = games.Count;
+        int index = 0;
         foreach (Ps5GameInfo game in games)
         {
+            token.ThrowIfCancellationRequested();
             string source = game.RootPath;
-            bool directory = Directory.Exists(source);
-            bool file = File.Exists(source);
-            if (!directory && !file) { skipped++; continue; }
+            index++;
+            progress.Report(new PackageTaskProgress("Moving", index - 1, total, 0, 0, index, total, game.Title));
+            if (string.IsNullOrWhiteSpace(source) || (!Directory.Exists(source) && !File.Exists(source)))
+            {
+                outcome.Skipped.Add($"{game.Title}: source not found");
+                continue;
+            }
 
-            string? parent = Path.GetDirectoryName(source);
-            if (string.IsNullOrEmpty(parent)) { skipped++; continue; }
+            string? group = GroupFolder(game, mode);
+            if (group is null)
+            {
+                outcome.Skipped.Add($"{game.Title}: no {MoveModeLabel(mode)} value");
+                continue;
+            }
 
-            string sub = MakeSafeFileName(folderSelector(game));
-            if (sub.Length == 0) sub = "PS5";
-            string target = Path.Combine(Path.Combine(parent, sub), Path.GetFileName(source));
-            if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase)) { skipped++; continue; }
-            if (File.Exists(target) || Directory.Exists(target)) { skipped++; continue; }
+            string target = Path.Combine(destinationRoot, group, LibraryFileName(game));
+            if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
+            {
+                outcome.Skipped.Add($"{LibraryFileName(game)}: already in the destination");
+                continue;
+            }
+            if (File.Exists(target) || Directory.Exists(target))
+            {
+                outcome.Skipped.Add($"{LibraryFileName(game)}: destination already exists");
+                Logger.Warn($"Move skipped (exists): {target}");
+                continue;
+            }
 
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                if (directory) Directory.Move(source, target);
-                else File.Move(source, target);
-                RewriteGamePath(game, source, target);
-                moved++;
+                string? parent = Path.GetDirectoryName(target);
+                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                LibraryFileMover.Move(source, target, token, progress);                outcome.Moved.Add((game, source, target));
+                Logger.Info($"Moved {source} -> {target}");
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            catch (OperationCanceledException)
             {
+                throw;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+            {
+                outcome.Skipped.Add($"{LibraryFileName(game)}: {ex.Message}");
                 Logger.Warn($"Move failed for '{source}': {ex.Message}");
-                skipped++;
             }
         }
+        progress.Report(new PackageTaskProgress("Moving", total, total, 0, 0, total, total, string.Empty));
+    }
 
-        SaveSettingsQuietly();
-        _stateStore.SaveManifest(_games);
-        ApplyFilter();
-        Logger.Info($"Moved {moved:N0} source(s); skipped {skipped:N0}.");
-        statusLabel.Text = $"Moved {moved:N0} source(s); skipped {skipped:N0}.";
-        if (moved == 0 && skipped > 0)
-            AppDialog.ShowWarning("No sources were moved. Check the log for details.", "Move to folder");
+    private static string? GroupFolder(Ps5GameInfo game, MoveMode mode)
+    {
+        switch (mode)
+        {
+            case MoveMode.Title:
+            {
+                string category = CategoryOf(game);
+                if (category.Equals("DLC", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Add-on", StringComparison.OrdinalIgnoreCase))
+                    return Path.Combine("Addon", SafeFolder(game.TitleId, "UNKNOWN_TITLEID"));
+                if (category.Equals("App", StringComparison.OrdinalIgnoreCase))
+                    return Path.Combine("App", SafeFolder(game.Title, "UNKNOWN_TITLEID"));
+                if (category.Equals("Game", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Patch", StringComparison.OrdinalIgnoreCase))
+                    return Path.Combine("Base + Update", SafeFolder(game.Title, "UNKNOWN_TITLEID"));
+                return null;
+            }
+            case MoveMode.TitleId:
+                return SafeFolder(game.TitleId, "UNKNOWN_TITLEID");
+            case MoveMode.Category:
+                return CategoryOf(game) switch
+                {
+                    "Game" => "Game",
+                    "Patch" => "Patch",
+                    "DLC" or "Add-on" => "Dlc",
+                    "App" => "App",
+                    _ => null
+                };
+            case MoveMode.Region:
+                return SafeFolder(RegionOf(game), "Other");
+            case MoveMode.Source:
+                return SafeFolder(game.SourceDescription, "Other");
+            case MoveMode.Flat:
+                return string.Empty;
+            default:
+                return null;
+        }
+    }
+
+    private static string SafeFolder(string value, string fallback)
+    {
+        string safe = Ps5RenameFormatter.Sanitize(value);
+        return safe.Length > 0 ? safe : Ps5RenameFormatter.Sanitize(fallback);
     }
 
     private void RewriteGamePath(Ps5GameInfo game, string source, string target)

@@ -53,6 +53,7 @@ partial class MainForm
     private ToolStripMenuItem menuLibraryMoveTitleId = null!;
     private ToolStripMenuItem menuLibraryMoveCategory = null!;
     private ToolStripMenuItem menuLibraryMoveRegion = null!;
+    private ToolStripMenuItem menuLibraryMoveSource = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuLibraryMoveSeparator = null!;
     private ToolStripMenuItem menuLibraryMoveSingle = null!;
     private ToolStripMenuItem menuLibraryDelete = null!;
@@ -377,6 +378,7 @@ partial class MainForm
         menuLibraryMoveTitleId = new ToolStripMenuItem();
         menuLibraryMoveCategory = new ToolStripMenuItem();
         menuLibraryMoveRegion = new ToolStripMenuItem();
+        menuLibraryMoveSource = new ToolStripMenuItem();
         menuLibraryMoveSeparator = new DarkUI.Controls.DarkToolStripSeparator();
         menuLibraryMoveSingle = new ToolStripMenuItem();
         menuLibraryDelete = new ToolStripMenuItem();
@@ -1022,12 +1024,12 @@ partial class MainForm
         // menuLibraryMove
         // 
         menuLibraryMove.BackColor = Color.FromArgb(60, 63, 65);
-        menuLibraryMove.DropDownItems.AddRange(new ToolStripItem[] { menuLibraryMoveTitle, menuLibraryMoveTitleId, menuLibraryMoveCategory, menuLibraryMoveRegion, menuLibraryMoveSeparator, menuLibraryMoveSingle });
+        menuLibraryMove.DropDownItems.AddRange(new ToolStripItem[] { menuLibraryMoveTitle, menuLibraryMoveTitleId, menuLibraryMoveCategory, menuLibraryMoveRegion, menuLibraryMoveSource, menuLibraryMoveSeparator, menuLibraryMoveSingle });
         menuLibraryMove.ForeColor = Color.FromArgb(220, 220, 220);
         menuLibraryMove.Name = "menuLibraryMove";
-        menuLibraryMove.Enabled = false;
         menuLibraryMove.Size = new Size(277, 22);
-        menuLibraryMove.Text = "Move to Folder (Coming soon)";
+        menuLibraryMove.Text = "Move to Folder";
+
         // 
         // menuLibraryMoveTitle
         // 
@@ -1057,6 +1059,13 @@ partial class MainForm
         menuLibraryMoveRegion.Text = "By Region";
         menuLibraryMoveRegion.Click += menuLibraryMoveRegion_Click;
         // 
+        // menuLibraryMoveSource
+        // 
+        menuLibraryMoveSource.Name = "menuLibraryMoveSource";
+        menuLibraryMoveSource.Size = new Size(184, 22);
+        menuLibraryMoveSource.Text = "By Source";
+        menuLibraryMoveSource.Click += menuLibraryMoveSource_Click;
+        // 
         // menuLibraryMoveSeparator
         // 
         menuLibraryMoveSeparator.Name = "menuLibraryMoveSeparator";
@@ -1066,7 +1075,7 @@ partial class MainForm
         // 
         menuLibraryMoveSingle.Name = "menuLibraryMoveSingle";
         menuLibraryMoveSingle.Size = new Size(184, 22);
-        menuLibraryMoveSingle.Text = "Into a Single Folder...";
+        menuLibraryMoveSingle.Text = "All into the Destination";
         menuLibraryMoveSingle.Click += menuLibraryMoveSingle_Click;
         // 
         // menuLibraryDelete
