@@ -120,4 +120,4 @@ The app is written to `PS5PKGTool\bin\Release\net10.0-windows\PS5 PKG Tool.exe`.
 - [PSBrew / Renan Barreto](https://github.com/PSBrew/MkPFS)
 - [kerrdec97](https://github.com/kerrdec97/ps5-exfat-builder)
 - [strongt1me](https://github.com/strongt1me/PS5-Dump-Image-Converter)
-- Sony
+- Sony <3
