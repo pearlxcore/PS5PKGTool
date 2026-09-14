@@ -41,7 +41,7 @@ The release build is self-contained and includes the .NET runtime, so nothing el
 
 The Tools workspace has one unified form. Pick a source (the selected library item or a file), then pick an action.
 
-- **Create / Convert** between dump folders and exFAT, FFPKG (UFS2), and FFPFSC images, or build a debug package (FPKG) from a dump or image.
+- **Create / Convert** between dump folders and exFAT, FFPKG, and FFPFSC images, or build a debug package (FPKG) from a dump or image.
 - **Extract** a dump tree out of an image, or extract package contents.
 - **Verify** an image or a package.
 - **Edit Files** for exFAT and FFPKG images (replace, add, import a folder, create directories, delete).
@@ -55,6 +55,7 @@ Every long action runs on the Tasks tab; the form only queues work and reports p
 
 - Read, verify, and extract debug PS5 packages (FPKG), including inner PFS browsing, trophies, activities, and PlayGo data.
 - Build a debug package from an unpacked dump or directly from an image. Content ID and passcode are configurable, and an optional seed gives byte reproducible output.
+- Build settings include inner compression (Auto - Kraken where it helps, Kraken forced, or Uncompressed), Kraken level and thread count, PlayGo chunk count (default 1), an SDK version override, and an optional workspace folder. Package type is APP; AC (additional content) is not supported yet.
 - Convert a debug package to exFAT, FFPKG, or FFPFSC.
 - Retail packages are recognized but cannot be decoded without matching image key material. Only debug packages built with the default or a known passcode are fully readable.
 

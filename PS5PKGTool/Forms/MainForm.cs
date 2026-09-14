@@ -85,6 +85,7 @@ public partial class MainForm : DarkForm
         InitializeLog();
         RefreshImageTools();
         InitializeImageSdkList();
+        InitializeImageBuildLists();
         _pendingExternalPath = externalPath;
     }
 
@@ -703,7 +704,7 @@ public partial class MainForm : DarkForm
                 game.ContainerInnerFileName);
             bool isUfs2 = game.SourceKind == Ps5SourceKind.Ffpkg ||
                           Path.GetExtension(game.ContainerInnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase);
-            Add(isUfs2 ? "Logical UFS2 Size" : "Logical exFAT Size",
+            Add(isUfs2 ? "Logical FFPKG Size" : "Logical exFAT Size",
                 FormatBytes(game.ContainerLogicalSize));
             if (game.SourceKind == Ps5SourceKind.Ffpfsc)
             {
@@ -1604,11 +1605,11 @@ public partial class MainForm : DarkForm
                     : $"{inventory.FileCount:N0} readable CNT entries - {FormatBytes(inventory.TotalSize)} package",
             Ps5SourceKind.Ffpfsc =>
                 $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} logical " +
-                $"{(Path.GetExtension(game.ContainerInnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase) ? "UFS2" : "exFAT")} content - read directly from FFPFSC",
+                $"{(Path.GetExtension(game.ContainerInnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase) ? "FFPKG" : "exFAT")} content - read directly from FFPFSC",
             Ps5SourceKind.FilesystemImage =>
                 $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} content - read directly from {Path.GetExtension(game.RootPath).TrimStart('.').ToUpperInvariant()}",
             Ps5SourceKind.Ffpkg =>
-                $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} logical content - read directly from UFS2 FFPKG",
+                $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} logical content - read directly from the FFPKG",
             _ => $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} total - double-click folders to browse or files to reveal them"
         };
         RefreshFileList();

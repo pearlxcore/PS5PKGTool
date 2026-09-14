@@ -136,6 +136,22 @@ public partial class MainForm
         }
 
         RestoreLibrarySelection(previousRoot);
+
+        // On the first load there is no previous selection. The grid highlights the first row while
+        // populating (selection suppressed), so promote it to a real selection to load the details
+        // pane and the Tools source immediately.
+        if (previousRoot is null && _visibleGames.Count > 0)
+        {
+            DataGridViewRow? first = null;
+            foreach (DataGridViewRow row in gridLibrary.Rows)
+                if (row.Tag is Ps5GameInfo) { first = row; break; }
+            if (first is not null)
+            {
+                gridLibrary.ClearSelection();
+                first.Selected = true;
+            }
+        }
+
         StartLibraryThumbnailLoad(_visibleGames);
     }
 

@@ -568,7 +568,7 @@ public partial class MainForm
         PackageTaskTypes.ImageConvert => GetBool(fields, "package")
             ? PackageTaskPlans.ConvertPackage
             : PackageTaskPlans.ConvertImage,
-        PackageTaskTypes.ImageBuildPackage => PackageTaskPlans.BuildPackage,
+        PackageTaskTypes.ImageBuildPackage => PackageTaskPlans.BuildPackageFor(Get(fields, "source")),
         PackageTaskTypes.ImageVerify => PackageTaskPlans.Verify,
         PackageTaskTypes.PackageExtract => PackageTaskPlans.Extract,
         PackageTaskTypes.PackageVerify => PackageTaskPlans.Verify,
@@ -693,8 +693,22 @@ public partial class MainForm
         ulong? sdkVersionOverride = GetSdkOverride(fields);
         string tempText = Get(fields, "temp");
         string? tempDirectory = tempText.Length > 0 ? tempText : null;
+        ImageBuildSettings settings = GetImageBuildSettings(fields);
         return (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-            sdkVersionOverride, tempDirectory, progress, token);
+            sdkVersionOverride, tempDirectory, settings, progress, token);
+    }
+
+    private static ImageBuildSettings GetImageBuildSettings(Dictionary<string, string> fields)
+    {
+        Ps5InnerCompression compression = Enum.TryParse(Get(fields, "compression"), out Ps5InnerCompression parsed)
+            ? parsed
+            : Ps5InnerCompression.Auto;
+        int krakenLevel = int.TryParse(Get(fields, "krakenLevel"), out int level) ? level : 7;
+        int krakenThreads = int.TryParse(Get(fields, "krakenThreads"), out int threads) ? threads : 0;
+        int playgo = int.TryParse(Get(fields, "playgo"), out int chunks) ? chunks : 1;
+        string drm = Get(fields, "drm");
+        return new ImageBuildSettings(compression, krakenLevel, krakenThreads, playgo,
+            drm.Length > 0 ? drm : null);
     }
 
     private static ulong? GetSdkOverride(Dictionary<string, string> fields)

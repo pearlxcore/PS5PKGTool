@@ -36,9 +36,25 @@ public partial class MainForm
     private bool _suppressImageEvents;
 
     private ImageToolTarget? CurrentImageTarget =>
-        cboImageTarget.SelectedIndex >= 0 && cboImageTarget.SelectedIndex < _imageTargets.Count
-            ? _imageTargets[cboImageTarget.SelectedIndex]
-            : null;
+        cboImageAction.SelectedItem as string == ImageActionConvert ? TabTarget(tabsImageTargets.SelectedTab) : null;
+
+    private ImageToolTarget? TabTarget(System.Windows.Forms.TabPage? page)
+    {
+        if (ReferenceEquals(page, tabTargetExfat)) return ImageToolTarget.Exfat;
+        if (ReferenceEquals(page, tabTargetFfpkg)) return ImageToolTarget.Ffpkg;
+        if (ReferenceEquals(page, tabTargetFfpfsc)) return ImageToolTarget.Ffpfsc;
+        if (ReferenceEquals(page, tabTargetDebug)) return ImageToolTarget.DebugPackage;
+        return null;
+    }
+
+    private DarkUI.Controls.DarkTabPage TabPageFor(ImageToolTarget target) => target switch
+    {
+        ImageToolTarget.Exfat => tabTargetExfat,
+        ImageToolTarget.Ffpkg => tabTargetFfpkg,
+        ImageToolTarget.Ffpfsc => tabTargetFfpfsc,
+        _ => tabTargetDebug
+    };
+
 
     private void RefreshImageTools() => SyncImageSourceFromLibrary();
 
@@ -107,7 +123,7 @@ public partial class MainForm
         return _imageSourceFormat switch
         {
             Ps5ImageFormat.Exfat => "exFAT",
-            Ps5ImageFormat.Ufs2 => "FFPKG (UFS2)",
+            Ps5ImageFormat.Ufs2 => "FFPKG",
             Ps5ImageFormat.Pfs => "FFPFSC",
             _ => "unknown"
         };
@@ -181,7 +197,6 @@ public partial class MainForm
         try
         {
             _imageTargets.Clear();
-            cboImageTarget.Items.Clear();
             if (cboImageAction.SelectedItem as string == ImageActionConvert && _imageSourcePath is not null)
             {
                 if (_imageSourceIsPackage)
@@ -200,19 +215,31 @@ public partial class MainForm
                             _imageTargets.Add(MapTarget(target));
                     _imageTargets.Add(ImageToolTarget.DebugPackage);
                 }
+            }
+
+            tabsImageTargets.TabPages.Clear();
+            if (cboImageAction.SelectedItem as string == ImageActionConvert)
+            {
                 foreach (ImageToolTarget target in _imageTargets)
-                    cboImageTarget.Items.Add(ImageTargetLabel(target));
-                if (cboImageTarget.Items.Count > 0)
-                {
-                    int index = _imageTargets.IndexOf(DefaultImageTarget());
-                    cboImageTarget.SelectedIndex = index >= 0 ? index : 0;
-                }
+                    tabsImageTargets.TabPages.Add(TabPageFor(target));
+                if (tabsImageTargets.TabPages.Count > 0)
+                    tabsImageTargets.SelectedIndex = 0;
+            }
+            else
+            {
+                tabsImageTargets.TabPages.Add(tabTargetOptions);
             }
         }
         finally
         {
             _suppressImageEvents = false;
         }
+        UpdateImageOptionVisibility();
+    }
+
+    private void tabsImageTargets_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_suppressImageEvents) return;
         UpdateImageOptionVisibility();
     }
 
@@ -230,24 +257,10 @@ public partial class MainForm
         _ => Ps5ImageConversionTarget.Ffpfsc
     };
 
-    private ImageToolTarget DefaultImageTarget()
-    {
-        if (_imageSourceIsPackage) return ImageToolTarget.Ffpkg;
-        if (_imageSourcePath is not null && Directory.Exists(_imageSourcePath))
-            return ImageToolTarget.Ffpkg;
-        return _imageSourceFormat switch
-        {
-            Ps5ImageFormat.Exfat => ImageToolTarget.Ffpfsc,
-            Ps5ImageFormat.Ufs2 => ImageToolTarget.Ffpfsc,
-            Ps5ImageFormat.Pfs => ImageToolTarget.Exfat,
-            _ => ImageToolTarget.Ffpfsc
-        };
-    }
-
     private static string ImageTargetLabel(ImageToolTarget target) => target switch
     {
         ImageToolTarget.Exfat => "exFAT image",
-        ImageToolTarget.Ffpkg => "FFPKG (UFS2)",
+        ImageToolTarget.Ffpkg => "FFPKG",
         ImageToolTarget.Ffpfsc => "FFPFSC image",
         _ => "Debug Package (FPKG)"
     };
@@ -267,77 +280,74 @@ public partial class MainForm
         bool extract = action == ImageActionExtract;
         bool verify = action == ImageActionVerify;
         ImageToolTarget? target = convert ? CurrentImageTarget : null;
-        bool showCluster = target is ImageToolTarget.Exfat or ImageToolTarget.Ffpfsc;
-        bool showCompression = target == ImageToolTarget.Ffpfsc;
-        bool showFfpkg = target == ImageToolTarget.Ffpkg;
         bool showDebug = target == ImageToolTarget.DebugPackage;
-        bool showPasscode = showDebug || (_imageSourceIsPackage && (extract || verify));
+        bool showPasscode = _imageSourceIsPackage && (extract || verify);
 
-        lblImageTarget.Visible = convert;
-        cboImageTarget.Visible = convert;
-        lblImageCluster.Visible = showCluster;
-        cboImageCluster.Visible = showCluster;
-        lblImageLevel.Visible = showCompression;
-        nudImageLevel.Visible = showCompression;
-        lblImageGain.Visible = showCompression;
-        nudImageGain.Visible = showCompression;
-        chkImageAmpr.Visible = showCluster;
-        lblImageBlock.Visible = showFfpkg;
-        cboImageBlock.Visible = showFfpkg;
-        lblImageFragment.Visible = showFfpkg;
-        cboImageFragment.Visible = showFfpkg;
-        lblImageDensity.Visible = showFfpkg;
-        cboImageDensity.Visible = showFfpkg;
-        lblImageMinFree.Visible = showFfpkg;
-        nudImageMinFree.Visible = showFfpkg;
+        // Target-specific option controls live in their own target tab, so they are always shown
+        // within that tab. Only the shared Job fields and the non-convert Options tab are toggled.
         lblImageContentId.Visible = showDebug;
         txtImageContentId.Visible = showDebug;
+        lblImageTitleId.Visible = showDebug;
+        txtImageTitleId.Visible = showDebug;
+        lblImageVersion.Visible = showDebug;
+        txtImageVersion.Visible = showDebug;
+
+        lblImageOutput.Visible = extract;
+        txtImageOutput.Visible = extract;
+        btnImageBrowseOutput.Visible = extract;
+        chkImageOverwrite.Visible = extract;
         lblImagePasscode.Visible = showPasscode;
         txtImagePasscode.Visible = showPasscode;
-        chkImageSdkOverride.Visible = showDebug;
-        cboImageSdk.Visible = showDebug && chkImageSdkOverride.Checked;
-        lblImageTemp.Visible = showDebug;
-        txtImageTemp.Visible = showDebug;
-        btnImageTempBrowse.Visible = showDebug;
-        bool showOutput = convert || extract;
-        lblImageOutput.Visible = showOutput;
-        txtImageOutput.Visible = showOutput;
-        btnImageBrowseOutput.Visible = showOutput;
-        chkImageOverwrite.Visible = showOutput;
         lblImageOutput.Text = extract ? "Output folder:" : "Output file:";
 
         if (convert)
         {
             SuggestImageOutput(ImageTargetExtension(target ?? ImageToolTarget.Ffpfsc));
-            if (showDebug) SuggestImageContentId();
+            if (showDebug)
+            {
+                SuggestImageContentId();
+                RefreshImageBuildInfo();
+            }
         }
         else if (extract) SuggestImageOutput("-files");
 
-        btnImageRun.Enabled = action is not null;
+        btnImageRun.Enabled = action is not null && !(showDebug && ImagePackageTypeUnsupported());
         btnImageCancel.Enabled = _taskQueue.Tasks.Any(task =>
             task.Status is PackageTaskStatus.Running or PackageTaskStatus.Queued);
     }
 
+    private TextBox ImageOutputBox() => CurrentImageTarget switch
+    {
+        ImageToolTarget.Exfat => txtOutExfat,
+        ImageToolTarget.Ffpkg => txtOutFfpkg,
+        ImageToolTarget.Ffpfsc => txtOutFfpfsc,
+        ImageToolTarget.DebugPackage => txtOutDebug,
+        _ => txtImageOutput
+    };
+
+    private CheckBox ImageOverwriteBox() => CurrentImageTarget switch
+    {
+        ImageToolTarget.Exfat => chkOutExfat,
+        ImageToolTarget.Ffpkg => chkOutFfpkg,
+        ImageToolTarget.Ffpfsc => chkOutFfpfsc,
+        ImageToolTarget.DebugPackage => chkOutDebug,
+        _ => chkImageOverwrite
+    };
+
+    private TextBox ImagePasscodeBox() => CurrentImageTarget == ImageToolTarget.DebugPackage
+        ? txtDbgPasscode
+        : txtImagePasscode;
+
     private void SuggestImageOutput(string suffix)
     {
-        if (_imageSourcePath is null) { txtImageOutput.Clear(); return; }
+        TextBox box = ImageOutputBox();
+        if (_imageSourcePath is null) { box.Clear(); return; }
         bool directory = Directory.Exists(_imageSourcePath);
         string name = directory ? new DirectoryInfo(_imageSourcePath).Name : Path.GetFileNameWithoutExtension(_imageSourcePath);
         string? parent = directory ? Directory.GetParent(_imageSourcePath)?.FullName : Path.GetDirectoryName(_imageSourcePath);
-        txtImageOutput.Text = Path.Combine(parent ?? _imageSourcePath, name + suffix);
+        box.Text = Path.Combine(parent ?? _imageSourcePath, name + suffix);
     }
 
-    private void btnImageUseSelected_Click(object? sender, EventArgs e)
-    {
-        if (_selectedGame is not { } game) return;
-        SetImageSource(game.RootPath);
-    }
-
-    private void btnImageChoose_Click(object? sender, EventArgs e)
-    {
-        if (openImageDialog.ShowDialog(this) != DialogResult.OK) return;
-        SetImageSource(openImageDialog.FileName);
-    }
 
     private void cboImageAction_SelectedIndexChanged(object? sender, EventArgs e)
     {
@@ -345,32 +355,28 @@ public partial class MainForm
         UpdateImageTargetList();
     }
 
-    private void cboImageTarget_SelectedIndexChanged(object? sender, EventArgs e)
-    {
-        if (_suppressImageEvents) return;
-        UpdateImageOptionVisibility();
-    }
-
     private void btnImageBrowseOutput_Click(object? sender, EventArgs e)
     {
+        TextBox box = ImageOutputBox();
         if (cboImageAction.SelectedItem as string == ImageActionExtract)
         {
             folderBrowserDialog.Description = "Select the extraction folder";
             if (folderBrowserDialog.ShowDialog(this) == DialogResult.OK)
-                txtImageOutput.Text = folderBrowserDialog.SelectedPath;
+                box.Text = folderBrowserDialog.SelectedPath;
             return;
         }
 
         ImageToolTarget target = CurrentImageTarget ?? ImageToolTarget.Ffpfsc;
         imageSaveDialog.Filter = ImageTargetLabel(target) + " (*" + ImageTargetExtension(target) + ")|*" +
                                  ImageTargetExtension(target) + "|All files (*.*)|*.*";
-        imageSaveDialog.FileName = Path.GetFileName(txtImageOutput.Text);
-        string? directory = Path.GetDirectoryName(txtImageOutput.Text);
+        imageSaveDialog.FileName = Path.GetFileName(box.Text);
+        string? directory = Path.GetDirectoryName(box.Text);
         if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
             imageSaveDialog.InitialDirectory = directory;
         if (imageSaveDialog.ShowDialog(this) == DialogResult.OK)
-            txtImageOutput.Text = imageSaveDialog.FileName;
+            box.Text = imageSaveDialog.FileName;
     }
+
 
     private void btnImageTempBrowse_Click(object? sender, EventArgs e)
     {
@@ -408,7 +414,7 @@ public partial class MainForm
     private void RunImageConvert()
     {
         string source = _imageSourcePath!;
-        string output = txtImageOutput.Text.Trim();
+        string output = ImageOutputBox().Text.Trim();
         if (output.Length == 0)
         {
             AppDialog.ShowWarning("Select an output file.", "Image Tools");
@@ -421,7 +427,8 @@ public partial class MainForm
             return;
         }
         Ps5ImageConversionTarget target = MapTarget(toolTarget);
-        bool overwrite = chkImageOverwrite.Checked;
+        bool overwrite = ImageOverwriteBox().Checked;
+
 
         ExfatBuildOptions? exfatOptions = target == Ps5ImageConversionTarget.Ffpkg
             ? null
@@ -500,7 +507,7 @@ public partial class MainForm
     private void RunImageExtract()
     {
         string source = _imageSourcePath!;
-        string output = txtImageOutput.Text.Trim();
+        string output = ImageOutputBox().Text.Trim();
         if (output.Length == 0)
         {
             AppDialog.ShowWarning("Select an extraction folder.", "Image Tools");
@@ -588,8 +595,8 @@ public partial class MainForm
         }
     }
 
-    private string ImagePasscode() => txtImagePasscode.Text.Length > 0
-        ? txtImagePasscode.Text
+    private string ImagePasscode() => ImagePasscodeBox().Text.Length > 0
+        ? ImagePasscodeBox().Text
         : !string.IsNullOrEmpty(_settings.DebugPasscode)
             ? _settings.DebugPasscode
             : SonyDebugPackageCredentials.DefaultPasscode;
@@ -597,7 +604,7 @@ public partial class MainForm
     private void RunPackageExtract()
     {
         string source = _imageSourcePath!;
-        string output = txtImageOutput.Text.Trim();
+        string output = ImageOutputBox().Text.Trim();
         if (output.Length == 0)
         {
             AppDialog.ShowWarning("Select an extraction folder.", "Image Tools");
@@ -723,7 +730,7 @@ public partial class MainForm
     {
         string source = _imageSourcePath!;
         if (AppDialog.ShowWarning(
-                "This extracts every readable file, rebuilds all UFS2 metadata beside the original, fully verifies " +
+                "This extracts every readable file, rebuilds all FFPKG metadata beside the original, fully verifies " +
                 "the replacement, and only then swaps it into place. It requires substantial free disk space.\n\n" +
                 source, "Rebuild FFPKG image?", DarkDialogButton.YesNo) != DialogResult.Yes)
             return;
@@ -747,24 +754,81 @@ public partial class MainForm
     private void InitializeImageSdkList()
     {
         cboImageSdk.Items.Clear();
+        cboImageSdk.Items.Add(SdkAutoLabel);
         foreach (Ps5SdkVersions.Release release in Ps5SdkVersions.Releases)
             cboImageSdk.Items.Add(release.Version);
-        int index = cboImageSdk.Items.IndexOf("9.00.00.40");
-        cboImageSdk.SelectedIndex = index >= 0
-            ? index
-            : cboImageSdk.Items.Count > 0 ? cboImageSdk.Items.Count - 1 : -1;
+        cboImageSdk.SelectedIndex = 0;
     }
 
-    private ulong? SelectedSdkOverride() =>
-        chkImageSdkOverride.Checked ? Ps5SdkVersions.ExecutableVersionAt(cboImageSdk.SelectedIndex) : null;
+    private static readonly (int Value, string Name)[] KrakenLevelNames =
+    {
+        (-4, "-4 HyperFast4"), (-3, "-3 HyperFast3"), (-2, "-2 HyperFast2"), (-1, "-1 HyperFast1"),
+        (0, "0 None"), (1, "1 SuperFast"), (2, "2 VeryFast"), (3, "3 Fast"), (4, "4 Normal"),
+        (5, "5 Optimal1"), (6, "6 Optimal2"), (7, "7 Optimal3"), (8, "8 Optimal4"), (9, "9 Optimal5")
+    };
 
-    private void chkImageSdkOverride_CheckedChanged(object? sender, EventArgs e) =>
-        cboImageSdk.Visible = chkImageSdkOverride.Visible && chkImageSdkOverride.Checked;
+    private const string SdkAutoLabel = "Auto (from source)";
+
+    private void InitializeImageBuildLists()
+    {
+        cboImagePkgType.Items.Clear();
+        cboImagePkgType.Items.Add("APP (application)");
+        cboImagePkgType.Items.Add("AC (additional content) - not supported yet");
+        cboImagePkgType.SelectedIndex = 0;
+
+        cboImageCompression.Items.Clear();
+        cboImageCompression.Items.Add("Auto (Kraken where it helps)");
+        cboImageCompression.Items.Add("Kraken (force)");
+        cboImageCompression.Items.Add("Uncompressed (stored)");
+        cboImageCompression.SelectedIndex = 0;
+
+        cboImageKrakenLevel.Items.Clear();
+        foreach (var (_, name) in KrakenLevelNames) cboImageKrakenLevel.Items.Add(name);
+        cboImageKrakenLevel.SelectedIndex = IndexOfKrakenLevel(7);
+
+        txtImageTemp.Text = Path.GetTempPath()
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
+    private static int IndexOfKrakenLevel(int value)
+    {
+        for (int i = 0; i < KrakenLevelNames.Length; i++)
+            if (KrakenLevelNames[i].Value == value) return i;
+        return 0;
+    }
+
+    private ulong? SelectedSdkOverride()
+    {
+        int index = cboImageSdk.SelectedIndex - 1;
+        return index >= 0 ? Ps5SdkVersions.ExecutableVersionAt(index) : null;
+    }
+
+    private Ps5InnerCompression SelectedCompression() => cboImageCompression.SelectedIndex switch
+    {
+        1 => Ps5InnerCompression.Kraken,
+        2 => Ps5InnerCompression.Stored,
+        _ => Ps5InnerCompression.Auto
+    };
+
+    private int SelectedKrakenLevel() =>
+        cboImageKrakenLevel.SelectedIndex >= 0 ? KrakenLevelNames[cboImageKrakenLevel.SelectedIndex].Value : 7;
+
+    private bool ImagePackageTypeUnsupported() => cboImagePkgType.SelectedIndex == 1;
+
+    private void cboImageCompression_SelectedIndexChanged(object? sender, EventArgs e) =>
+        UpdateImageOptionVisibility();
+
+    private void cboImagePkgType_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (ImagePackageTypeUnsupported())
+            lblImageStatus.Text = "AC (additional content) packages are not supported yet; choose APP.";
+        UpdateImageOptionVisibility();
+    }
 
     private void RunImageBuildPackage()
     {
         string source = _imageSourcePath!;
-        string output = txtImageOutput.Text.Trim();
+        string output = ImageOutputBox().Text.Trim();
         if (output.Length == 0)
         {
             AppDialog.ShowWarning("Select an output .pkg file.", "Image Tools");
@@ -777,9 +841,17 @@ public partial class MainForm
             return;
         }
         string passcode = ImagePasscode();
-        bool overwrite = chkImageOverwrite.Checked;
+        bool overwrite = ImageOverwriteBox().Checked;
         ulong? sdkVersionOverride = SelectedSdkOverride();
         string? tempDirectory = string.IsNullOrWhiteSpace(txtImageTemp.Text) ? null : txtImageTemp.Text.Trim();
+        if (ImagePackageTypeUnsupported())
+        {
+            AppDialog.ShowWarning("AC (additional content) packages are not supported yet. Choose APP.", "Build package");
+            return;
+        }
+        var settings = new ImageBuildSettings(SelectedCompression(), SelectedKrakenLevel(),
+            (int)nudImageKrakenThreads.Value, (int)nudImagePlayGoChunks.Value,
+            chkImageDrmStandard.Checked ? "standard" : null);
 
         // Best-effort free-space preflight before a long build; the engine re-checks exactly and
         // throws ProsperoInsufficientSpaceException, which the task failure path surfaces as a dialog.
@@ -796,13 +868,16 @@ public partial class MainForm
         lblImageStatus.Text = "Queued: package build. See the Tasks tab.";
         EnqueueTask(PackageTaskTypes.ImageBuildPackage, $"Build package from {Path.GetFileName(source)}",
             (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-                sdkVersionOverride, tempDirectory, progress, token),
+                sdkVersionOverride, tempDirectory, settings, progress, token),
             sourcePath: source, outputPath: output,
             operation: "Build package", sourceFormat: ImageFormatLabel(source), targetFormat: "FPKG",
-            stagePlan: PackageTaskPlans.BuildPackage,
+            stagePlan: PackageTaskPlans.BuildPackageFor(source),
             payload: Payload(("source", source), ("output", output), ("contentId", contentId),
                 ("passcode", passcode), ("overwrite", overwrite.ToString()),
-                ("sdk", sdkVersionOverride?.ToString("X16")), ("temp", tempDirectory)),
+                ("sdk", sdkVersionOverride?.ToString("X16")), ("temp", tempDirectory),
+                ("compression", settings.Compression.ToString()), ("krakenLevel", settings.KrakenLevel.ToString()),
+                ("krakenThreads", settings.KrakenThreads.ToString()), ("playgo", settings.PlayGoChunks.ToString()),
+                ("drm", settings.DrmType)),
             onFinished: task => lblImageStatus.Text = task.Status == PackageTaskStatus.Completed
                 ? $"Built package {Path.GetFileName(output)}."
                 : $"Package build {StatusText(task.Status).ToLowerInvariant()}.");
@@ -827,9 +902,12 @@ public partial class MainForm
         return 0;
     }
 
+    private readonly record struct ImageBuildSettings(Ps5InnerCompression Compression, int KrakenLevel,
+        int KrakenThreads, int PlayGoChunks, string? DrmType);
+
     private static async Task BuildPackageFromSourceAsync(string source, string output, string contentId,
         string passcode, bool overwrite, ulong? sdkVersionOverride, string? tempDirectory,
-        IProgress<PackageTaskProgress> progress, CancellationToken token)
+        ImageBuildSettings settings, IProgress<PackageTaskProgress> progress, CancellationToken token)
     {
         if (!overwrite && File.Exists(output))
             throw new IOException($"The output file already exists: {output}");
@@ -842,7 +920,12 @@ public partial class MainForm
             Passcode = passcode,
             SdkVersionOverride = sdkVersionOverride,
             TempDirectory = tempDirectory,
-            Log = Logger.Info
+            Log = Logger.Info,
+            Compression = settings.Compression,
+            KrakenLevel = settings.KrakenLevel,
+            KrakenThreads = settings.KrakenThreads,
+            PlayGoChunkCount = settings.PlayGoChunks,
+            DrmTypeOverride = settings.DrmType
         };
         var bridge = new Progress<SonyDebugPackageProgress>(value =>
             progress.Report(new PackageTaskProgress(value.Stage, 0, 0, value.CompletedBytes, value.TotalBytes,
@@ -867,37 +950,72 @@ public partial class MainForm
     private void SuggestImageContentId()
     {
         if (!string.IsNullOrWhiteSpace(txtImageContentId.Text) || _imageSourcePath is null) return;
-        string? contentId = TryReadParamContentId(_imageSourcePath, _imageSourceFormat);
-        if (contentId is not null) txtImageContentId.Text = contentId;
+        ImageParamFields fields = TryReadParamFields(_imageSourcePath, _imageSourceFormat);
+        if (fields.ContentId.Length > 0) txtImageContentId.Text = fields.ContentId;
     }
 
-    private static string? TryReadParamContentId(string source, Ps5ImageFormat format)
+    private void RefreshImageBuildInfo()
     {
-        byte[]? bytes = null;
+        if (_imageSourcePath is null)
+        {
+            txtImageTitleId.Clear();
+            txtImageVersion.Clear();
+            return;
+        }
+        ImageParamFields fields = TryReadParamFields(_imageSourcePath, _imageSourceFormat);
+        txtImageTitleId.Text = fields.TitleId;
+        txtImageVersion.Text = fields.ContentVersion;
+    }
+
+    private readonly record struct ImageParamFields(string ContentId, string TitleId, string ContentVersion);
+
+    private static ImageParamFields TryReadParamFields(string source, Ps5ImageFormat format)
+    {
+        byte[]? bytes = TryReadParamBytes(source, format);
+        if (bytes is null || bytes.Length == 0) return default;
+        try
+        {
+            using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(bytes);
+            System.Text.Json.JsonElement root = document.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return default;
+            return new ImageParamFields(ReadString(root, "contentId"), ReadString(root, "titleId"),
+                ReadString(root, "contentVersion"));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return default;
+        }
+    }
+
+    private static string ReadString(System.Text.Json.JsonElement root, string name) =>
+        root.TryGetProperty(name, out System.Text.Json.JsonElement element) &&
+        element.ValueKind == System.Text.Json.JsonValueKind.String
+            ? element.GetString() ?? string.Empty
+            : string.Empty;
+
+    private static byte[]? TryReadParamBytes(string source, Ps5ImageFormat format)
+    {
         try
         {
             if (Directory.Exists(source))
             {
                 string path = Path.Combine(source, "sce_sys", "param.json");
-                if (File.Exists(path)) bytes = File.ReadAllBytes(path);
+                if (File.Exists(path)) return File.ReadAllBytes(path);
+                return null;
             }
-            else
+            switch (format)
             {
-                switch (format)
-                {
-                    case Ps5ImageFormat.Exfat:
-                        using (var volume = new ExfatVolume(File.OpenRead(source)))
-                            bytes = volume.ReadAllBytes("sce_sys/param.json", 4 * 1024 * 1024);
-                        break;
-                    case Ps5ImageFormat.Ufs2:
-                        using (var volume = new Ufs2Volume(source))
-                            bytes = volume.ReadAllBytes("sce_sys/param.json", 4 * 1024 * 1024);
-                        break;
-                    case Ps5ImageFormat.Pfs:
-                        using (var volume = FfpfscVolume.Open(source))
-                            bytes = volume.ReadAllBytes("sce_sys/param.json", 4 * 1024 * 1024);
-                        break;
-                }
+                case Ps5ImageFormat.Exfat:
+                    using (var volume = new ExfatVolume(File.OpenRead(source)))
+                        return volume.ReadAllBytes("sce_sys/param.json", 4 * 1024 * 1024);
+                case Ps5ImageFormat.Ufs2:
+                    using (var volume = new Ufs2Volume(source))
+                        return volume.ReadAllBytes("sce_sys/param.json", 4 * 1024 * 1024);
+                case Ps5ImageFormat.Pfs:
+                    using (var volume = FfpfscVolume.Open(source))
+                        return volume.ReadAllBytes("sce_sys/param.json", 4 * 1024 * 1024);
+                default:
+                    return null;
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
@@ -905,20 +1023,5 @@ public partial class MainForm
         {
             return null;
         }
-
-        if (bytes is null || bytes.Length == 0) return null;
-        try
-        {
-            using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(bytes);
-            if (document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                document.RootElement.TryGetProperty("contentId", out System.Text.Json.JsonElement element) &&
-                element.ValueKind == System.Text.Json.JsonValueKind.String)
-                return element.GetString();
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return null;
-        }
-        return null;
     }
 }

@@ -14,7 +14,7 @@ public sealed class FilesystemImageGameReader
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string fullPath = Path.GetFullPath(path);
         if (!Path.GetExtension(fullPath).Equals(".exfat", StringComparison.OrdinalIgnoreCase))
-            throw new NotSupportedException("This reader accepts raw exFAT images; use FfpkgGameReader for UFS2 FFPKG images.");
+            throw new NotSupportedException("This reader accepts raw exFAT images; use FfpkgGameReader for FFPKG images.");
         using var image = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read,
             1024 * 1024, FileOptions.RandomAccess);
         using var volume = new ExfatVolume(image, leaveOpen: true);

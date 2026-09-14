@@ -145,7 +145,7 @@ public partial class FfpkgEditorForm : DarkForm
         if (_operations.Count == 0) return;
         if (AppDialog.ShowWarning(
                 $"Apply {_operations.Count:N0} queued change(s)?\n\n" +
-                "All changes extract and rebuild the UFS2 image beside the original. The original is replaced only after " +
+                "All changes extract and rebuild the FFPKG image beside the original. The original is replaced only after " +
                 "full verification. Large game images require substantial free space and time.",
                 "Apply FFPKG changes?", DarkDialogButton.YesNo) != DialogResult.Yes) return;
 
@@ -169,7 +169,7 @@ public partial class FfpkgEditorForm : DarkForm
             lblStatus.Text = $"Completed and verified {result.Verification.FileCount:N0} files.";
             AppDialog.ShowInformation(
                 $"All FFPKG changes were applied successfully.\n\n" +
-                $"Mode: Verified transactional UFS2 rebuild\n" +
+                $"Mode: Verified transactional FFPKG rebuild\n" +
                 $"Files: {result.Verification.FileCount:N0}\n" +
                 $"Directories: {result.Verification.DirectoryCount:N0}\n" +
                 $"Manifest SHA-256: {result.Verification.ManifestSha256}",

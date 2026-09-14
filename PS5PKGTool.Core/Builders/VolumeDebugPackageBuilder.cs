@@ -39,19 +39,27 @@ public static class VolumeDebugPackageBuilder
         if (!File.Exists(source)) throw new FileNotFoundException("The source image was not found.", source);
 
         SonyDebugPackageCredentials credentials = SonyDebugPackageCredentials.Create(options.ContentId, options.Passcode);
-        progress?.Report(new SonyDebugPackageProgress("Reading image filesystem", 0, 0, Path.GetFileName(source)));
+        progress?.Report(new SonyDebugPackageProgress("Detecting image format", 0, 0, Path.GetFileName(source)));
 
         using IDisposable volume = OpenVolume(source, out IReadOnlyList<VolumeFile> entries,
-            out Func<string, Stream> open);
+            out Func<string, Stream> open, out string formatName);
+        string readStage = $"Reading {formatName} filesystem";
+
+        int totalEntries = entries.Count;
+        progress?.Report(new SonyDebugPackageProgress(readStage, 0, totalEntries,
+            Path.GetFileName(source)));
 
         var files = new List<EngineInnerFile>();
         var sceSys = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         long sourceBytes = 0;
         int sourceFiles = 0;
+        int processedEntries = 0;
 
         foreach (VolumeFile entry in entries.OrderBy(item => item.Path, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(new SonyDebugPackageProgress(readStage, ++processedEntries,
+                totalEntries, entry.Path));
             if (entry.IsDirectory || entry.IsSymlink) continue;
             sourceBytes += entry.Size;
             sourceFiles++;
@@ -102,7 +110,11 @@ public static class VolumeDebugPackageBuilder
         {
             Log = options.Log ?? (_ => { }),
             Progress = new RelayProgress<ProsperoBuildProgress>(value =>
-                progress?.Report(new SonyDebugPackageProgress(value.Stage, value.Done, value.Total, string.Empty)))
+                progress?.Report(new SonyDebugPackageProgress(
+                    value.StageId is { } stage ? ProsperoBuildStages.Name(stage) : value.Stage,
+                    value.BytesTotal > 0 ? value.BytesDone : value.Done,
+                    value.BytesTotal > 0 ? value.BytesTotal : value.Total,
+                    value.CurrentPath ?? string.Empty)))
         };
 
         EngineBuildResult result = EngineBuilder.Build(files, new DebugPackageBuildOptions
@@ -111,7 +123,11 @@ public static class VolumeDebugPackageBuilder
             ContentId = credentials.ContentId,
             Passcode = credentials.Passcode,
             ParamJson = paramJson,
-            Compression = ProsperoInnerCompressionMode.Stored,
+            Compression = options.Compression.ToEngine(),
+            KrakenLevel = options.KrakenLevel,
+            KrakenThreads = options.KrakenThreads,
+            PlayGoChunkCount = options.PlayGoChunkCount,
+            DrmTypeOverride = options.DrmTypeOverride,
             OuterSeed = options.Seed,
             DeterministicEntryKeys = options.Seed is { Length: 16 },
             SdkVersionOverride = options.SdkVersionOverride,
@@ -133,7 +149,7 @@ public static class VolumeDebugPackageBuilder
     }
 
     private static IDisposable OpenVolume(string imagePath, out IReadOnlyList<VolumeFile> entries,
-        out Func<string, Stream> open)
+        out Func<string, Stream> open, out string formatName)
     {
         var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20,
             FileOptions.RandomAccess);
@@ -145,6 +161,7 @@ public static class VolumeDebugPackageBuilder
             {
                 case Ps5ImageFormat.Pfs:
                 {
+                    formatName = "FFPFSC";
                     FfpfscVolume volume = FfpfscVolume.Open(stream, imagePath, leaveOpen: false);
                     if (volume.InnerFilesystemKind == FfpfscInnerFilesystemKind.Pfs)
                     {
@@ -160,6 +177,7 @@ public static class VolumeDebugPackageBuilder
                 }
                 case Ps5ImageFormat.Ufs2:
                 {
+                    formatName = "FFPKG";
                     var volume = new Ufs2Volume(stream, imagePath, leaveOpen: false);
                     entries = volume.Entries
                         .Select(item => new VolumeFile(Normalize(item.Path), item.IsDirectory, item.IsSymlink,
@@ -170,6 +188,7 @@ public static class VolumeDebugPackageBuilder
                 }
                 case Ps5ImageFormat.Exfat:
                 {
+                    formatName = "exFAT";
                     var volume = new ExfatVolume(stream, leaveOpen: false);
                     entries = volume.Entries
                         .Select(item => new VolumeFile(Normalize(item.Path), item.IsDirectory, false, item.Size))

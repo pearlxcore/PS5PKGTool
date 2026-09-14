@@ -21,6 +21,22 @@ public sealed class SonyDebugPackageBuildOptions
 
     /// <summary>Optional sink for engine log lines (free-space warnings, stale workspace sweep).</summary>
     public Action<string>? Log { get; init; }
+
+    /// <summary>Inner-image compression. Default is Auto (Kraken where it helps, stored otherwise).</summary>
+    public Ps5InnerCompression Compression { get; init; } = Ps5InnerCompression.Auto;
+
+    /// <summary>Kraken level recorded in the compressed header (Oodle naming, -4..9). Header-only here.</summary>
+    public int KrakenLevel { get; init; } = 7;
+
+    /// <summary>Blocks encoded concurrently; 0 selects the processor count.</summary>
+    public int KrakenThreads { get; init; }
+
+    /// <summary>PlayGo chunk count for the generated project; 1 matches the debug/nwonly profile.</summary>
+    public int PlayGoChunkCount { get; init; } = 1;
+
+    /// <summary>Optional DRM token to force in param.json. Null preserves the source token;
+    /// "standard" is the opt-in override surfaced by the Advanced build setting.</summary>
+    public string? DrmTypeOverride { get; init; }
 }
 
 public readonly record struct SonyDebugPackageProgress(string Stage, long CompletedBytes,
@@ -62,7 +78,12 @@ public static class SonyDebugPackageBuilder
                 Seed = options.Seed,
                 SdkVersionOverride = options.SdkVersionOverride,
                 TempDirectory = options.TempDirectory,
-                Log = options.Log
+                Log = options.Log,
+                Compression = options.Compression,
+                KrakenLevel = options.KrakenLevel,
+                KrakenThreads = options.KrakenThreads,
+                PlayGoChunkCount = options.PlayGoChunkCount,
+                DrmTypeOverride = options.DrmTypeOverride
             },
             progress, cancellationToken).ConfigureAwait(false);
     }

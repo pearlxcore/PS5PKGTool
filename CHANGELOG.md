@@ -2,6 +2,18 @@
 
 All notable changes to PS5 PKG Tool are documented here. This project uses semantic versioning.
 
+## [Unreleased]
+
+### Image tools
+
+- The Tools tab keeps the Job (source, action) pinned at the top with a pinned status and Run/Cancel footer. When the action is Create / Convert, the targets are tabs (exFAT, FFPKG, FFPFSC, Debug Package), each holding its own output and options. Other actions use a single Options tab (output/passcode).
+- The Source row is now driven by the library selection; the Use Selected and Choose File buttons were removed.
+- Debug package builds now expose build settings: compression (Auto - Kraken where it helps, Kraken forced, or Uncompressed), Kraken level and thread count, and PlayGo chunk count (default 1). The default is Auto/Kraken, so freshly built packages are smaller; choose Uncompressed to reproduce the older stored packages byte-for-byte.
+- The build panel shows the source Title ID and Version (read from param.json) next to the detected format, and a package type selector. APP is supported; AC (additional content) is shown but cannot be built yet and disables Run.
+- Advanced build setting: an off-by-default "Force DRM type to standard" checkbox. Left off, the source DRM token is preserved verbatim; checked, it forces "standard". (A raw DRM token entry is intentionally not exposed.)
+- The SDK version combo now includes an Auto option (use the source SDK) alongside the explicit release list; only an explicit release stamps param.json and the module .sceversion files.
+- Engine refresh (ProsperoPkgTool 88dd924): inner compression, Kraken level, Kraken thread count, PlayGo chunk count, and the opt-in DRM override are forwarded to the engine for both dump and image builds; the outer-PFS SHA3/XTS passes are parallel now.
+
 ## [1.0.0] - 2026-09-12
 
 First release. PS5 PKG Tool is a Windows library manager and image tool for PS5 dumps, filesystem images, and debug packages.

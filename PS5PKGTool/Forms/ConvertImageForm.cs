@@ -7,7 +7,7 @@ public partial class ConvertImageForm : DarkUI.Forms.DarkForm
     private static readonly (Ps5ImageConversionTarget Target, string Name, string Extension, string Filter)[] Targets =
     [
         (Ps5ImageConversionTarget.Exfat, "exFAT image", ".exfat", "exFAT image (*.exfat)|*.exfat"),
-        (Ps5ImageConversionTarget.Ffpkg, "FFPKG (UFS2) image", ".ffpkg", "FFPKG image (*.ffpkg)|*.ffpkg"),
+        (Ps5ImageConversionTarget.Ffpkg, "FFPKG image", ".ffpkg", "FFPKG image (*.ffpkg)|*.ffpkg"),
         (Ps5ImageConversionTarget.Ffpfsc, "FFPFSC image", ".ffpfsc", "FFPFSC image (*.ffpfsc)|*.ffpfsc")
     ];
 

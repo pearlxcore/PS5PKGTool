@@ -27,6 +27,22 @@ public sealed class ProsperoDebugPackageBuildOptions
 
     /// <summary>Optional sink for engine log lines (free-space warnings, stale workspace sweep).</summary>
     public Action<string>? Log { get; init; }
+
+    /// <summary>Inner-image compression. Default is Auto (Kraken where it helps, stored otherwise).</summary>
+    public Ps5InnerCompression Compression { get; init; } = Ps5InnerCompression.Auto;
+
+    /// <summary>Kraken level recorded in the compressed header (Oodle naming, -4..9). Header-only here.</summary>
+    public int KrakenLevel { get; init; } = 7;
+
+    /// <summary>Blocks encoded concurrently; 0 selects the processor count.</summary>
+    public int KrakenThreads { get; init; }
+
+    /// <summary>PlayGo chunk count for the generated project; 1 matches the debug/nwonly profile.</summary>
+    public int PlayGoChunkCount { get; init; } = 1;
+
+    /// <summary>Optional DRM token to force in param.json. Null preserves the source token;
+    /// "standard" is the opt-in override surfaced by the Advanced build setting.</summary>
+    public string? DrmTypeOverride { get; init; }
 }
 
 /// <summary>
@@ -57,20 +73,28 @@ public static class ProsperoDebugPackageBuilder
         if (!Directory.Exists(source)) throw new DirectoryNotFoundException(source);
 
         SonyDebugPackageCredentials credentials = SonyDebugPackageCredentials.Create(options.ContentId, options.Passcode);
-        progress?.Report(new SonyDebugPackageProgress("Building PS5 debug package", 0, 0, Path.GetFileName(destination)));
+        progress?.Report(new SonyDebugPackageProgress("Reading source folder", 0, 0, Path.GetFileName(source)));
 
         var files = new List<EngineInnerFile>();
         var sceSys = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         long sourceBytes = 0;
         int sourceFiles = 0;
 
-        foreach (string path in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)
-                     .OrderBy(item => item, StringComparer.Ordinal))
+        string[] sourcePaths = Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)
+            .OrderBy(item => item, StringComparer.Ordinal)
+            .ToArray();
+        int processedFiles = 0;
+        progress?.Report(new SonyDebugPackageProgress("Reading source folder", 0, sourcePaths.Length,
+            Path.GetFileName(source)));
+
+        foreach (string path in sourcePaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string relative = Path.GetRelativePath(source, path).Replace('\\', '/');
             sourceBytes += new FileInfo(path).Length;
             sourceFiles++;
+            progress?.Report(new SonyDebugPackageProgress("Reading source folder", ++processedFiles,
+                sourcePaths.Length, relative));
 
             bool publishing = SourceFolderValidator.IsPublishingArtifact(relative) ||
                 Path.GetExtension(relative).Equals(".gp4", StringComparison.OrdinalIgnoreCase);
@@ -118,7 +142,11 @@ public static class ProsperoDebugPackageBuilder
         {
             Log = options.Log ?? (_ => { }),
             Progress = new RelayProgress<ProsperoBuildProgress>(value =>
-                progress?.Report(new SonyDebugPackageProgress(value.Stage, value.Done, value.Total, string.Empty)))
+                progress?.Report(new SonyDebugPackageProgress(
+                    value.StageId is { } stage ? ProsperoBuildStages.Name(stage) : value.Stage,
+                    value.BytesTotal > 0 ? value.BytesDone : value.Done,
+                    value.BytesTotal > 0 ? value.BytesTotal : value.Total,
+                    value.CurrentPath ?? string.Empty)))
         };
 
         DebugPackageBuildResult result = EngineBuilder.Build(files, new DebugPackageBuildOptions
@@ -127,7 +155,11 @@ public static class ProsperoDebugPackageBuilder
             ContentId = credentials.ContentId,
             Passcode = credentials.Passcode,
             ParamJson = paramJson,
-            Compression = ProsperoInnerCompressionMode.Stored,
+            Compression = options.Compression.ToEngine(),
+            KrakenLevel = options.KrakenLevel,
+            KrakenThreads = options.KrakenThreads,
+            PlayGoChunkCount = options.PlayGoChunkCount,
+            DrmTypeOverride = options.DrmTypeOverride,
             OuterSeed = options.Seed,
             DeterministicEntryKeys = options.Seed is { Length: 16 },
             SdkVersionOverride = options.SdkVersionOverride,

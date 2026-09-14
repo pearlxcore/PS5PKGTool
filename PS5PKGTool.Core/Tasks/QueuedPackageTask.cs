@@ -39,9 +39,13 @@ public readonly record struct PackageTaskProgress(
                     ? Math.Clamp((double)Step / TotalSteps, 0d, 1d)
                     : 0d;
 
-    /// <summary>Fraction of the task's steps completed; single-step tasks mirror the step percent.</summary>
+    /// <summary>
+    /// Fraction of the task completed: completed steps plus the current step's own fraction. Using
+    /// the within-step fraction (not just the step index) keeps the task bar advancing smoothly
+    /// instead of jumping to a step boundary and then sitting still.
+    /// </summary>
     public double TaskPercent => TotalSteps > 1
-        ? Math.Clamp((double)Step / TotalSteps, 0d, 1d)
+        ? Math.Clamp((Step + OperationPercent) / TotalSteps, 0d, 1d)
         : OperationPercent;
 
     /// <summary>Backward-compatible alias for the current step percent.</summary>
@@ -86,11 +90,36 @@ public static class PackageTaskPlans
         new("Verify", "verif", "check", "compar")
     ];
 
-    public static readonly PackageTaskStage[] BuildPackage =
+    /// <summary>Build package from an unpacked dump folder.</summary>
+    public static readonly PackageTaskStage[] BuildPackageDump =
     [
-        new("Read", "reading image filesystem"),
-        new("Build", "build", "inner image", "outer pfs", "creating", "writing")
+        new("Read source", "reading source folder"),
+        new("Inner image", "inner image"),
+        new("NAPS", "naps"),
+        new("Outer PFS", "outer pfs"),
+        new("CNT", "cnt"),
+        new("Finalize", "finaliz")
     ];
+
+    /// <summary>
+    /// Build package directly from a filesystem image. Adds a format-detect phase and a
+    /// format-named read phase (exFAT / UFS2-FFPKG / FFPFSC) before the shared build stages.
+    /// </summary>
+    public static readonly PackageTaskStage[] BuildPackageImage =
+    [
+        new("Detect image", "detecting image format"),
+        new("Read image", "reading image filesystem", "reading exfat", "reading ufs2", "reading ffpkg",
+            "reading ffpfsc", "reading pfs"),
+        new("Inner image", "inner image"),
+        new("NAPS", "naps"),
+        new("Outer PFS", "outer pfs"),
+        new("CNT", "cnt"),
+        new("Finalize", "finaliz")
+    ];
+
+    /// <summary>Selects the build-package step plan for a dump folder or an image file.</summary>
+    public static PackageTaskStage[] BuildPackageFor(string sourcePath) =>
+        Directory.Exists(sourcePath) ? BuildPackageDump : BuildPackageImage;
 
     public static readonly PackageTaskStage[] Ampr =
     [
