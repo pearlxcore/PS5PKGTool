@@ -35,8 +35,30 @@ public static class SonyPackageExtraction
                 ProsperoInnerPfsReader.Entry[] files = engine.Files.ToArray();
                 if (files.Length == 0)
                     throw new InvalidDataException("The package inner image could not be decoded for extraction.");
-                total = files.Sum(file => file.Size);
-                fileCount = files.Length;
+
+                // Metadata such as sce_sys/param.json lives in the CNT container rather than the
+                // inner PFS, so extracting only the inner tree silently drops it. Collect the
+                // container's logical content paths as well, the same way GameFileSystem does;
+                // the inner PFS wins for any path present in both.
+                var innerPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (ProsperoInnerPfsReader.Entry file in files)
+                {
+                    string path = engine.ToRelativePath(file);
+                    if (path.Length > 0) innerPaths.Add(path);
+                }
+
+                var cntEntries = new List<(uint Id, string Path, long Size)>();
+                foreach ((uint id, string path, long size) in engine.ListReadableEntries())
+                {
+                    string relative = path.Replace('\\', '/').Trim('/');
+                    // Skip the container's internal bookkeeping entries; they are not user files.
+                    if (relative.Length == 0 || !relative.Contains('/')) continue;
+                    if (innerPaths.Contains(relative)) continue;
+                    cntEntries.Add((id, relative, size));
+                }
+
+                total = files.Sum(file => file.Size) + cntEntries.Sum(entry => entry.Size);
+                fileCount = files.Length + cntEntries.Count;
                 foreach (ProsperoInnerPfsReader.Entry file in files)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -59,6 +81,17 @@ public static class SonyPackageExtraction
                         completed += read;
                         progress?.Report(new SonyPackageExtractProgress(completed, total, relative));
                     }
+                }
+
+                foreach ((uint id, string relative, long size) in cntEntries)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string target = ResolveContainedPath(staging, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    byte[] content = engine.ReadCntEntry(id, size);
+                    await File.WriteAllBytesAsync(target, content, cancellationToken).ConfigureAwait(false);
+                    completed += content.LongLength;
+                    progress?.Report(new SonyPackageExtractProgress(completed, total, relative));
                 }
             }
             else
