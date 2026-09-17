@@ -352,16 +352,10 @@ partial class MainForm
     private DarkUI.Controls.DarkComboBox cboImageDensity = null!;
     private DarkUI.Controls.DarkLabel lblImageMinFree = null!;
     private DarkUI.Controls.DarkNumericUpDown nudImageMinFree = null!;
-    private DarkUI.Controls.DarkLabel lblImageContentId = null!;
-    private DarkUI.Controls.DarkTextBox txtImageContentId = null!;
     private DarkUI.Controls.DarkLabel lblImagePasscode = null!;
     private DarkUI.Controls.DarkTextBox txtImagePasscode = null!;
     private DarkUI.Controls.DarkLabel lblImageSdk = null!;
     private DarkUI.Controls.DarkComboBox cboImageSdk = null!;
-    private DarkUI.Controls.DarkLabel lblImageTitleId = null!;
-    private DarkUI.Controls.DarkTextBox txtImageTitleId = null!;
-    private DarkUI.Controls.DarkLabel lblImageVersion = null!;
-    private DarkUI.Controls.DarkTextBox txtImageVersion = null!;
     private DarkUI.Controls.DarkLabel lblImagePkgType = null!;
     private DarkUI.Controls.DarkComboBox cboImagePkgType = null!;
     private DarkUI.Controls.DarkLabel lblImageCompression = null!;
@@ -374,8 +368,6 @@ partial class MainForm
     private DarkUI.Controls.DarkNumericUpDown nudImagePlayGoChunks = null!;
     private DarkUI.Controls.DarkLabel lblImageDrm = null!;
     private DarkUI.Controls.DarkComboBox cboImageDrm = null!;
-    private DarkUI.Controls.DarkLabel lblImageTitle = null!;
-    private DarkUI.Controls.DarkTextBox txtImageTitle = null!;
     private DarkUI.Controls.DarkCheckBox chkImageFakeSign = null!;
     private DarkUI.Controls.DarkCheckBox chkImageRightSprx = null!;
     private DarkUI.Controls.DarkCheckBox chkImageDeterministic = null!;
@@ -641,17 +633,9 @@ partial class MainForm
         sectionJob = new DarkUI.Controls.DarkSectionPanel();
         lblImageSourcePath = new DarkUI.Controls.DarkLabel();
         lblImageFormat = new DarkUI.Controls.DarkLabel();
-        lblImageContentId = new DarkUI.Controls.DarkLabel();
-        txtImageContentId = new DarkUI.Controls.DarkTextBox();
-        lblImageTitleId = new DarkUI.Controls.DarkLabel();
-        txtImageTitleId = new DarkUI.Controls.DarkTextBox();
-        lblImageVersion = new DarkUI.Controls.DarkLabel();
-        txtImageVersion = new DarkUI.Controls.DarkTextBox();
         lblImageAction = new DarkUI.Controls.DarkLabel();
         cboImageAction = new DarkUI.Controls.DarkComboBox();
         lblImageSource = new DarkUI.Controls.DarkLabel();
-        lblImageTitle = new DarkUI.Controls.DarkLabel();
-        txtImageTitle = new DarkUI.Controls.DarkTextBox();
         tabsImageTargets = new DarkUI.Controls.DarkTabControl();
         tabTargetExfat = new DarkUI.Controls.DarkTabPage();
         lblOutExfat = new DarkUI.Controls.DarkLabel();
@@ -3441,17 +3425,9 @@ partial class MainForm
         // 
         sectionJob.Controls.Add(lblImageSourcePath);
         sectionJob.Controls.Add(lblImageFormat);
-        sectionJob.Controls.Add(lblImageContentId);
-        sectionJob.Controls.Add(txtImageContentId);
-        sectionJob.Controls.Add(lblImageTitleId);
-        sectionJob.Controls.Add(txtImageTitleId);
-        sectionJob.Controls.Add(lblImageVersion);
-        sectionJob.Controls.Add(txtImageVersion);
         sectionJob.Controls.Add(lblImageAction);
         sectionJob.Controls.Add(cboImageAction);
         sectionJob.Controls.Add(lblImageSource);
-        sectionJob.Controls.Add(lblImageTitle);
-        sectionJob.Controls.Add(txtImageTitle);
         sectionJob.Dock = DockStyle.Fill;
         sectionJob.Location = new Point(10, 8);
         sectionJob.Margin = new Padding(0, 0, 0, 6);
@@ -3480,62 +3456,6 @@ partial class MainForm
         lblImageFormat.TabIndex = 4;
         lblImageFormat.Text = "Detected: -";
         // 
-        // lblImageContentId
-        // 
-        lblImageContentId.Location = new Point(456, 84);
-        lblImageContentId.Name = "lblImageContentId";
-        lblImageContentId.Size = new Size(90, 15);
-        lblImageContentId.TabIndex = 32;
-        lblImageContentId.Text = "Content ID:";
-        lblImageContentId.TextAlign = ContentAlignment.MiddleRight;
-        lblImageContentId.Visible = false;
-        // 
-        // txtImageContentId
-        // 
-        txtImageContentId.Location = new Point(552, 80);
-        txtImageContentId.Name = "txtImageContentId";
-        txtImageContentId.Size = new Size(249, 23);
-        txtImageContentId.TabIndex = 33;
-        txtImageContentId.Visible = false;
-        // 
-        // lblImageTitleId
-        // 
-        lblImageTitleId.Location = new Point(818, 84);
-        lblImageTitleId.Name = "lblImageTitleId";
-        lblImageTitleId.Size = new Size(56, 15);
-        lblImageTitleId.TabIndex = 38;
-        lblImageTitleId.Text = "Title ID:";
-        lblImageTitleId.TextAlign = ContentAlignment.MiddleRight;
-        lblImageTitleId.Visible = false;
-        // 
-        // txtImageTitleId
-        // 
-        txtImageTitleId.Location = new Point(880, 80);
-        txtImageTitleId.Name = "txtImageTitleId";
-        txtImageTitleId.ReadOnly = true;
-        txtImageTitleId.Size = new Size(105, 23);
-        txtImageTitleId.TabIndex = 39;
-        txtImageTitleId.Visible = false;
-        // 
-        // lblImageVersion
-        // 
-        lblImageVersion.Location = new Point(1006, 84);
-        lblImageVersion.Name = "lblImageVersion";
-        lblImageVersion.Size = new Size(52, 15);
-        lblImageVersion.TabIndex = 40;
-        lblImageVersion.Text = "Version:";
-        lblImageVersion.TextAlign = ContentAlignment.MiddleRight;
-        lblImageVersion.Visible = false;
-        // 
-        // txtImageVersion
-        // 
-        txtImageVersion.Location = new Point(1064, 80);
-        txtImageVersion.Name = "txtImageVersion";
-        txtImageVersion.ReadOnly = true;
-        txtImageVersion.Size = new Size(105, 23);
-        txtImageVersion.TabIndex = 41;
-        txtImageVersion.Visible = false;
-        // 
         // lblImageAction
         // 
         lblImageAction.Location = new Point(12, 83);
@@ -3561,25 +3481,6 @@ partial class MainForm
         lblImageSource.TabIndex = 0;
         lblImageSource.Text = "Source:";
         lblImageSource.TextAlign = ContentAlignment.MiddleRight;
-        // 
-        // lblImageTitle
-        // 
-        lblImageTitle.Location = new Point(456, 55);
-        lblImageTitle.Name = "lblImageTitle";
-        lblImageTitle.Size = new Size(90, 15);
-        lblImageTitle.TabIndex = 60;
-        lblImageTitle.Text = "Title:";
-        lblImageTitle.TextAlign = ContentAlignment.MiddleRight;
-        lblImageTitle.Visible = false;
-        // 
-        // txtImageTitle
-        // 
-        txtImageTitle.Location = new Point(552, 51);
-        txtImageTitle.Name = "txtImageTitle";
-        txtImageTitle.ReadOnly = true;
-        txtImageTitle.Size = new Size(617, 23);
-        txtImageTitle.TabIndex = 61;
-        txtImageTitle.Visible = false;
         // 
         // tabsImageTargets
         // 

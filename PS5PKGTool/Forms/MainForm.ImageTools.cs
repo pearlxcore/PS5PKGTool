@@ -37,6 +37,7 @@ public partial class MainForm
     private bool _suppressImageEvents;
 
     private string? _imageContentIdSource;
+    private string _imageContentId = string.Empty;
 
     private ImageToolTarget? CurrentImageTarget =>
         cboImageAction.SelectedItem as string == ImageActionConvert ? TabTarget(tabsImageTargets.SelectedTab) : null;
@@ -59,6 +60,46 @@ public partial class MainForm
     };
 
 
+    private readonly List<(DarkUI.Controls.DarkTabPage Page, (Control Control, Point Base)[] Items)> _centeredImageTabs = [];
+
+    /// <summary>
+    /// Centers the option controls on each target tab horizontally so they stay centered when the
+    /// window is maximized, rather than hugging the left or right edge.
+    /// </summary>
+    private void InitializeCenteredImageTabs()
+    {
+        RegisterCenteredTab(tabTargetExfat);
+        RegisterCenteredTab(tabTargetFfpfsc);
+        RegisterCenteredTab(tabTargetFfpkg);
+        RegisterCenteredTab(tabTargetDebug);
+    }
+
+    private void RegisterCenteredTab(DarkUI.Controls.DarkTabPage page)
+    {
+        var items = new List<(Control, Point)>();
+        foreach (Control control in page.Controls)
+        {
+            // Drop the designer's right-anchor: centering is driven by this handler instead.
+            control.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            items.Add((control, control.Location));
+        }
+        if (items.Count == 0) return;
+        _centeredImageTabs.Add((page, items.ToArray()));
+        page.Resize += (_, _) => CenterImageTab(page);
+        CenterImageTab(page);
+    }
+
+    private void CenterImageTab(DarkUI.Controls.DarkTabPage page)
+    {
+        var entry = _centeredImageTabs.FirstOrDefault(candidate => ReferenceEquals(candidate.Page, page));
+        if (entry.Items is null || entry.Items.Length == 0) return;
+        int minX = entry.Items.Min(item => item.Base.X);
+        int maxX = entry.Items.Max(item => item.Base.X + item.Control.Width);
+        int offset = ((page.ClientSize.Width - (maxX - minX)) / 2) - minX;
+        foreach ((Control control, Point baseLocation) in entry.Items)
+            control.Location = new Point(Math.Max(0, baseLocation.X + offset), baseLocation.Y);
+    }
+
     private void RefreshImageTools() => SyncImageSourceFromLibrary();
 
     private void SyncImageSourceFromLibrary()
@@ -74,6 +115,7 @@ public partial class MainForm
     {
         _imageSourcePath = path;
         _imageContentIdSource = null;
+        _imageContentId = string.Empty;
         if (path is null)
         {
             _imageSourceFormat = Ps5ImageFormat.Unknown;
@@ -289,15 +331,6 @@ public partial class MainForm
 
         // Target-specific option controls live in their own target tab, so they are always shown
         // within that tab. Only the shared Job fields and the non-convert Options tab are toggled.
-        lblImageContentId.Visible = showDebug;
-        txtImageContentId.Visible = showDebug;
-        lblImageTitleId.Visible = showDebug;
-        txtImageTitleId.Visible = showDebug;
-        lblImageVersion.Visible = showDebug;
-        txtImageVersion.Visible = showDebug;
-        lblImageTitle.Visible = showDebug;
-        txtImageTitle.Visible = showDebug;
-
         lblImageOutput.Visible = extract;
         txtImageOutput.Visible = extract;
         btnImageBrowseOutput.Visible = extract;
@@ -309,11 +342,7 @@ public partial class MainForm
         if (convert)
         {
             SuggestImageOutput(ImageTargetExtension(target ?? ImageToolTarget.Ffpfsc));
-            if (showDebug)
-            {
-                SuggestImageContentId();
-                RefreshImageBuildInfo();
-            }
+            if (showDebug) SuggestImageContentId();
         }
         else if (extract) SuggestImageOutput("-files");
 
@@ -1052,10 +1081,12 @@ public partial class MainForm
             AppDialog.ShowWarning("Select an output .pkg file.", "Image Tools");
             return;
         }
-        string contentId = txtImageContentId.Text.Trim();
+        string contentId = _imageContentId.Trim();
         if (contentId.Length == 0)
         {
-            AppDialog.ShowWarning("Enter the package content ID.", "Image Tools");
+            AppDialog.ShowWarning(
+                "The source does not contain a content ID, so a package cannot be built from it.",
+                "Build package");
             return;
         }
         string passcode = ImagePasscode();
@@ -1284,32 +1315,22 @@ public partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Reads the content ID from the selected source's param once per source; the build tab no longer
+    /// asks for it (it is not user-editable), so an empty result means the source cannot be built.
+    /// </summary>
     private void SuggestImageContentId()
-    {
-        if (_imageSourcePath is null) return;
-        // Fill once per source so a manual edit is not clobbered when the target tab changes.
-        if (string.Equals(_imageContentIdSource, _imageSourcePath, StringComparison.Ordinal)) return;
-        ImageParamFields fields = TryReadParamFields(_imageSourcePath, _imageSourceFormat);
-        if (fields.ContentId.Length > 0)
-        {
-            txtImageContentId.Text = fields.ContentId;
-            _imageContentIdSource = _imageSourcePath;
-        }
-    }
-
-    private void RefreshImageBuildInfo()
     {
         if (_imageSourcePath is null)
         {
-            txtImageTitle.Clear();
-            txtImageTitleId.Clear();
-            txtImageVersion.Clear();
+            _imageContentId = string.Empty;
+            _imageContentIdSource = null;
             return;
         }
+        if (string.Equals(_imageContentIdSource, _imageSourcePath, StringComparison.Ordinal)) return;
         ImageParamFields fields = TryReadParamFields(_imageSourcePath, _imageSourceFormat);
-        txtImageTitle.Text = fields.TitleName;
-        txtImageTitleId.Text = fields.TitleId;
-        txtImageVersion.Text = fields.ContentVersion;
+        _imageContentId = fields.ContentId;
+        _imageContentIdSource = _imageSourcePath;
     }
 
     private readonly record struct ImageParamFields(string ContentId, string TitleId, string ContentVersion,

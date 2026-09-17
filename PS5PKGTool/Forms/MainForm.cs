@@ -97,6 +97,7 @@ public partial class MainForm : DarkForm
         RefreshImageTools();
         InitializeImageSdkList();
         InitializeImageBuildLists();
+        InitializeCenteredImageTabs();
         ApplyDefaultCredentials();
         _pendingExternalPath = externalPath;
     }
@@ -888,6 +889,22 @@ public partial class MainForm : DarkForm
 
     private void btnRawOriginal_Click(object? sender, EventArgs e) => ShowRawJson(formatted: false);
 
+    /// <summary>Decodes the FIH signed byte, whose value selects the finalized debug vs retail layout.</summary>
+    private static string DescribeFihSignedByte(byte value) => value switch
+    {
+        0x00 => "0x00 (finalized debug / FPKG)",
+        0x80 => "0x80 (finalized retail)",
+        _ => $"0x{value:X2}"
+    };
+
+    /// <summary>Labels the CNT content type where the value is known, otherwise shows the raw hex.</summary>
+    private static string DescribeCntContentType(uint value) => value switch
+    {
+        0x20 => "Application (0x00000020)",
+        0x21 => "Additional content (0x00000021)",
+        _ => $"0x{value:X8}"
+    };
+
     private void PopulateOverview(Ps5GameInfo game)
     {
         var table = new DataTable();
@@ -911,7 +928,7 @@ public partial class MainForm : DarkForm
         Add("Origin Content Version", game.OriginContentVersion);
         Add("Required System Software", game.RequiredSystemSoftware);
         Add("SDK Version", game.SdkVersion);
-        Add("Category", game.ApplicationCategory);
+        Add("Category", CategoryOf(game));
         Add("DRM Type", game.DrmType);
         Add("Content Badge", game.ContentBadgeType);
         Add("Default Language", game.DefaultLanguage);
@@ -964,10 +981,10 @@ public partial class MainForm : DarkForm
                     ? "Not present in this retail FIH"
                     : "Empty");
             Add("CNT Header Flags", $"0x{package.HeaderFlags:X8}");
-            Add("CNT Content Type", $"0x{package.ContentType:X8}");
+            Add("CNT Content Type", DescribeCntContentType(package.ContentType));
             Add("CNT Content Flags", $"0x{package.ContentFlags:X8}");
             Add("CNT DRM Type", $"0x{package.DrmType:X8}");
-            if (package.SignedByte.HasValue) Add("FIH Signed Byte", $"0x{package.SignedByte:X2}");
+            if (package.SignedByte is { } signedByte) Add("FIH Signed Byte", DescribeFihSignedByte(signedByte));
             if (package.FormatVersion.HasValue) Add("FIH Format Version", package.FormatVersion.Value);
             if (package.PfsImageSize > 0)
             {
