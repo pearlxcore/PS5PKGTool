@@ -921,7 +921,7 @@ partial class MainForm
         // menuFile
         // 
         menuFile.BackColor = Color.FromArgb(60, 63, 65);
-        menuFile.DropDownItems.AddRange(new ToolStripItem[] { menuAddFolder, menuOpenDump, menuOpenPackage, menuRecent, menuRefresh, menuLibraryRenameAll, menuSaveManifest, menuEmptyList, menuRemoveMissing, menuSeparator, menuSettings, menuExit });
+        menuFile.DropDownItems.AddRange(new ToolStripItem[] { menuAddFolder, menuOpenDump, menuOpenPackage, menuRecent, menuRefresh, menuSaveManifest, menuEmptyList, menuRemoveMissing, menuSeparator, menuSettings, menuExit });
         menuFile.ForeColor = Color.FromArgb(220, 220, 220);
         menuFile.Name = "menuFile";
         menuFile.Size = new Size(37, 20);
@@ -1045,7 +1045,7 @@ partial class MainForm
         // 
         // contextLibrary
         // 
-        contextLibrary.Items.AddRange(new ToolStripItem[] { menuLibraryReveal, menuLibrarySeparator1, menuLibraryCopy, menuLibraryRename, menuLibraryRenameByPriority, menuLibraryMove, menuLibraryDelete, menuLibrarySeparator2, menuLibrarySaveArtwork, menuLibraryExport, menuLibrarySeparator3, menuLibraryGroupBy, menuLibraryDuplicates, menuLibrarySeparator5, menuLibraryGroupExport, menuLibraryGroupArtwork });
+        contextLibrary.Items.AddRange(new ToolStripItem[] { menuLibraryReveal, menuLibrarySeparator1, menuLibraryCopy, menuLibraryRename, menuLibraryRenameAll, menuLibraryRenameByPriority, menuLibraryMove, menuLibraryDelete, menuLibrarySeparator2, menuLibrarySaveArtwork, menuLibraryExport, menuLibrarySeparator3, menuLibraryGroupBy, menuLibraryDuplicates, menuLibrarySeparator5, menuLibraryGroupExport, menuLibraryGroupArtwork });
         contextLibrary.Name = "contextLibrary";
         contextLibrary.Size = new Size(261, 318);
         contextLibrary.Opening += contextLibrary_Opening;
@@ -1306,11 +1306,10 @@ partial class MainForm
         // menuLibraryDuplicates
         // 
         menuLibraryDuplicates.BackColor = Color.FromArgb(60, 63, 65);
-        menuLibraryDuplicates.Enabled = false;
         menuLibraryDuplicates.ForeColor = Color.FromArgb(220, 220, 220);
         menuLibraryDuplicates.Name = "menuLibraryDuplicates";
         menuLibraryDuplicates.Size = new Size(260, 22);
-        menuLibraryDuplicates.Text = "Find Duplicates (Coming soon)";
+        menuLibraryDuplicates.Text = "Find Duplicates";
         menuLibraryDuplicates.Click += menuLibraryDuplicates_Click;
         // 
         // menuLibrarySeparator5
