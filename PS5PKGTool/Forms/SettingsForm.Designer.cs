@@ -975,10 +975,10 @@ partial class SettingsForm
         Controls.Add(btnCancel);
         Controls.Add(btnSave);
         Controls.Add(tabsSettings);
-        FormBorderStyle = FormBorderStyle.Sizable;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
-        MinimumSize = new Size(620, 420);
+        MinimumSize = new Size(0, 0);
         Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
         Name = "SettingsForm";
         ShowInTaskbar = false;
