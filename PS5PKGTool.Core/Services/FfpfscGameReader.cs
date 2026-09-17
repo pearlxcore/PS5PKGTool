@@ -40,4 +40,18 @@ public sealed class FfpfscGameReader
         game.ContainerBlockCount = volume.Info.Pfsc.BlockCount;
         return game;
     }
+
+    /// <summary>Structure-only inspection when no single readable sce_sys/param.json exists.</summary>
+    public Ps5GameInfo ReadStructure(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        using FfpfscVolume volume = FfpfscVolume.Open(fullPath);
+        int roots = volume.Entries.Count(entry => !entry.IsDirectory &&
+            (entry.Path.Equals("sce_sys/param.json", StringComparison.OrdinalIgnoreCase) ||
+             entry.Path.EndsWith("/sce_sys/param.json", StringComparison.OrdinalIgnoreCase)));
+        var info = new FileInfo(fullPath);
+        return SourceStructure.Build(Ps5SourceKind.Ffpfsc, fullPath, volume.Info.InnerFileName, info.Length,
+            volume.Info.LogicalLength, volume.Info.StoredLength, volume.Info.Pfsc.BlockCount,
+            "PFSC filesystem", roots, info.LastWriteTimeUtc);
+    }
 }

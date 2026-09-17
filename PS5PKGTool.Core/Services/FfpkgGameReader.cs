@@ -40,4 +40,17 @@ public sealed class FfpkgGameReader
         game.ContainerStoredSize = info.Length;
         return game;
     }
+
+    /// <summary>Structure-only inspection when no single readable sce_sys/param.json exists.</summary>
+    public Ps5GameInfo ReadStructure(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        using var volume = new Ufs2Volume(fullPath);
+        int roots = volume.Entries.Count(entry => !entry.IsDirectory &&
+            (entry.Path.Equals("sce_sys/param.json", StringComparison.OrdinalIgnoreCase) ||
+             entry.Path.EndsWith("/sce_sys/param.json", StringComparison.OrdinalIgnoreCase)));
+        var info = new FileInfo(fullPath);
+        return SourceStructure.Build(Ps5SourceKind.Ffpkg, fullPath, info.Name, info.Length, info.Length,
+            info.Length, 0, "UFS2 filesystem", roots, info.LastWriteTimeUtc);
+    }
 }

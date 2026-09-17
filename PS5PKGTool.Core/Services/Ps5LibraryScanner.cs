@@ -103,13 +103,43 @@ public sealed class Ps5LibraryScanner
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
             {
-                result.Errors.Add($"{path}: {ex.Message}");
+                // A source the strict readers reject (no readable param.json, or several game roots)
+                // is still listed as a structure-only record so it can be inspected rather than dropped.
+                Ps5GameInfo? structure = TryReadStructure(kind, path);
+                if (structure is not null)
+                {
+                    structure.DataWarnings.Add("Structure-only view: " + ex.Message);
+                    result.Games.Add(structure);
+                }
+                else
+                {
+                    result.Errors.Add($"{path}: {ex.Message}");
+                }
             }
             processed++;
         }
         progress?.Report(new Ps5ScanProgress { Processed = processed, Total = sources.Length });
         result.Games.Sort((left, right) => StringComparer.CurrentCultureIgnoreCase.Compare(left.Title, right.Title));
         return result;
+    }
+
+    /// <summary>Structure-only fallback for a source the strict readers rejected; null when it cannot open.</summary>
+    private Ps5GameInfo? TryReadStructure(Ps5SourceKind kind, string path)
+    {
+        try
+        {
+            return kind switch
+            {
+                Ps5SourceKind.Ffpfsc => _ffpfscReader.ReadStructure(path),
+                Ps5SourceKind.FilesystemImage => _filesystemImageReader.ReadStructure(path),
+                Ps5SourceKind.Ffpkg => _ffpkgReader.ReadStructure(path),
+                _ => null
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
+        {
+            return null;
+        }
     }
 
     private static string ResolveRootPath(string path, Ps5SourceKind kind)
