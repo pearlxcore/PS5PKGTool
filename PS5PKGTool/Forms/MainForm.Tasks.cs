@@ -409,6 +409,10 @@ public partial class MainForm
         if (task.OutputPath.Length > 0) parts.Add("To " + Path.GetFileName(task.OutputPath));
         parts.Add("Elapsed " + ElapsedText(task));
         if (task.Attempts > 0) parts.Add($"Attempt {task.Attempts}");
+        // Requested builder and effective settings come from the captured configuration.
+        string requestedBackend = Get(ReadPayload(task.PersistencePayload), "backend");
+        if (requestedBackend.Length > 0)
+            parts.Add("Builder " + BackendRegistry.Get(requestedBackend).DisplayName + " (requested)");
         if (task.StartedUtc is { } startedAt) parts.Add("Started " + startedAt.ToLocalTime().ToString("HH:mm:ss"));
         if (task.CompletedUtc is { } endedAt) parts.Add("Ended " + endedAt.ToLocalTime().ToString("HH:mm:ss"));
         if (EtaText(task) is { } eta) parts.Add(eta);
@@ -425,11 +429,12 @@ public partial class MainForm
         string output = task.OutputPath;
         bool hasOutput = output.Length > 0 && (File.Exists(output) || Directory.Exists(output));
         string stage = string.IsNullOrWhiteSpace(task.Progress.Stage) ? string.Empty : $" at {task.Progress.Stage}";
+        string counts = CountsText(task.Progress);
         return task.Status switch
         {
             PackageTaskStatus.Completed => hasOutput
-                ? "Result: completed - output " + output
-                : "Result: completed (no output path recorded).",
+                ? "Result: completed - output " + output + counts
+                : "Result: completed" + counts + " (no output path recorded).",
             PackageTaskStatus.Failed => $"Result: failed{stage} - {task.Message}",
             PackageTaskStatus.Cancelled => "Result: cancelled" + stage + (hasOutput ? " - partial output " + output : "."),
             PackageTaskStatus.Interrupted => "Result: interrupted by a previous shutdown; retry to run it again.",
@@ -437,6 +442,19 @@ public partial class MainForm
             PackageTaskStatus.Running => "Result: in progress.",
             _ => "Result: waiting in the queue."
         };
+    }
+
+    /// <summary>Measured counters from the last progress report, e.g. "12/500 items, 3.2/8.0 GiB".</summary>
+    private static string CountsText(PackageTaskProgress progress)
+    {
+        var parts = new List<string>();
+        if (progress.CurrentItem > 0 || progress.TotalItems > 0)
+            parts.Add(progress.TotalItems > 0
+                ? $"{progress.CurrentItem:N0}/{progress.TotalItems:N0} items"
+                : $"{progress.CurrentItem:N0} items");
+        if (progress.TotalBytes > 0)
+            parts.Add($"{FormatBytes(progress.CurrentBytes)}/{FormatBytes(progress.TotalBytes)}");
+        return parts.Count > 0 ? " (" + string.Join(", ", parts) + ")" : string.Empty;
     }
 
     private void btnTaskDiagnostic_Click(object? sender, EventArgs e)
@@ -478,7 +496,8 @@ public partial class MainForm
         if (percent is <= 0.03d or >= 0.999d) return null;
         TimeSpan elapsed = DateTime.UtcNow - task.StartedUtc.Value;
         double totalSeconds = elapsed.TotalSeconds / percent;
-        return "ETA " + FormatDuration(TimeSpan.FromSeconds(Math.Max(0d, totalSeconds - elapsed.TotalSeconds)));
+        // Approximate only, and only while a measured fraction exists.
+        return "ETA ~" + FormatDuration(TimeSpan.FromSeconds(Math.Max(0d, totalSeconds - elapsed.TotalSeconds)));
     }
 
     private static string FormatDuration(TimeSpan value)
@@ -599,7 +618,7 @@ public partial class MainForm
     /// A self-contained text report for one task: identity, state, timings, stage, failure and the
     /// captured configuration with secrets masked. Secrets are never exported verbatim.
     /// </summary>
-    private static string BuildTaskReport(QueuedPackageTask task)
+    private string BuildTaskReport(QueuedPackageTask task)
     {
         var report = new System.Text.StringBuilder();
         report.AppendLine("PS5 PKG Tool - task report");
@@ -635,7 +654,25 @@ public partial class MainForm
             report.AppendLine("Failure:");
             report.AppendLine(failure.ToString());
         }
+
+        // Task-filtered log lines, so one attempt can be isolated without the whole global log.
+        LogEntry[] relevant = _logEntries.Where(entry => MatchesTaskLog(entry, task)).TakeLast(200).ToArray();
+        if (relevant.Length > 0)
+        {
+            report.AppendLine();
+            report.AppendLine($"Recent log lines for this task ({relevant.Length}):");
+            foreach (LogEntry entry in relevant)
+                report.AppendLine($"  {entry.Time:HH:mm:ss.fff} [{entry.Level}] {entry.Message}");
+        }
         return report.ToString();
+    }
+
+    private static bool MatchesTaskLog(LogEntry entry, QueuedPackageTask task)
+    {
+        string source = Path.GetFileName(task.SourcePath);
+        string output = Path.GetFileName(task.OutputPath);
+        return (source.Length > 0 && entry.Message.Contains(source, StringComparison.OrdinalIgnoreCase)) ||
+               (output.Length > 0 && entry.Message.Contains(output, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string MaskSecret(string key, string value) =>
