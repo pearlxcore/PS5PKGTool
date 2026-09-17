@@ -99,10 +99,6 @@ your folders, sources, recent folders and saved views.
 
 > **Note:** ProsperoPkgTool is the app's own internal package builder, provided alongside LibProsperoPkg. It is still experimental — output has been validated on PC but not on jailbroken PS5 hardware. Keep originals and verify any produced package before relying on it.
 
-# Updates
-
-Use `Help > Check for Updates` to compare your version with the latest GitHub release. If a newer version exists you can open the download page, otherwise it reports that the app is up to date.
-
 # Build
 
 ```
