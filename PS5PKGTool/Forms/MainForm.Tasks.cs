@@ -140,10 +140,12 @@ public partial class MainForm
                 _notifiedTasks.Add("open:" + task.Id))
                 RunOnUi(() => OpenOutputFolder(task.OutputPath));
         };
+        bool wasEmpty = _taskQueue.Tasks.Count == 0;
         _taskQueue.Enqueue(task);
-        Logger.Info($"Queued task: {displayName}");
+        Logger.Info($"Queued task: {displayName} (see the Tasks tab)");
         _taskRefreshPending = true;
-        if (tabTasks is not null) tabsWorkspace.SelectedTab = tabTasks;
+        // Show Tasks for the first job only; later jobs queue without switching away from the current tab.
+        if (wasEmpty && tabTasks is not null) tabsWorkspace.SelectedTab = tabTasks;
         _autoFollowRunning = true;
         SyncFollowCheckbox();
         RefreshTaskGrid();

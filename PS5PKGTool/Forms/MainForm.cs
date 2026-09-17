@@ -336,7 +336,9 @@ public partial class MainForm : DarkForm
         else if (e.Control && e.KeyCode == Keys.F)
         {
             e.Handled = true;
-            searchLibrary.Focus();
+            // Ctrl+F searches whichever workspace is active.
+            if (tabsWorkspace.SelectedTab == tabTasks) searchTasks.Focus();
+            else searchLibrary.Focus();
         }
         else if (e.KeyCode == Keys.Escape && searchLibrary.ContainsFocus)
         {
