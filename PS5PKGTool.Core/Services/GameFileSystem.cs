@@ -342,9 +342,21 @@ public static class GameFileSystem
     private sealed class LocalGameFileSystem : IReadOnlyGameFileSystem
     {
         private readonly string _root;
+        private readonly CancellationToken _cancellationToken;
+        private IReadOnlyList<GameFileRecord>? _files;
+
         public LocalGameFileSystem(string root, CancellationToken cancellationToken)
         {
             _root = Path.GetFullPath(root);
+            _cancellationToken = cancellationToken;
+        }
+
+        // The inventory is built lazily: FileExists/OpenRead resolve the path directly, so reading a
+        // single icon or preview no longer walks the whole dump first.
+        public IReadOnlyList<GameFileRecord> Files => _files ??= EnumerateFiles();
+
+        private IReadOnlyList<GameFileRecord> EnumerateFiles()
+        {
             var files = new List<GameFileRecord>();
             var options = new EnumerationOptions
             {
@@ -354,13 +366,13 @@ public static class GameFileSystem
             };
             foreach (string path in Directory.EnumerateFiles(_root, "*", options))
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                _cancellationToken.ThrowIfCancellationRequested();
                 try { files.Add(new GameFileRecord(NormalizePath(Path.GetRelativePath(_root, path)), new FileInfo(path).Length, "Host")); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
-            Files = files;
+            return files;
         }
-        public IReadOnlyList<GameFileRecord> Files { get; }
+
         public bool FileExists(string relativePath) => File.Exists(Resolve(relativePath));
         public Stream OpenRead(string relativePath) => new FileStream(Resolve(relativePath), FileMode.Open,
             FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.RandomAccess);

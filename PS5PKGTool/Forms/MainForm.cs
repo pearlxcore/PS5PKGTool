@@ -430,9 +430,12 @@ public partial class MainForm : DarkForm
         SetScanning(true);
         var progress = new Progress<Ps5ScanProgress>(value =>
         {
+            // The final report has Processed == Total (and no current path); do not show N+1 of N.
             statusLabel.Text = value.Total == 0
                 ? "Searching for PS5 dumps, packages, and filesystem images..."
-                : $"Reading {value.Processed + 1:N0} of {value.Total:N0}: {Path.GetFileName(value.CurrentPath)}";
+                : string.IsNullOrEmpty(value.CurrentPath)
+                    ? $"Reading PS5 sources... {value.Processed:N0} of {value.Total:N0}"
+                    : $"Reading {value.Processed + 1:N0} of {value.Total:N0}: {Path.GetFileName(value.CurrentPath)}";
         });
 
         try
@@ -740,9 +743,11 @@ public partial class MainForm : DarkForm
     private void ApplyFilter()
     {
         string query = searchLibrary.SearchText.Trim();
+        ParseQueryTokens(query);
+        RebuildFamilyIndex();
         _visibleGames = _games
             .Where(MatchesFilters)
-            .Where(game => MatchesQuery(game, query))
+            .Where(MatchesQueryTokens)
             .ToList();
 
         PopulateLibraryGrid();

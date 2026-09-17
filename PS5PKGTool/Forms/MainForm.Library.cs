@@ -471,21 +471,36 @@ public partial class MainForm
         return role;
     }
 
-    /// <summary>True when another installed patch for the same title has a higher version.</summary>
-    private bool IsSupersededUpdate(Ps5GameInfo game)
+    private readonly HashSet<string> _supersededUpdates = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Rebuilds the set of patches superseded by a higher version of the same title. Computed once per
+    /// filter pass so neither row filling nor Role sorting walks the whole library per comparison.
+    /// </summary>
+    private void RebuildFamilyIndex()
     {
-        if (string.IsNullOrWhiteSpace(game.TitleId)) return false;
-        VersionKey best = default;
-        bool found = false;
-        foreach (Ps5GameInfo other in _games)
+        _supersededUpdates.Clear();
+        var highest = new Dictionary<string, VersionKey>(StringComparer.OrdinalIgnoreCase);
+        foreach (Ps5GameInfo game in _games)
         {
-            if (!string.Equals(other.TitleId, game.TitleId, StringComparison.OrdinalIgnoreCase)) continue;
-            if (!string.Equals(CategoryOf(other), "Patch", StringComparison.OrdinalIgnoreCase)) continue;
-            VersionKey key = VersionKey.Parse(other.DisplayVersion);
-            if (!found || key.CompareTo(best) > 0) { best = key; found = true; }
+            if (string.IsNullOrWhiteSpace(game.TitleId)) continue;
+            if (!string.Equals(CategoryOf(game), "Patch", StringComparison.OrdinalIgnoreCase)) continue;
+            VersionKey key = VersionKey.Parse(game.DisplayVersion);
+            if (!highest.TryGetValue(game.TitleId, out VersionKey best) || key.CompareTo(best) > 0)
+                highest[game.TitleId] = key;
         }
-        return found && VersionKey.Parse(game.DisplayVersion).CompareTo(best) < 0;
+        foreach (Ps5GameInfo game in _games)
+        {
+            if (string.IsNullOrWhiteSpace(game.TitleId)) continue;
+            if (!string.Equals(CategoryOf(game), "Patch", StringComparison.OrdinalIgnoreCase)) continue;
+            if (highest.TryGetValue(game.TitleId, out VersionKey best) &&
+                VersionKey.Parse(game.DisplayVersion).CompareTo(best) < 0)
+                _supersededUpdates.Add(game.RootPath);
+        }
     }
+
+    /// <summary>True when another installed patch for the same title has a higher version.</summary>
+    private bool IsSupersededUpdate(Ps5GameInfo game) => _supersededUpdates.Contains(game.RootPath);
 
     /// <summary>Base first, then updates, then DLC, then apps; used to order a family view.</summary>
     internal static int RolePriority(Ps5GameInfo game) => CategoryOf(game) switch

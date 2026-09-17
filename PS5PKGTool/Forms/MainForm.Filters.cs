@@ -230,14 +230,26 @@ public partial class MainForm
     /// OR groups with <c>|</c>, numeric comparisons (<c>&gt;</c>, <c>&gt;=</c>, <c>&lt;</c>,
     /// <c>&lt;=</c>, <c>=</c>) and <c>-</c> negation.
     /// </summary>
-    private bool MatchesQuery(Ps5GameInfo game, string query)
+    private readonly List<(string Body, bool Negate)> _queryTokens = [];
+
+    /// <summary>Tokenizes the query once per filter pass instead of once per record.</summary>
+    private void ParseQueryTokens(string query)
     {
-        if (string.IsNullOrWhiteSpace(query)) return true;
+        _queryTokens.Clear();
+        if (string.IsNullOrWhiteSpace(query)) return;
         foreach (string token in TokenizeQuery(query))
         {
             bool negate = token.Length > 1 && token[0] == '-';
             string body = negate ? token[1..] : token;
             if (body.Length == 0) continue;
+            _queryTokens.Add((body, negate));
+        }
+    }
+
+    private bool MatchesQueryTokens(Ps5GameInfo game)
+    {
+        foreach ((string body, bool negate) in _queryTokens)
+        {
             int colon = body.IndexOf(':');
             bool match = colon > 0
                 ? MatchField(game, body[..colon].ToLowerInvariant(), body[(colon + 1)..])

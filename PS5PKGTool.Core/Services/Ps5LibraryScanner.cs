@@ -83,8 +83,13 @@ public sealed class Ps5LibraryScanner
                 // so a refresh only re-parses new or modified sources.
                 string rootPath = ResolveRootPath(path, kind);
                 DateTime stamp = ReadStamp(path);
+                // A container whose timestamp is preserved by a replacement still has a different
+                // length, so compare the size too before reusing cached metadata (loose dumps stamp
+                // param.json, whose length is unrelated to the cached dump size).
+                long length = kind == Ps5SourceKind.LooseDump ? 0 : ReadLength(path);
                 if (cachedByRoot.TryGetValue(rootPath, out Ps5GameInfo? reuse) &&
-                    reuse.SourceKind == kind && reuse.LastWriteTimeUtc == stamp)
+                    reuse.SourceKind == kind && reuse.LastWriteTimeUtc == stamp &&
+                    (length <= 0 || reuse.SourceSize == length))
                 {
                     result.Games.Add(reuse);
                     processed++;
@@ -161,5 +166,11 @@ public sealed class Ps5LibraryScanner
     {
         try { return File.GetLastWriteTimeUtc(path); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return DateTime.MinValue; }
+    }
+
+    private static long ReadLength(string path)
+    {
+        try { return new FileInfo(path).Length; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
     }
 }

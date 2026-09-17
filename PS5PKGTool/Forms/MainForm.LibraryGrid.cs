@@ -93,6 +93,7 @@ public partial class MainForm
         ApplyLibraryColumnVisibility();
         BuildLibraryColumnMenu();
         LoadLibrarySortKeys();
+        gridLibrary.Scroll += gridLibrary_Scrolled;
     }
 
     /// <summary>Restores the multi-sort keys, falling back to the single legacy sort setting.</summary>
@@ -550,44 +551,99 @@ public partial class MainForm
         return imageListFiles.Images[key] ?? imageListFiles.Images[0] ?? new Bitmap(16, 16);
     }
 
+    private readonly List<Ps5GameInfo> _thumbnailQueue = [];
+    private int _thumbnailQueueIndex;
+    private int _thumbnailLoadBusy;
+    private const int ThumbnailBatchSize = 96;
+
     private void StartLibraryThumbnailLoad(IReadOnlyList<Ps5GameInfo> ordered)
     {
         if (!_settings.ShowThumbnails) return;
         if (_settings.ThumbnailCacheCount > 0 && _libraryThumbnails.Count >= _settings.ThumbnailCacheCount)
             ClearLibraryThumbnails();
 
-        int version = ++_libraryThumbnailVersion;
-        var pending = new List<Ps5GameInfo>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (Ps5GameInfo game in ordered)
+        _libraryThumbnailVersion++;
+        lock (_thumbnailQueue)
         {
-            if (_libraryThumbnails.ContainsKey(game.RootPath)) continue;
-            if (!seen.Add(game.RootPath)) continue;
-            if (!_libraryThumbnailAttempts.TryAdd(game.RootPath, 0)) continue;
-            pending.Add(game);
+            _thumbnailQueue.Clear();
+            _thumbnailQueueIndex = 0;
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (Ps5GameInfo game in ordered)
+            {
+                if (_libraryThumbnails.ContainsKey(game.RootPath)) continue;
+                if (_libraryThumbnailAttempts.ContainsKey(game.RootPath)) continue;
+                if (!seen.Add(game.RootPath)) continue;
+                _thumbnailQueue.Add(game);
+            }
         }
-        if (pending.Count == 0) return;
+        LoadLibraryThumbnailBatch();
+    }
 
+    /// <summary>
+    /// Loads the next bounded batch of thumbnails (visible-first, then on scroll). Attempts are recorded
+    /// per item as it starts, so a cancelled batch leaves the remaining items retryable instead of
+    /// marking the whole pending set attempted up front.
+    /// </summary>
+    private void LoadLibraryThumbnailBatch()
+    {
+        if (!_settings.ShowThumbnails) return;
+        if (Interlocked.CompareExchange(ref _thumbnailLoadBusy, 1, 0) != 0) return;
+
+        Ps5GameInfo[] batch;
+        lock (_thumbnailQueue)
+        {
+            if (_thumbnailQueueIndex >= _thumbnailQueue.Count)
+            {
+                Interlocked.Exchange(ref _thumbnailLoadBusy, 0);
+                return;
+            }
+            int start = _thumbnailQueueIndex;
+            int end = Math.Min(_thumbnailQueue.Count, start + ThumbnailBatchSize);
+            _thumbnailQueueIndex = end;
+            batch = _thumbnailQueue.GetRange(start, end - start).ToArray();
+        }
+
+        int version = _libraryThumbnailVersion;
         _ = Task.Run(() =>
         {
-            foreach (Ps5GameInfo game in pending)
+            try
             {
-                if (version != _libraryThumbnailVersion) return;
-                Image? thumbnail = LoadLibraryThumbnail(game);
-                if (thumbnail is null) continue;
-                // A newer rebuild may have started while this image decoded; drop the stale result.
-                if (version != _libraryThumbnailVersion) { thumbnail.Dispose(); return; }
-                _libraryThumbnails[game.RootPath] = thumbnail;
-                try
+                foreach (Ps5GameInfo game in batch)
                 {
-                    BeginInvoke(() => ApplyLibraryThumbnail(game, thumbnail));
+                    if (version != _libraryThumbnailVersion) return;
+                    if (!_libraryThumbnailAttempts.TryAdd(game.RootPath, 0)) continue;
+                    Image? thumbnail = LoadLibraryThumbnail(game);
+                    if (thumbnail is null) continue;
+                    // A newer rebuild may have started while this image decoded; drop the stale result.
+                    if (version != _libraryThumbnailVersion) { thumbnail.Dispose(); return; }
+                    _libraryThumbnails[game.RootPath] = thumbnail;
+                    try
+                    {
+                        BeginInvoke(() => ApplyLibraryThumbnail(game, thumbnail));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        return;
+                    }
                 }
-                catch (InvalidOperationException)
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _thumbnailLoadBusy, 0);
+                // A newer rebuild may have queued while this batch was busy; start its first batch.
+                if (version != _libraryThumbnailVersion && _thumbnailQueueIndex < _thumbnailQueue.Count)
                 {
-                    return;
+                    try { BeginInvoke(new Action(LoadLibraryThumbnailBatch)); }
+                    catch (InvalidOperationException) { }
                 }
             }
         });
+    }
+
+    private void gridLibrary_Scrolled(object? sender, ScrollEventArgs e)
+    {
+        // Continue loading thumbnails as the user scrolls through the list.
+        if (_thumbnailQueueIndex < _thumbnailQueue.Count) LoadLibraryThumbnailBatch();
     }
 
     /// <summary>
@@ -603,6 +659,11 @@ public partial class MainForm
             if (image is not null && !referenced.Contains(image)) image.Dispose();
         _libraryThumbnails.Clear();
         _libraryThumbnailAttempts.Clear();
+        lock (_thumbnailQueue)
+        {
+            _thumbnailQueue.Clear();
+            _thumbnailQueueIndex = 0;
+        }
     }
 
     /// <summary>
