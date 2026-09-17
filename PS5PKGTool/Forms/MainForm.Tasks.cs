@@ -380,6 +380,7 @@ public partial class MainForm
             barTaskOverall.Value = 0;
             lblTaskMessage.Text = string.Empty;
             lblTaskMeta.Text = string.Empty;
+            lblTaskResult.Text = string.Empty;
             return;
         }
         PackageTaskProgress progress = task.Progress;
@@ -412,6 +413,40 @@ public partial class MainForm
         if (task.CompletedUtc is { } endedAt) parts.Add("Ended " + endedAt.ToLocalTime().ToString("HH:mm:ss"));
         if (EtaText(task) is { } eta) parts.Add(eta);
         lblTaskMeta.Text = string.Join("   |   ", parts);
+        lblTaskResult.Text = ResultText(task);
+    }
+
+    /// <summary>
+    /// The concrete outcome: what actually happened, whether an output exists, and (on failure or
+    /// cancellation) the stage reached. An existing output path alone is not proof this attempt made it.
+    /// </summary>
+    private static string ResultText(QueuedPackageTask task)
+    {
+        string output = task.OutputPath;
+        bool hasOutput = output.Length > 0 && (File.Exists(output) || Directory.Exists(output));
+        string stage = string.IsNullOrWhiteSpace(task.Progress.Stage) ? string.Empty : $" at {task.Progress.Stage}";
+        return task.Status switch
+        {
+            PackageTaskStatus.Completed => hasOutput
+                ? "Result: completed - output " + output
+                : "Result: completed (no output path recorded).",
+            PackageTaskStatus.Failed => $"Result: failed{stage} - {task.Message}",
+            PackageTaskStatus.Cancelled => "Result: cancelled" + stage + (hasOutput ? " - partial output " + output : "."),
+            PackageTaskStatus.Interrupted => "Result: interrupted by a previous shutdown; retry to run it again.",
+            PackageTaskStatus.Cancelling => "Result: cancelling - waiting for the operation to stop.",
+            PackageTaskStatus.Running => "Result: in progress.",
+            _ => "Result: waiting in the queue."
+        };
+    }
+
+    private void btnTaskDiagnostic_Click(object? sender, EventArgs e)
+    {
+        if (SelectedTask() is not { } task) return;
+        string report = BuildTaskReport(task);
+        CopyText(report);
+        AppDialog.ShowInformation(
+            "The full task diagnostic was copied to the clipboard. Use Export Report... to save it.\n\n" +
+            report[..Math.Min(report.Length, 1200)], "Task diagnostic");
     }
 
     private static double TaskPercent(QueuedPackageTask task) => task.Status == PackageTaskStatus.Completed

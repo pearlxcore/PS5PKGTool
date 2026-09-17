@@ -124,6 +124,8 @@ partial class MainForm
     private DarkUI.Controls.DarkProgressBar barTaskOverall = null!;
     private DarkUI.Controls.DarkLabel lblTaskMessage = null!;
     private DarkUI.Controls.DarkLabel lblTaskMeta = null!;
+    private DarkUI.Controls.DarkLabel lblTaskResult = null!;
+    private DarkUI.Controls.DarkButton btnTaskDiagnostic = null!;
     private DarkUI.Controls.DarkContextMenu contextTasks = null!;
     private ToolStripMenuItem menuTaskStart = null!;
     private ToolStripMenuItem menuTaskCancel = null!;
@@ -765,6 +767,8 @@ partial class MainForm
         barTaskOverall = new DarkUI.Controls.DarkProgressBar();
         lblTaskMessage = new DarkUI.Controls.DarkLabel();
         lblTaskMeta = new DarkUI.Controls.DarkLabel();
+        lblTaskResult = new DarkUI.Controls.DarkLabel();
+        btnTaskDiagnostic = new DarkUI.Controls.DarkButton();
         tabLog = new DarkUI.Controls.DarkTabPage();
         txtLogView = new DarkUI.Controls.DarkRichTextBox();
         lblLogLevel = new DarkUI.Controls.DarkLabel();
@@ -4699,16 +4703,20 @@ partial class MainForm
         taskDetailLayout.Controls.Add(barTaskOverall, 1, 2);
         taskDetailLayout.Controls.Add(lblTaskMessage, 0, 3);
         taskDetailLayout.Controls.Add(lblTaskMeta, 0, 4);
+        taskDetailLayout.Controls.Add(lblTaskResult, 0, 5);
+        taskDetailLayout.Controls.Add(btnTaskDiagnostic, 0, 6);
         taskDetailLayout.Dock = DockStyle.Fill;
         taskDetailLayout.Location = new Point(1, 25);
         taskDetailLayout.Name = "taskDetailLayout";
         taskDetailLayout.Padding = new Padding(10, 2, 10, 4);
-        taskDetailLayout.RowCount = 5;
+        taskDetailLayout.RowCount = 7;
         taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
         taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
         taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
         taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18F));
         taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        taskDetailLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
         taskDetailLayout.Size = new Size(1368, 137);
         taskDetailLayout.TabIndex = 0;
         // 
@@ -4779,6 +4787,27 @@ partial class MainForm
         lblTaskMeta.Name = "lblTaskMeta";
         lblTaskMeta.Size = new Size(1342, 49);
         lblTaskMeta.TabIndex = 6;
+        // 
+        // lblTaskResult
+        // 
+        lblTaskResult.AutoEllipsis = true;
+        taskDetailLayout.SetColumnSpan(lblTaskResult, 2);
+        lblTaskResult.Dock = DockStyle.Fill;
+        lblTaskResult.Location = new Point(13, 133);
+        lblTaskResult.Name = "lblTaskResult";
+        lblTaskResult.Size = new Size(1342, 20);
+        lblTaskResult.TabIndex = 7;
+        lblTaskResult.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // btnTaskDiagnostic
+        // 
+        taskDetailLayout.SetColumnSpan(btnTaskDiagnostic, 2);
+        btnTaskDiagnostic.Location = new Point(13, 156);
+        btnTaskDiagnostic.Name = "btnTaskDiagnostic";
+        btnTaskDiagnostic.Size = new Size(160, 24);
+        btnTaskDiagnostic.TabIndex = 8;
+        btnTaskDiagnostic.Text = "Diagnostic...";
+        btnTaskDiagnostic.Click += btnTaskDiagnostic_Click;
         lblTaskMeta.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // tabLog
