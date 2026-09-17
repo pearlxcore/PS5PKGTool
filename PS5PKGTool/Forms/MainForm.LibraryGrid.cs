@@ -574,8 +574,35 @@ public partial class MainForm
             };
             _libraryColumnMenu.DropDownItems.Add(item);
         }
+        var resetView = new ToolStripMenuItem("Reset view");
+        resetView.Click += (_, _) => ResetLibraryView();
         contextLibrary.Items.Add(new ToolStripSeparator());
+        contextLibrary.Items.Add(resetView);
         contextLibrary.Items.Add(_libraryColumnMenu);
+    }
+
+    /// <summary>
+    /// Restores the default layout — Title ascending sort, no grouping, all columns shown in their
+    /// declared order — without touching the filter query or selections.
+    /// </summary>
+    private void ResetLibraryView()
+    {
+        _librarySortColumn = "Title";
+        _librarySortAscending = true;
+        _settings.LibrarySortColumn = _librarySortColumn;
+        _settings.LibrarySortAscending = _librarySortAscending;
+
+        _settings.LibraryHiddenColumns.Clear();
+        _settings.LibraryColumnOrder = LibraryColumnDefinitions.Select(definition => definition.Name).ToList();
+        ApplyLibraryColumnVisibility();
+        RestoreLibraryColumnLayout();
+        foreach (DataGridViewColumn column in gridLibrary.Columns)
+            column.HeaderCell.SortGlyphDirection = SortOrder.None;
+
+        SetGroupBy(string.Empty);
+        ApplyFilter();
+        SaveSettingsQuietly();
+        statusLabel.Text = "View reset to defaults.";
     }
 
     private void RestoreLibraryColumnLayout()
