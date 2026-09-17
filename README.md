@@ -76,6 +76,15 @@ Every long action runs on the Tasks tab; the form only queues work and reports p
 - PS5 package reading, verification, extraction, and debug package creation use the clean room MIT engine ProsperoPkgTool as a managed library.
 - Kraken metadata is decoded through the bundled Oodle 2.9.10 decoder. See `THIRD_PARTY_NOTICES.md` for the Oodle license and redistribution restrictions.
 
+# Settings
+
+Every preference lives in File > Settings, split across Library, Appearance, Naming, Viewing & Cache,
+Output & Defaults, File Operations, and Maintenance. Visual preferences apply when you save; changing
+library folders or Scan subfolders rescans when you save. Settings are saved before the dialog closes, so
+a save failure keeps your edits and offers Retry. Import validates the file and shows what will change;
+export leaves the debug passcode out unless you ask for it; Reset restores preference defaults but keeps
+your folders, sources, recent folders and saved views.
+
 # How To Convert
 
 1. Select a dump or image in the library, or open Tools and choose a file.
