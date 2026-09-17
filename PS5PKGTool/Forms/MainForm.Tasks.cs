@@ -269,7 +269,7 @@ public partial class MainForm
         IReadOnlyList<QueuedPackageTask> tasks = _taskQueue.Tasks;
         if (tasks.Count == 0)
         {
-            lblTaskSummary.Text = "Queue is empty.";
+            lblTaskSummary.Text = "No tasks yet. Start an operation from Image Tools or the Library.";
             return;
         }
         int running = tasks.Count(task => task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling);
