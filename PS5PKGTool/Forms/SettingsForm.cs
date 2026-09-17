@@ -17,10 +17,35 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         _originalTheme = Settings.Theme;
 
         cboTheme.Items.AddRange(ThemeManager.Presets.Select(theme => theme.Name).ToArray());
-        cboDefaultGroup.Items.AddRange(["None", "Title ID", "Category", "Region", "Source format", "Required firmware"]);
+        cboDefaultGroup.Items.AddRange(["None", "Title ID", "Family (base + updates + DLC)", "Category", "Region", "Source format", "Required firmware"]);
+        cboDensity.Items.AddRange(["Compact", "Normal", "Comfortable"]);
+        cboDensity.SelectedIndexChanged += (_, _) => ApplyDensityPreset();
+        nudRowHeight.ValueChanged += (_, _) => SyncDensityFromRowHeight();
 
         foreach (string folder in Settings.LibraryFolders) lstFolders.Items.Add(folder);
         LoadToControls();
+    }
+
+    private static readonly int[] DensityRowHeights = [18, 22, 28];
+    private bool _syncingDensity;
+
+    private void ApplyDensityPreset()
+    {
+        if (_syncingDensity) return;
+        int index = Math.Clamp(cboDensity.SelectedIndex, 0, DensityRowHeights.Length - 1);
+        _syncingDensity = true;
+        try { nudRowHeight.Value = Math.Clamp(DensityRowHeights[index], (int)nudRowHeight.Minimum, (int)nudRowHeight.Maximum); }
+        finally { _syncingDensity = false; }
+    }
+
+    private void SyncDensityFromRowHeight()
+    {
+        if (_syncingDensity) return;
+        int height = (int)nudRowHeight.Value;
+        int index = height <= 19 ? 0 : height <= 24 ? 1 : 2;
+        _syncingDensity = true;
+        try { cboDensity.SelectedIndex = index; }
+        finally { _syncingDensity = false; }
     }
 
     public AppSettings Settings { get; private set; }
@@ -40,6 +65,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
 
         SelectCombo(cboTheme, Settings.Theme);
         nudRowHeight.Value = Clamp(Settings.GridRowHeight, nudRowHeight);
+        SyncDensityFromRowHeight();
         chkShowThumbnails.Checked = Settings.ShowThumbnails;
         chkShowGridLines.Checked = Settings.ShowGridLines;
         SelectCombo(cboDefaultGroup, GroupLabelFor(Settings.DefaultGroupBy));
@@ -90,6 +116,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
     private static string GroupKeyFor(string? label) => label switch
     {
         "Title ID" => "titleid",
+        "Family (base + updates + DLC)" => "family",
         "Category" => "category",
         "Region" => "region",
         "Source format" => "source",
@@ -101,6 +128,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
     private static string GroupLabelFor(string? key) => key switch
     {
         "titleid" => "Title ID",
+        "family" => "Family (base + updates + DLC)",
         "category" => "Category",
         "region" => "Region",
         "source" => "Source format",

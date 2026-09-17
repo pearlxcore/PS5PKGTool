@@ -27,6 +27,8 @@ partial class SettingsForm
     private DarkUI.Controls.DarkComboBox cboTheme = null!;
     private DarkUI.Controls.DarkLabel lblRowHeight = null!;
     private DarkUI.Controls.DarkNumericUpDown nudRowHeight = null!;
+    private DarkUI.Controls.DarkLabel lblDensity = null!;
+    private DarkUI.Controls.DarkComboBox cboDensity = null!;
     private DarkUI.Controls.DarkCheckBox chkShowThumbnails = null!;
     private DarkUI.Controls.DarkCheckBox chkShowGridLines = null!;
     private DarkUI.Controls.DarkLabel lblDefaultGroup = null!;
@@ -92,6 +94,8 @@ partial class SettingsForm
         cboTheme = new DarkUI.Controls.DarkComboBox();
         lblRowHeight = new DarkUI.Controls.DarkLabel();
         nudRowHeight = new DarkUI.Controls.DarkNumericUpDown();
+        lblDensity = new DarkUI.Controls.DarkLabel();
+        cboDensity = new DarkUI.Controls.DarkComboBox();
         chkShowThumbnails = new DarkUI.Controls.DarkCheckBox();
         chkShowGridLines = new DarkUI.Controls.DarkCheckBox();
         lblDefaultGroup = new DarkUI.Controls.DarkLabel();
@@ -275,6 +279,8 @@ partial class SettingsForm
         tabAppearance.Controls.Add(cboTheme);
         tabAppearance.Controls.Add(lblRowHeight);
         tabAppearance.Controls.Add(nudRowHeight);
+        tabAppearance.Controls.Add(lblDensity);
+        tabAppearance.Controls.Add(cboDensity);
         tabAppearance.Controls.Add(chkShowThumbnails);
         tabAppearance.Controls.Add(chkShowGridLines);
         tabAppearance.Controls.Add(lblDefaultGroup);
@@ -328,6 +334,22 @@ partial class SettingsForm
         nudRowHeight.Size = new Size(80, 23);
         nudRowHeight.TabIndex = 4;
         nudRowHeight.Value = new decimal(new int[] { 22, 0, 0, 0 });
+        // 
+        // lblDensity
+        // 
+        lblDensity.Location = new Point(300, 83);
+        lblDensity.Name = "lblDensity";
+        lblDensity.Size = new Size(120, 15);
+        lblDensity.TabIndex = 10;
+        lblDensity.Text = "Density";
+        // 
+        // cboDensity
+        // 
+        cboDensity.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboDensity.Location = new Point(400, 79);
+        cboDensity.Name = "cboDensity";
+        cboDensity.Size = new Size(160, 23);
+        cboDensity.TabIndex = 11;
         // 
         // chkShowThumbnails
         // 

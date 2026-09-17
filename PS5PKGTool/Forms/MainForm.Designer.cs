@@ -1357,6 +1357,8 @@ partial class MainForm
         // 
         // searchLibrary
         // 
+        searchLibrary.AccessibleDescription = "Search the PS5 library by title, ID, size and more.";
+        searchLibrary.AccessibleName = "Library search";
         searchLibrary.Location = new Point(10, 8);
         searchLibrary.Name = "searchLibrary";
         searchLibrary.Placeholder = "Search: title:, id:, size:>50GB, -exclude";
@@ -1437,6 +1439,8 @@ partial class MainForm
         // 
         // btnFilterClear
         // 
+        btnFilterClear.AccessibleDescription = "Clear the search query and all checkbox filters.";
+        btnFilterClear.AccessibleName = "Reset filters";
         btnFilterClear.Location = new Point(772, 8);
         btnFilterClear.Name = "btnFilterClear";
         btnFilterClear.Size = new Size(110, 28);
@@ -1527,6 +1531,8 @@ partial class MainForm
         gridLibrary.Dock = DockStyle.Fill;
         gridLibrary.GroupCellValueComparer = null;
         gridLibrary.GroupHeaderColumnIndex = 0;
+        gridLibrary.AccessibleDescription = "The scanned PS5 library. Right-click for actions such as rename, move and export.";
+        gridLibrary.AccessibleName = "PS5 library";
         gridLibrary.GroupHeaderColumnName = null;
         gridLibrary.GroupHeaderHeight = 26F;
         gridLibrary.GroupLabelFormatter = null;
@@ -1554,6 +1560,8 @@ partial class MainForm
         tabsWorkspace.Controls.Add(tabWorkspaceGeneral);
         tabsWorkspace.Controls.Add(tabWorkspaceTools);
         tabsWorkspace.Controls.Add(tabTasks);
+        tabsWorkspace.AccessibleDescription = "Switch between overview, files, tasks, log and other detail panes.";
+        tabsWorkspace.AccessibleName = "Details workspace";
         tabsWorkspace.Controls.Add(tabLog);
         tabsWorkspace.Dock = DockStyle.Fill;
         tabsWorkspace.ItemSize = new Size(80, 28);
@@ -4486,6 +4494,8 @@ partial class MainForm
         // 
         // searchTasks
         // 
+        searchTasks.AccessibleDescription = "Filter the task list by title or status.";
+        searchTasks.AccessibleName = "Task search";
         searchTasks.Dock = DockStyle.Fill;
         searchTasks.Location = new Point(613, 3);
         searchTasks.Margin = new Padding(3, 3, 3, 3);
@@ -4549,6 +4559,8 @@ partial class MainForm
         gridTasks.GroupCellValueComparer = null;
         gridTasks.GroupHeaderColumnIndex = 0;
         gridTasks.GroupHeaderColumnName = null;
+        gridTasks.AccessibleDescription = "Queued, running and finished package tasks.";
+        gridTasks.AccessibleName = "Task list";
         gridTasks.GroupHeaderHeight = 26F;
         gridTasks.GroupLabelFormatter = null;
         gridTasks.Location = new Point(1, 25);
