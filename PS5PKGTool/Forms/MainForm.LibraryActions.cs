@@ -454,13 +454,10 @@ public partial class MainForm
     {
         List<Ps5GameInfo> games = SelectedGames().ToList();
         if (games.Count == 0) return;
-        if (_settings.ConfirmDelete && AppDialog.ShowWarning(
-                $"Send {games.Count:N0} source(s) to the Recycle Bin?\n\n" +
-                string.Join(Environment.NewLine, games.Select(game => "  " + game.RootPath)),
-                "Delete package") != DialogResult.OK)
-            return;
+        bool permanent = _settings.PermanentDelete;
+        if (_settings.ConfirmDelete && !ConfirmDelete(games, permanent)) return;
 
-        var recycle = _settings.PermanentDelete
+        var recycle = permanent
             ? Microsoft.VisualBasic.FileIO.RecycleOption.DeletePermanently
             : Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin;
 
@@ -498,8 +495,29 @@ public partial class MainForm
         SaveSettingsQuietly();
         _stateStore.SaveManifest(_games);
         ApplyFilter();
-        Logger.Info($"Deleted {deleted:N0} source(s); skipped {skipped:N0}.");
-        statusLabel.Text = $"Deleted {deleted:N0} source(s); skipped {skipped:N0}.";
+        string verb = permanent ? "Permanently deleted" : "Recycled";
+        Logger.Info($"{verb} {deleted:N0} source(s); skipped {skipped:N0}.");
+        statusLabel.Text = $"{verb} {deleted:N0} source(s); skipped {skipped:N0}.";
+    }
+
+    /// <summary>
+    /// Confirms a destructive action with a cancellable Yes/No dialog (previously OK-only) and an
+    /// accurate verb: a permanent delete is never presented as a Recycle Bin move.
+    /// </summary>
+    private static bool ConfirmDelete(IReadOnlyList<Ps5GameInfo> games, bool permanent)
+    {
+        const int maximumListed = 15;
+        var listed = new System.Text.StringBuilder();
+        foreach (string path in games.Take(maximumListed).Select(game => game.RootPath))
+            listed.Append("  ").AppendLine(path);
+        if (games.Count > maximumListed)
+            listed.AppendLine($"  ... and {games.Count - maximumListed:N0} more");
+
+        string caption = permanent ? "Permanently delete" : "Move to Recycle Bin";
+        string question = permanent
+            ? $"Permanently delete {games.Count:N0} source(s)? This cannot be undone.\n\n{listed}"
+            : $"Send {games.Count:N0} source(s) to the Recycle Bin?\n\n{listed}";
+        return AppDialog.ShowWarning(question, caption, DarkUI.Forms.DarkDialogButton.YesNo) == DialogResult.Yes;
     }
 
     private static void RemoveSettingPath(List<string> paths, string value) =>

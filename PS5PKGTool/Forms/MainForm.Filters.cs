@@ -88,7 +88,7 @@ public partial class MainForm
             {
                 case 2: SetComboItem(cboFilterCategory, "Game"); break;
                 case 3: SetComboItem(cboFilterCategory, "Patch"); break;
-                case 4: SetComboItem(cboFilterCategory, "Add-on"); break;
+                case 4: SetComboItem(cboFilterCategory, "DLC"); break;
                 case 5: SetComboItem(cboFilterFormat, "Dump Files"); break;
                 case 6: SetComboItem(cboFilterFormat, "PKG"); break;
                 case 7: SetComboItem(cboFilterFormat, "FFPKG"); break;

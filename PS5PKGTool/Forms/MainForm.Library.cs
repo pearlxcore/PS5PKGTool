@@ -303,10 +303,10 @@ public partial class MainForm
         {
             0x20 => "Game",
             // 0x21 is PS5 additional content (DLC), not a patch: real patches use the LIH patch-layer
-            // envelope, and the engine classifies 0x21 as Dlc (ProsperoPackageCategories). "Add-on" is
-            // the library's DLC bucket, treated the same as "DLC" downstream.
-            0x21 => "Add-on",
-            0x22 => "Add-on",
+            // envelope, and the engine classifies 0x21 as Dlc (ProsperoPackageCategories). One
+            // presentation value ("DLC") is used everywhere so the filter matches exactly.
+            0x21 => "DLC",
+            0x22 => "DLC",
             _ => game.SourceKind == Ps5SourceKind.LooseDump ? "Game" : "Unknown"
         };
     }

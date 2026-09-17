@@ -1366,7 +1366,7 @@ partial class MainForm
         // cboFilterCategory
         // 
         cboFilterCategory.ItemHeight = 18;
-        cboFilterCategory.Items.AddRange(new object[] { "Game", "Patch", "Add-on", "App", "Other" });
+        cboFilterCategory.Items.AddRange(new object[] { "Game", "Patch", "DLC", "App", "Unknown" });
         cboFilterCategory.Location = new Point(72, 42);
         cboFilterCategory.Name = "cboFilterCategory";
         cboFilterCategory.Size = new Size(140, 24);
