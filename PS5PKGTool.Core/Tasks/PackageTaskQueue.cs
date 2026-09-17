@@ -21,7 +21,8 @@ namespace PS5PKGTool.Core.Tasks;
     string Message = "",
     string Stage = "",
     string FailureText = "",
-    int Attempts = 0);
+    int Attempts = 0,
+    string TargetQualifier = "");
 
 /// <summary>
 /// Sequential, resumable task queue modelled after a desktop download manager: long package
@@ -97,7 +98,7 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         Func<IProgress<PackageTaskProgress>, CancellationToken, Task> execute,
         string sourcePath = "", string outputPath = "", string? payload = null,
         string operation = "", string sourceFormat = "", string targetFormat = "",
-        PackageTaskStage[]? stagePlan = null)
+        PackageTaskStage[]? stagePlan = null, string targetQualifier = "")
     {
         ArgumentNullException.ThrowIfNull(execute);
         return Enqueue(new QueuedPackageTask
@@ -111,6 +112,7 @@ public sealed class PackageTaskQueue : IAsyncDisposable
             Operation = operation,
             SourceFormat = sourceFormat,
             TargetFormat = targetFormat,
+            TargetQualifier = targetQualifier,
             StagePlan = stagePlan ?? [],
             Execute = execute
         });
@@ -225,7 +227,7 @@ public sealed class PackageTaskQueue : IAsyncDisposable
                 task.Id, task.Type, task.DisplayName, task.SourcePath, task.OutputPath,
                 task.PersistencePayload, task.Status, task.Operation, task.SourceFormat, task.TargetFormat,
                 task.CreatedUtc, task.StartedUtc, task.CompletedUtc, task.Message, task.Progress.Stage,
-                task.Failure?.ToString() ?? string.Empty, task.Attempts)).ToArray();
+                task.Failure?.ToString() ?? string.Empty, task.Attempts, task.TargetQualifier)).ToArray();
             string directory = Path.GetDirectoryName(path) ?? ".";
             Directory.CreateDirectory(directory);
             string temporary = path + ".tmp";

@@ -1095,6 +1095,7 @@ public partial class MainForm
                 sdkVersionOverride, tempDirectory, settings, backend, progress, token),
             sourcePath: source, outputPath: output,
             operation: "Build package", sourceFormat: ImageFormatLabel(source), targetFormat: "FPKG",
+            targetQualifier: backend.DisplayName,
             stagePlan: PackageTaskPlans.BuildPackageFor(source,
                 backend.Id == BackendRegistry.LppId && !Directory.Exists(source)),
             payload: Payload(("source", source), ("output", output), ("contentId", contentId),

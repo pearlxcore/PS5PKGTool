@@ -108,7 +108,7 @@ public partial class MainForm
         Func<IProgress<PackageTaskProgress>, CancellationToken, Task> execute,
         string sourcePath = "", string outputPath = "", Action<QueuedPackageTask>? onFinished = null,
         string? payload = null, string operation = "", string sourceFormat = "", string targetFormat = "",
-        PackageTaskStage[]? stagePlan = null)
+        PackageTaskStage[]? stagePlan = null, string targetQualifier = "")
     {
         var task = new QueuedPackageTask
         {
@@ -121,6 +121,7 @@ public partial class MainForm
             Operation = operation,
             SourceFormat = sourceFormat,
             TargetFormat = targetFormat,
+            TargetQualifier = targetQualifier,
             StagePlan = stagePlan ?? [],
             Execute = execute
         };
@@ -847,6 +848,7 @@ public partial class MainForm
             Operation = entry.Operation,
             SourceFormat = entry.SourceFormat,
             TargetFormat = entry.TargetFormat,
+            TargetQualifier = entry.TargetQualifier,
             StagePlan = PlanForType(entry.Type, fields),
             Execute = execute,
             CreatedUtc = entry.CreatedUtc == default ? DateTime.UtcNow : entry.CreatedUtc

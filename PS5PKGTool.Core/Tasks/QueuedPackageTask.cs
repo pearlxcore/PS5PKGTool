@@ -245,9 +245,21 @@ public sealed class QueuedPackageTask
     public bool IsTerminal => Status is PackageTaskStatus.Completed or PackageTaskStatus.Failed
         or PackageTaskStatus.Cancelled or PackageTaskStatus.Interrupted;
 
-    public string FormatRoute => SourceFormat.Length > 0 && TargetFormat.Length > 0
-        ? $"{SourceFormat} \u2192 {TargetFormat}"
-        : string.Empty;
+    /// <summary>
+    /// Optional qualifier appended to the target in <see cref="FormatRoute"/>, for example the builder
+    /// used for a debug package ("Dump Folder → FPKG (LibProsperoPkg 1.2.0)").
+    /// </summary>
+    public string TargetQualifier { get; init; } = string.Empty;
+
+    public string FormatRoute
+    {
+        get
+        {
+            if (SourceFormat.Length == 0 || TargetFormat.Length == 0) return string.Empty;
+            string route = $"{SourceFormat} \u2192 {TargetFormat}";
+            return TargetQualifier.Length > 0 ? $"{route} ({TargetQualifier})" : route;
+        }
+    }
 
     internal void Apply(PackageTaskStatus status, string? message = null, PackageTaskProgress? progress = null)
     {
