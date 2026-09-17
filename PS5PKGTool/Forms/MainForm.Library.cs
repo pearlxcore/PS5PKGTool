@@ -27,6 +27,7 @@ public partial class MainForm
         _groupItems.Add((menuLibraryGroupFirmware, "firmware"));
         BuildRenamePresetMenu(menuLibraryRename, all: false);
         BuildRenamePresetMenu(menuLibraryRenameAll, all: true);
+        BuildLibraryViewsMenu();
         // Export offers an explicit scope instead of guessing from the current selection.
         menuLibraryExport.DropDownItems.Add("Export selected…", null,
             (_, _) => ExportGamesCsv(SelectedGames().ToList(), "PS5-selected.csv"));
@@ -34,6 +35,105 @@ public partial class MainForm
             (_, _) => ExportGamesCsv([.. _visibleGames], "PS5-visible.csv"));
         menuLibraryExport.DropDownItems.Add("Export all…", null,
             (_, _) => ExportGamesCsv([.. _games], "PS5-library.csv"));
+    }
+
+    private ToolStripMenuItem? _libraryViewsMenu;
+
+    private void BuildLibraryViewsMenu()
+    {
+        if (_libraryViewsMenu is not null) return;
+        _libraryViewsMenu = new ToolStripMenuItem("Views");
+        contextLibrary.Items.Add(new ToolStripSeparator());
+        contextLibrary.Items.Add(_libraryViewsMenu);
+        RebuildLibraryViewsMenu();
+    }
+
+    private void RebuildLibraryViewsMenu()
+    {
+        if (_libraryViewsMenu is null) return;
+        _libraryViewsMenu.DropDownItems.Clear();
+
+        var save = new ToolStripMenuItem("Save current view…");
+        save.Click += (_, _) => SaveCurrentView();
+        _libraryViewsMenu.DropDownItems.Add(save);
+        _libraryViewsMenu.DropDownItems.Add(new ToolStripSeparator());
+
+        if (_settings.SavedViews.Count == 0)
+        {
+            _libraryViewsMenu.DropDownItems.Add(new ToolStripMenuItem("(none saved)") { Enabled = false });
+            return;
+        }
+
+        foreach (SavedLibraryView view in _settings.SavedViews)
+        {
+            var item = new ToolStripMenuItem(view.Name);
+            item.Click += (_, _) => ApplyView(view);
+            _libraryViewsMenu.DropDownItems.Add(item);
+        }
+
+        _libraryViewsMenu.DropDownItems.Add(new ToolStripSeparator());
+        var remove = new ToolStripMenuItem("Delete view");
+        foreach (SavedLibraryView view in _settings.SavedViews)
+        {
+            var item = new ToolStripMenuItem(view.Name);
+            item.Click += (_, _) =>
+            {
+                _settings.SavedViews.Remove(view);
+                SaveSettingsQuietly();
+                RebuildLibraryViewsMenu();
+            };
+            remove.DropDownItems.Add(item);
+        }
+        _libraryViewsMenu.DropDownItems.Add(remove);
+    }
+
+    private void SaveCurrentView()
+    {
+        string? name = PromptText("Save view", "Name for the current view:", string.Empty);
+        if (string.IsNullOrWhiteSpace(name)) return;
+        _settings.SavedViews.RemoveAll(view => string.Equals(view.Name, name, StringComparison.OrdinalIgnoreCase));
+        _settings.SavedViews.Add(new SavedLibraryView
+        {
+            Name = name,
+            Query = searchLibrary.SearchText,
+            Categories = SelectedValues(cboFilterCategory).ToList(),
+            Regions = SelectedValues(cboFilterRegion).ToList(),
+            Formats = SelectedValues(cboFilterFormat).ToList(),
+            GroupBy = _libraryGroupBy,
+            SortKeys = [.. _settings.LibrarySortKeys ?? []],
+            HiddenColumns = [.. _settings.LibraryHiddenColumns ?? []],
+            ColumnOrder = [.. _settings.LibraryColumnOrder ?? []]
+        });
+        SaveSettingsQuietly();
+        RebuildLibraryViewsMenu();
+        statusLabel.Text = $"Saved view '{name}'.";
+    }
+
+    private void ApplyView(SavedLibraryView view)
+    {
+        _suppressFilterEvents = true;
+        try
+        {
+            searchLibrary.SearchText = view.Query;
+            SetCheckedItems(cboFilterCategory, view.Categories);
+            SetCheckedItems(cboFilterRegion, view.Regions);
+            SetCheckedItems(cboFilterFormat, view.Formats);
+        }
+        finally
+        {
+            _suppressFilterEvents = false;
+        }
+
+        _settings.LibraryHiddenColumns = [.. view.HiddenColumns];
+        _settings.LibraryColumnOrder = [.. view.ColumnOrder];
+        _settings.LibrarySortKeys = [.. view.SortKeys];
+        ApplyLibraryColumnVisibility();
+        RestoreLibraryColumnLayout();
+        LoadLibrarySortKeys();
+        SetGroupBy(view.GroupBy);
+        ApplyFilter();
+        SaveSettingsQuietly();
+        statusLabel.Text = $"Applied view '{view.Name}'.";
     }
 
     private void menuLibraryReveal_Click(object? sender, EventArgs e)

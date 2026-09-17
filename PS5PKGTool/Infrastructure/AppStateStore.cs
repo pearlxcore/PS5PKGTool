@@ -3,6 +3,20 @@ using PS5PKGTool.Core.Models;
 
 namespace PS5PKGTool.Infrastructure;
 
+/// <summary>A named snapshot of the library layout: filters, grouping, sorting and columns.</summary>
+public sealed class SavedLibraryView
+{
+    public string Name { get; set; } = string.Empty;
+    public string Query { get; set; } = string.Empty;
+    public List<string> Categories { get; set; } = [];
+    public List<string> Regions { get; set; } = [];
+    public List<string> Formats { get; set; } = [];
+    public string GroupBy { get; set; } = string.Empty;
+    public List<string> SortKeys { get; set; } = [];
+    public List<string> HiddenColumns { get; set; } = [];
+    public List<string> ColumnOrder { get; set; } = [];
+}
+
 public sealed class AppSettings
 {
     public List<string> LibraryFolders { get; set; } = [];
@@ -16,6 +30,8 @@ public sealed class AppSettings
     public bool LibrarySortAscending { get; set; } = true;
     /// <summary>Ordered sort keys ("Title:asc", "Size:desc") for multi-column sorting.</summary>
     public List<string> LibrarySortKeys { get; set; } = [];
+    /// <summary>Named saved library views (filters, grouping, sorting and column layout).</summary>
+    public List<SavedLibraryView> SavedViews { get; set; } = [];
     public List<string> LibraryColumnOrder { get; set; } = [];
     public List<string> LibraryHiddenColumns { get; set; } = [];
     /// <summary>Remembered column fill weights by column name so user-resized widths survive a restart.</summary>

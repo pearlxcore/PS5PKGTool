@@ -106,6 +106,13 @@ public partial class MainForm
         ApplyFilter();
     }
 
+    /// <summary>Replaces a combo's checked set (used when restoring a saved view).</summary>
+    private static void SetCheckedItems(DarkCheckedComboBox combo, IEnumerable<string> values)
+    {
+        combo.SetAllItemsChecked(false);
+        foreach (string value in values) SetComboItem(combo, value);
+    }
+
     private static void SetComboItem(DarkCheckedComboBox combo, string value)
     {
         for (int index = 0; index < combo.Items.Count; index++)
