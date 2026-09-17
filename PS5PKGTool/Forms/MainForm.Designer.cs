@@ -4470,11 +4470,12 @@ partial class MainForm
         // 
         // chkTaskFollow
         // 
-        chkTaskFollow.Dock = DockStyle.Fill;
-        chkTaskFollow.Location = new Point(513, 3);
+        chkTaskFollow.Anchor = AnchorStyles.Left;
+        chkTaskFollow.AutoSize = true;
+        chkTaskFollow.Location = new Point(513, 9);
         chkTaskFollow.Margin = new Padding(3, 3, 3, 3);
         chkTaskFollow.Name = "chkTaskFollow";
-        chkTaskFollow.Size = new Size(114, 32);
+        chkTaskFollow.Size = new Size(114, 19);
         chkTaskFollow.TabIndex = 10;
         chkTaskFollow.Text = "Follow running";
         chkTaskFollow.Checked = true;
@@ -4482,11 +4483,11 @@ partial class MainForm
         // 
         // cboTaskFilter
         // 
-        cboTaskFilter.Dock = DockStyle.Fill;
-        cboTaskFilter.Location = new Point(443, 3);
+        cboTaskFilter.Anchor = AnchorStyles.Left;
+        cboTaskFilter.Location = new Point(443, 7);
         cboTaskFilter.Margin = new Padding(3, 3, 3, 3);
         cboTaskFilter.Name = "cboTaskFilter";
-        cboTaskFilter.Size = new Size(124, 26);
+        cboTaskFilter.Size = new Size(124, 24);
         cboTaskFilter.TabIndex = 10;
         cboTaskFilter.SelectedIndexChanged += cboTaskFilter_SelectedIndexChanged;
         // 
@@ -4494,28 +4495,28 @@ partial class MainForm
         // 
         searchTasks.AccessibleDescription = "Filter the task list by title or status.";
         searchTasks.AccessibleName = "Task search";
-        searchTasks.Dock = DockStyle.Fill;
-        searchTasks.Location = new Point(613, 3);
+        searchTasks.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        searchTasks.Location = new Point(613, 5);
         searchTasks.Margin = new Padding(3, 3, 3, 3);
         searchTasks.Name = "searchTasks";
-        searchTasks.Size = new Size(164, 32);
+        searchTasks.Size = new Size(164, 28);
         searchTasks.TabIndex = 10;
         searchTasks.SearchTextChanged += searchTasks_SearchTextChanged;
         // 
         // btnTaskToggleDetails
         // 
-        btnTaskToggleDetails.Dock = DockStyle.Fill;
-        btnTaskToggleDetails.Location = new Point(783, 3);
+        btnTaskToggleDetails.Anchor = AnchorStyles.Left;
+        btnTaskToggleDetails.Location = new Point(783, 6);
         btnTaskToggleDetails.Margin = new Padding(3, 3, 3, 3);
         btnTaskToggleDetails.Name = "btnTaskToggleDetails";
-        btnTaskToggleDetails.Size = new Size(90, 32);
+        btnTaskToggleDetails.Size = new Size(90, 26);
         btnTaskToggleDetails.TabIndex = 11;
         btnTaskToggleDetails.Text = "Details";
         btnTaskToggleDetails.Click += btnTaskToggleDetails_Click;
         // 
         // splitTasks
         // 
-        tasksLayout.SetColumnSpan(splitTasks, 10);
+        tasksLayout.SetColumnSpan(splitTasks, 14);
         splitTasks.Controls.Add(splitTasksPane1);
         splitTasks.Controls.Add(splitTasksPane2);
         splitTasks.Dock = DockStyle.Fill;

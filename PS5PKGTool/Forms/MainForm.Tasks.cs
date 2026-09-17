@@ -344,21 +344,28 @@ public partial class MainForm
     }
 
     /// <summary>
-    /// Applies the remembered split: collapsed gives the list nearly all the height (a compact
-    /// details strip remains), otherwise the remembered list size is restored.
+    /// Applies the remembered split. Collapsing removes the details pane so the list uses the full
+    /// height (rather than squeezing the details into a broken strip); expanding re-adds it.
     /// </summary>
     private void ApplyTaskPanelSizes()
     {
-        int height = splitTasks.Height;
-        if (height <= 0) return;
+        bool present = splitTasks.Panels.Contains(splitTasksPane2);
         if (_settings.TaskDetailsCollapsed)
         {
-            splitTasks.SetPanelSize(0, Math.Max(60, height - 64));
+            if (present) splitTasks.RemovePanel(splitTasksPane2);
+            return;
         }
-        else if (_settings.TaskSplitterDistance > 0)
+
+        if (!present)
         {
-            splitTasks.SetPanelSize(0, Math.Clamp(_settings.TaskSplitterDistance, 60, Math.Max(60, height - 64)));
+            splitTasks.AddPanel(splitTasksPane2);
+            splitTasks.SetPanelSize(0, Math.Max(100, _settings.TaskSplitterDistance));
+            splitTasks.SetPanelSize(1, 100);
         }
+
+        int height = splitTasks.Height;
+        if (height > 0 && _settings.TaskSplitterDistance > 0)
+            splitTasks.SetPanelSize(0, Math.Clamp(_settings.TaskSplitterDistance, 60, Math.Max(60, height - 64)));
     }
 
     /// <summary>1-based position among the waiting tasks, so a held queue is understandable.</summary>
