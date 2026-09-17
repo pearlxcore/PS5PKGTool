@@ -26,9 +26,13 @@ The release build is self-contained and includes the .NET runtime, so nothing el
 
 - Scan folders for unpacked dumps, Sony `.pkg` files, `.ffpfsc`, `.ffpkg`, and `.exfat` images.
 - Manifest cache, so the library loads instantly after the first scan.
-- Group the list by Title ID, Category, Region, Source format, or Firmware.
-- Filter by Category, Region, and Format, use the presets for common cases, or type in the search box with a small query grammar (`title:`, `id:`, `content:`, `category:`, `region:`, `size:>50GB`, `version:`, `fw:`, `feature:`, `path:`, `-exclude`, quoted phrases, and `|` for OR).
-- Right click actions: copy Title, Title ID, Content ID, file name or path, rename, move into folders, delete to the Recycle Bin, save artwork, extract a package, and convert the selected image.
+- Group the list by Title ID, **Family** (base game, updates and DLC together), Category, Region, Source format, or Firmware.
+- Sort by one column, or **Shift+click** further column headers for a multi-column sort.
+- **Saved views** remember a query, filters, grouping, sort and column layout under a name.
+- A **Role** column labels each item Base, Update, DLC or App and marks updates that a newer patch supersedes.
+- Filter by Category, Region, and Format, use the presets for common cases, or type in the search box with a small query grammar (`title:`, `id:`, `content:`, `category:`, `role:`, `region:`, `size:>50GB`, `version:`, `fw:`, `feature:`, `path:`, `-exclude`, quoted phrases, and `|` for OR). Add `=` for an exact value (`id:=PPSA12345`); a "Check query" hint appears when a token cannot be understood.
+- Right click actions: copy Title, Title ID, Content ID, file name or path, rename (with a preview of every new name), move into folders (with a preview of every destination), delete to the Recycle Bin, save artwork, extract a package, and convert the selected image. Export the selected rows, the visible rows, or the whole library; **Find Duplicates** hashes `param.json` to separate byte-identical copies from possible ones.
+- Appearance settings include a Compact / Normal / Comfortable density preset for the list.
 
 **Game Details and Files**
 

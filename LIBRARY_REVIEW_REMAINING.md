@@ -57,10 +57,24 @@ are design/robustness work.
   selection, and library-wide Rename All moved from the row context menu to the File menu.
 - **Medium — scan feedback:** Escape cancels an in-progress refresh, and scan warnings open a scrollable
   full report instead of a truncated dialog.
+- **Medium — rename/move previews:** rename lists every old -> new name (flagging name clashes that get a
+  numbered name, unchanged items and errors) and move lists every relative destination plus skips before
+  the queue starts.
+- **Optional — family view and roles:** a Family grouping orders base, updates (highest first), DLC and
+  apps within each title; the Role column labels Base/Update/DLC/App and marks older superseded updates;
+  `role:` joins the search grammar.
+- **Optional — duplicates:** Find Duplicates groups candidates by content/title/file metadata, then hashes
+  each `sce_sys/param.json` off the UI thread to separate byte-identical copies from possible ones.
+- **Optional — multi-sort:** Shift+click column headers builds an ordered multi-column sort persisted as
+  `LibrarySortKeys`; glyphs mark every sorted column and Reset view returns to Title ascending.
+- **Optional — saved views:** a Views submenu saves the query, checkbox filters, grouping, sort keys and
+  column layout under a name, applies a saved view in one click, and deletes views.
+- **Optional — density, DPI and accessibility:** a Compact/Normal/Comfortable density preset drives the
+  grid row height (and follows manual row-height changes); the process already runs PerMonitorV2 DPI; key
+  controls expose accessible names/descriptions.
+- **Help wording:** README feature list updated for Family grouping, multi-sort, saved views, the Role
+  column, exact-match queries and query hints, rename/move previews, export scope and duplicate hashing.
 
 ## Remaining
 
-| Priority | Item |
-|---|---|
-| Medium | Rename/move previews enumerate all affected items and conflicts. |
-| Optional | Family/relationship views (base/update/DLC), highest/older-local updates, possible/byte-identical duplicates; multi-sort editor; saved views; density; accessibility/DPI pass; Help update wording. |
+All items from the library review are now addressed. This file is kept as a record of what changed.
