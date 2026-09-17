@@ -25,11 +25,11 @@ history-depth improvements.
 | Area | Item |
 |---|---|
 | Layout | Queue strip (running/waiting/needs attention) done; task text filter added; Details toggle collapses the details panel to enlarge the list; the list/details split is remembered. Status filter added, plus a Result line and a Diagnostic button (copies the full report). Still to do: wide-window side panel. |
-| Controls | "Show source" and "Export report…" now in the task context menu; attempt count is tracked and shown. Still to do: explicit "Follow running" toggle naming; full separate attempt history records. |
-| Columns | Operation-aware Task/source title; builder label; queue position for waiting jobs; in-place row updates preserving selection/scroll/group/column widths; stop scrolling to selection when follow is off. |
+| Controls | "Show source" and "Export report…" now in the task context menu; attempt count is tracked and shown. An explicit "Follow running" toggle is now in the toolbar. Still to do: full separate attempt history records. |
+| Columns | Queue position added; the list no longer auto-scrolls when Follow running is off. Still to do: operation-aware title, a builder label column, in-place updates preserving selection/scroll/group. |
 | Details | Captured configuration (masked), timestamps, attempt number; requested builder and measured item/byte counts are shown. Still to do: version, staging cleanup, verification scope. |
 | State/result | "Completed with warnings" badge; verification failure as a domain result distinct from an exception; truthful Cancelling. |
 | Progress/time | ETA is now labelled approximate and measured counters appear in the result. Still to do: a stage checklist, a running clock independent of progress notifications, and a visible adapter fallback/plan reset. |
-| History | Timing (created/started/completed), last stage and failure text are now persisted and restored. Still to do: separate attempt records, revalidate waiting inputs before running, do not auto-restart interrupted tasks. |
+| History | Timing (created/started/completed), last stage and failure text are now persisted and restored. Waiting jobs now revalidate their source before running. Still to do: separate attempt records (interrupted tasks are already not auto-restarted). |
 | Error/logs | The report (Export report / Diagnostic button) includes masked configuration, timings, stage, failure and task-filtered log lines. Still to do: task/attempt IDs in the global log, fallback visible in the final result. |
 | Interaction | Empty-queue/empty-filter messages with actions; Ctrl+F scoping; queued notification without leaving Tools; accessible status text surviving row updates; selectable long paths/errors. |

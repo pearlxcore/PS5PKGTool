@@ -318,6 +318,17 @@ public sealed class PackageTaskQueue : IAsyncDisposable
 
     private async Task RunAsync(QueuedPackageTask task, CancellationToken lifetime)
     {
+        // Revalidate the captured input before running: files, volumes and workspaces may have changed
+        // since the job was queued.
+        if (!string.IsNullOrEmpty(task.SourcePath) &&
+            !File.Exists(task.SourcePath) && !Directory.Exists(task.SourcePath))
+        {
+            task.Attempts++;
+            task.Apply(PackageTaskStatus.Failed, "Source is no longer available: " + task.SourcePath);
+            Persist();
+            return;
+        }
+
         task.Cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
         CancellationToken token = task.Cancellation.Token;
         task.Attempts++;

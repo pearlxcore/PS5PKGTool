@@ -98,6 +98,7 @@ partial class MainForm
     private DarkUI.Controls.DarkButton btnTaskOpen = null!;
     private DarkUI.Controls.DarkButton btnTaskClear = null!;
     private DarkUI.Controls.DarkLabel lblTaskSummary = null!;
+    private DarkUI.Controls.DarkCheckBox chkTaskFollow = null!;
     private DarkUI.Controls.DarkComboBox cboTaskFilter = null!;
     private DarkUI.Controls.DarkSearchBox searchTasks = null!;
     private DarkUI.Controls.DarkButton btnTaskToggleDetails = null!;
@@ -733,6 +734,7 @@ partial class MainForm
         lblTaskGroup = new DarkUI.Controls.DarkLabel();
         cboTaskGroup = new DarkUI.Controls.DarkComboBox();
         lblTaskSummary = new DarkUI.Controls.DarkLabel();
+        chkTaskFollow = new DarkUI.Controls.DarkCheckBox();
         cboTaskFilter = new DarkUI.Controls.DarkComboBox();
         searchTasks = new DarkUI.Controls.DarkSearchBox();
         btnTaskToggleDetails = new DarkUI.Controls.DarkButton();
@@ -4312,7 +4314,7 @@ partial class MainForm
         // 
         // tasksLayout
         // 
-        tasksLayout.ColumnCount = 13;
+        tasksLayout.ColumnCount = 14;
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86F));
@@ -4325,6 +4327,7 @@ partial class MainForm
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96F));
+        tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         tasksLayout.Controls.Add(chkTaskAutoStart, 0, 0);
         tasksLayout.Controls.Add(btnTaskStart, 1, 0);
@@ -4338,7 +4341,8 @@ partial class MainForm
         tasksLayout.Controls.Add(cboTaskFilter, 9, 0);
         tasksLayout.Controls.Add(searchTasks, 10, 0);
         tasksLayout.Controls.Add(btnTaskToggleDetails, 11, 0);
-        tasksLayout.Controls.Add(lblTaskSummary, 12, 0);
+        tasksLayout.Controls.Add(chkTaskFollow, 12, 0);
+        tasksLayout.Controls.Add(lblTaskSummary, 13, 0);
         tasksLayout.Controls.Add(splitTasks, 0, 1);
         tasksLayout.Dock = DockStyle.Fill;
         tasksLayout.Location = new Point(0, 0);
@@ -4448,6 +4452,18 @@ partial class MainForm
         lblTaskSummary.TabIndex = 9;
         lblTaskSummary.Text = "Queue is empty.";
         lblTaskSummary.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // chkTaskFollow
+        // 
+        chkTaskFollow.Dock = DockStyle.Fill;
+        chkTaskFollow.Location = new Point(513, 3);
+        chkTaskFollow.Margin = new Padding(3, 3, 3, 3);
+        chkTaskFollow.Name = "chkTaskFollow";
+        chkTaskFollow.Size = new Size(114, 32);
+        chkTaskFollow.TabIndex = 10;
+        chkTaskFollow.Text = "Follow running";
+        chkTaskFollow.Checked = true;
+        chkTaskFollow.CheckedChanged += chkTaskFollow_CheckedChanged;
         // 
         // cboTaskFilter
         // 

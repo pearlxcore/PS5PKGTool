@@ -19,6 +19,7 @@ public partial class MainForm
     private bool _taskRefreshPending;
     private readonly HashSet<string> _notifiedTasks = new(StringComparer.Ordinal);
     private bool _autoFollowRunning = true;
+    private bool _suppressFollowSync;
     private bool _suppressTaskSelection;
     private bool _taskGroupByStatus;
 
@@ -61,8 +62,28 @@ public partial class MainForm
 
     private void gridTasks_SelectionChanged(object? sender, EventArgs e)
     {
-        if (!_suppressTaskSelection) _autoFollowRunning = false;
+        // Selecting a task manually turns follow off so the running task stops stealing focus.
+        if (!_suppressTaskSelection && _autoFollowRunning)
+        {
+            _autoFollowRunning = false;
+            SyncFollowCheckbox();
+        }
         UpdateTaskDetails();
+    }
+
+    private void chkTaskFollow_CheckedChanged(object? sender, EventArgs e)
+    {
+        if (_suppressFollowSync) return;
+        _autoFollowRunning = chkTaskFollow.Checked;
+        RefreshTaskGrid();
+    }
+
+    /// <summary>Mirrors <see cref="_autoFollowRunning"/> into the checkbox without re-entering its handler.</summary>
+    private void SyncFollowCheckbox()
+    {
+        _suppressFollowSync = true;
+        try { chkTaskFollow.Checked = _autoFollowRunning; }
+        finally { _suppressFollowSync = false; }
     }
 
     private void gridTasks_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
@@ -124,6 +145,7 @@ public partial class MainForm
         _taskRefreshPending = true;
         if (tabTasks is not null) tabsWorkspace.SelectedTab = tabTasks;
         _autoFollowRunning = true;
+        SyncFollowCheckbox();
         RefreshTaskGrid();
         return task;
     }
@@ -229,7 +251,9 @@ public partial class MainForm
                         {
                             _suppressTaskSelection = false;
                         }
-                        if (row.Index >= 0) gridTasks.FirstDisplayedScrollingRowIndex = row.Index;
+                        // Only auto-scroll while following a running task; otherwise leave the view put.
+                        if (followId is not null && row.Index >= 0)
+                            gridTasks.FirstDisplayedScrollingRowIndex = row.Index;
                         break;
                     }
         }
