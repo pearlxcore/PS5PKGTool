@@ -636,6 +636,7 @@ public partial class MainForm : DarkForm
         PopulateLibraryGrid();
 
         statusCount.Text = $"{_visibleGames.Count:N0} of {_games.Count:N0} games";
+        menuLibraryRenameAll.Enabled = _games.Count > 0;
         if (lblFilterEmpty is not null)
         {
             lblFilterEmpty.Visible = _visibleGames.Count == 0 && _games.Count > 0;

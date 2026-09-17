@@ -24,6 +24,13 @@ public partial class MainForm
         _groupItems.Add((menuLibraryGroupFirmware, "firmware"));
         BuildRenamePresetMenu(menuLibraryRename, all: false);
         BuildRenamePresetMenu(menuLibraryRenameAll, all: true);
+        // Export offers an explicit scope instead of guessing from the current selection.
+        menuLibraryExport.DropDownItems.Add("Export selected…", null,
+            (_, _) => ExportGamesCsv(SelectedGames().ToList(), "PS5-selected.csv"));
+        menuLibraryExport.DropDownItems.Add("Export visible…", null,
+            (_, _) => ExportGamesCsv([.. _visibleGames], "PS5-visible.csv"));
+        menuLibraryExport.DropDownItems.Add("Export all…", null,
+            (_, _) => ExportGamesCsv([.. _games], "PS5-library.csv"));
     }
 
     private void menuLibraryReveal_Click(object? sender, EventArgs e)
@@ -92,7 +99,8 @@ public partial class MainForm
         menuLibraryGroupArtwork.Visible = groupContext;
         menuLibrarySeparator5.Visible = groupContext;
 
-        menuLibraryExport.Text = SelectedGames().Any() ? "Export selected (CSV)..." : "Export library (CSV)...";
+        menuLibraryExport.Text = "Export (CSV)";
+        menuLibraryExport.Enabled = _games.Count > 0;
     }
 
     private void gridLibrary_MouseDown(object? sender, MouseEventArgs e)
