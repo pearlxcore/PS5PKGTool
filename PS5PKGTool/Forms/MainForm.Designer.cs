@@ -241,6 +241,7 @@ partial class MainForm
     private DarkUI.Controls.DarkLabel lblExecutableSummary = null!;
     private DarkUI.Controls.DarkDataGridView gridModules = null!;
     private DarkUI.Controls.DarkButton btnExecExtract = null!;
+    private DarkUI.Controls.DarkButton btnExecHash = null!;
     private DarkUI.Controls.DarkButton btnExecCopyAll = null!;
     private DarkUI.Controls.DarkButton btnExecCopySelected = null!;
     private DarkUI.Controls.DarkSearchBox searchExecutable = null!;
@@ -594,6 +595,7 @@ partial class MainForm
         btnExecCopySelected = new DarkUI.Controls.DarkButton();
         btnExecCopyAll = new DarkUI.Controls.DarkButton();
         btnExecExtract = new DarkUI.Controls.DarkButton();
+        btnExecHash = new DarkUI.Controls.DarkButton();
         tabRaw = new DarkUI.Controls.DarkTabPage();
         txtRawMetadata = new DarkUI.Controls.DarkRichTextBox();
         btnCopyRawJson = new DarkUI.Controls.DarkButton();
@@ -2706,6 +2708,7 @@ partial class MainForm
         tabExecutable.Controls.Add(btnExecCopySelected);
         tabExecutable.Controls.Add(btnExecCopyAll);
         tabExecutable.Controls.Add(btnExecExtract);
+        tabExecutable.Controls.Add(btnExecHash);
         tabExecutable.Location = new Point(4, 32);
         tabExecutable.Name = "tabExecutable";
         tabExecutable.Padding = new Padding(0, 90, 0, 0);
@@ -2958,6 +2961,15 @@ partial class MainForm
         btnExecExtract.TabIndex = 0;
         btnExecExtract.Text = "Extract...";
         btnExecExtract.Click += btnExecExtract_Click;
+        // 
+        // btnExecHash
+        // 
+        btnExecHash.Location = new Point(124, 58);
+        btnExecHash.Name = "btnExecHash";
+        btnExecHash.Size = new Size(130, 26);
+        btnExecHash.TabIndex = 1;
+        btnExecHash.Text = "SHA-256...";
+        btnExecHash.Click += btnExecHash_Click;
         // 
         // tabRaw
         // 

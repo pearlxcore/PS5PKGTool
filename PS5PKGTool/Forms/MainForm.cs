@@ -36,6 +36,7 @@ public partial class MainForm : DarkForm
     private Ps5UdsSummary? _udsSummary;
     private Ps5SelfInfo? _selfInfo;
     private DataView? _trophyView;
+    private string _trophySummaryBase = string.Empty;
     private int _fileSortColumn;
     private bool _fileSortAscending = true;
     private string _currentDetailsRoot = string.Empty;
@@ -1465,13 +1466,15 @@ public partial class MainForm : DarkForm
             string languages = set.Languages.Count > 0 ? string.Join(", ", set.Languages) : "unknown";
             lblTrophySummary.Text = $"{set.Title} - {set.Trophies.Count} trophies ({grades}) - {set.NpCommunicationId} - " +
                                     $"Set version: {set.TrophySetVersion} - Language: {set.SelectedLanguage} (available: {languages}) - " +
-                                    $"UCP integrity: {(set.IntegrityValid ? "Valid" : "Failed")}";
+                                    $"UCP integrity: {(set.IntegrityValid ? "Valid" : "Failed")} - " +
+                                    "source: sce_sys/trophy2/trophy00.ucp";
         }
         else lblTrophySummary.Text = sectionError.Length > 0
             ? "Trophy archive could not be read: " + sectionError
-            : "No PS5 trophy archive was found.";
+            : "No sce_sys/trophy2/trophy00.ucp archive was found for this source.";
         _trophyView = table.DefaultView;
         gridTrophies.DataSource = _trophyView;
+        _trophySummaryBase = lblTrophySummary.Text;
         ApplyTrophyFilter();
     }
 
@@ -1498,6 +1501,11 @@ public partial class MainForm : DarkForm
 
         try { _trophyView.RowFilter = string.Join(" AND ", clauses); }
         catch (SyntaxErrorException) { _trophyView.RowFilter = string.Empty; }
+        // Distinguish "no trophies at all" from "none match the current filter".
+        int total = _currentDetails?.TrophySet?.Trophies.Count ?? 0;
+        lblTrophySummary.Text = clauses.Count > 0
+            ? $"{_trophySummaryBase}  —  showing {_trophyView.Count:N0} of {total:N0}"
+            : _trophySummaryBase;
     }
 
     private IReadOnlyList<Ps5Trophy> VisibleTrophies()
@@ -1821,10 +1829,13 @@ public partial class MainForm : DarkForm
         treeFiles.SelectedNode = root;
         lblFilesSummary.Text = game.SourceKind switch
         {
-            Ps5SourceKind.SonyPackage =>
-                game.Package?.NestedPfs?.AccessState == SonyPfsAccessState.PlaintextIndexed
-                    ? $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} content - inner PFS files with readable CNT metadata merged"
-                    : $"{inventory.FileCount:N0} readable CNT metadata entries - {FormatBytes(inventory.TotalSize)} package (game filesystem not decoded)",
+            Ps5SourceKind.SonyPackage => game.Package?.NestedPfs?.AccessState == SonyPfsAccessState.PlaintextIndexed
+                ? $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} content - inner PFS files with readable CNT metadata merged"
+                : $"{inventory.FileCount:N0} readable CNT metadata entries - {FormatBytes(inventory.TotalSize)} package " +
+                  "(the game filesystem was not decoded; this is not the full file set" +
+                  (game.Package is { EncryptedEntryCount: > 0 } encrypted
+                      ? $"; {encrypted.EncryptedEntryCount:N0} encrypted entr{(encrypted.EncryptedEntryCount == 1 ? "y is" : "ies are")} not readable"
+                      : string.Empty) + ")",
             Ps5SourceKind.Ffpfsc =>
                 $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} logical " +
                 $"{(Path.GetExtension(game.ContainerInnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase) ? "FFPKG" : "exFAT")} content - read directly from FFPFSC",
@@ -2724,6 +2735,48 @@ public partial class MainForm : DarkForm
         file = found;
         return true;
     }
+
+    /// <summary>
+    /// On-demand eboot.bin SHA-256 with its provenance. Never computed automatically: eboot can be
+    /// large and may legitimately differ between a dump and a built package.
+    /// </summary>
+    private async void btnExecHash_Click(object? sender, EventArgs e)
+    {
+        if (_selectedGame is not { } game)
+        {
+            AppDialog.ShowInformation("Select a source first.", "Executable");
+            return;
+        }
+        try
+        {
+            string? hash = await ComputeEbootSha256Async(game);
+            if (hash is null)
+            {
+                AppDialog.ShowInformation("eboot.bin was not found in this source.", "Executable");
+                return;
+            }
+            CopyText(hash);
+            AppDialog.ShowInformation(
+                $"SHA-256 of the eboot.bin as read from this source:\n\n{hash}\n\n" +
+                $"Source: {game.SourceDescription} ({game.RootPath})\n" +
+                "The hash was copied to the clipboard.", "eboot.bin SHA-256");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
+                                   NotSupportedException or ArgumentException)
+        {
+            AppDialog.ShowError("Could not hash eboot.bin: " + ex.Message, "Executable");
+        }
+    }
+
+    private static async Task<string?> ComputeEbootSha256Async(Ps5GameInfo game) =>
+        await Task.Run(() =>
+        {
+            using IReadOnlyGameFileSystem files = GameFileSystem.Open(game);
+            if (!files.FileExists("eboot.bin")) return (string?)null;
+            using Stream stream = files.OpenRead("eboot.bin");
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            return Convert.ToHexString(sha.ComputeHash(stream));
+        });
 
     private void PopulateExecutable(Ps5SelfInfo? executable, string sectionError = "")
     {
