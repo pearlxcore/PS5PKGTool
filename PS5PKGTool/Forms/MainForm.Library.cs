@@ -57,7 +57,16 @@ public partial class MainForm
 
     private void contextLibrary_Opening(object? sender, CancelEventArgs e)
     {
-        bool groupContext = _contextRowIndex >= 0 && gridLibrary.IsGroupRow(_contextRowIndex);
+        // Resolve the target here, per invocation: a mouse right-click records its row in MouseDown,
+        // while keyboard invocation (Shift+F10 / Menu key) must use the focused row rather than a stale
+        // index left over from an earlier right-click.
+        int rowIndex = _contextFromMouse
+            ? _contextRowIndex
+            : gridLibrary.CurrentRow?.Index
+              ?? (gridLibrary.SelectedRows.Count > 0 ? gridLibrary.SelectedRows[0].Index : -1);
+        _contextFromMouse = false;
+        _contextRowIndex = rowIndex;
+        bool groupContext = rowIndex >= 0 && gridLibrary.IsGroupRow(rowIndex);
         bool hasGame = !groupContext && SelectedGame() is not null;
         // Single-row actions target one entry; disable them for a multi-selection rather than acting
         // on an arbitrary row.
@@ -90,6 +99,7 @@ public partial class MainForm
     {
         if (e.Button != MouseButtons.Right) return;
         DataGridView.HitTestInfo hit = gridLibrary.HitTest(e.X, e.Y);
+        _contextFromMouse = true;
         _contextRowIndex = hit.RowIndex;
         if (hit.RowIndex < 0 || hit.RowIndex >= gridLibrary.Rows.Count) return;
         DataGridViewRow row = gridLibrary.Rows[hit.RowIndex];

@@ -12,6 +12,7 @@ namespace PS5PKGTool.Forms;
 public partial class MainForm
 {
     private int _contextRowIndex = -1;
+    private bool _contextFromMouse;
 
     // ---------------------------------------------------------------- copy
 
