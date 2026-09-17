@@ -22,6 +22,9 @@ public partial class MainForm
     private bool _suppressFollowSync;
     private bool _suppressTaskSelection;
     private bool _taskGroupByStatus;
+    private readonly Dictionary<string, DataGridViewRow> _taskRows = new(StringComparer.Ordinal);
+    private string _taskGridSignature = string.Empty;
+    private string? _lastFollowedTaskId;
 
     private void InitializeTaskQueue()
     {
@@ -217,53 +220,86 @@ public partial class MainForm
             ? _taskQueue.Tasks.FirstOrDefault(task =>
                 task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling)?.Id
             : null;
-        string? targetId = followId ?? selectedId;
         IReadOnlyList<QueuedPackageTask> tasks = _taskQueue.Tasks.Where(MatchesTaskFilter).ToArray();
+
+        // Rebuild only when the visible set or its statuses change. Routine progress ticks update the
+        // existing rows in place, so the grid no longer jumps to the top or flickers on every tick.
+        string signature = (_taskGroupByStatus ? "g|" : "|") +
+            string.Join("|", tasks.Select(task => task.Id + ":" + (int)task.Status));
+        bool rebuild = !string.Equals(signature, _taskGridSignature, StringComparison.Ordinal);
+        bool followChanged = !string.Equals(followId, _lastFollowedTaskId, StringComparison.Ordinal);
+        int scrollRow = gridTasks.FirstDisplayedScrollingRowIndex;
+        string? targetId = rebuild
+            ? (followId is not null && followChanged ? followId : selectedId)
+            : null;
 
         gridTasks.SuspendLayout();
         try
         {
-            if (_taskGroupByStatus)
+            if (rebuild)
             {
-                gridTasks.SetGroups(tasks, task => StatusText(task.Status), FillTaskRow, TaskGroupComparer);
+                _taskGridSignature = signature;
+                _taskRows.Clear();
+                if (_taskGroupByStatus)
+                {
+                    gridTasks.SetGroups(tasks, task => StatusText(task.Status), FillTaskRow, TaskGroupComparer);
+                }
+                else
+                {
+                    gridTasks.ClearGroups();
+                    gridTasks.Rows.Clear();
+                    foreach (QueuedPackageTask task in tasks)
+                    {
+                        DataGridViewRow row = gridTasks.Rows[gridTasks.Rows.Add()];
+                        row.Tag = task;
+                        FillTaskRow(row, task);
+                    }
+                }
+                foreach (DataGridViewRow row in gridTasks.Rows)
+                    if (row.Tag is QueuedPackageTask task) _taskRows[task.Id] = row;
             }
             else
             {
-                gridTasks.ClearGroups();
-                gridTasks.Rows.Clear();
                 foreach (QueuedPackageTask task in tasks)
-                {
-                    DataGridViewRow row = gridTasks.Rows[gridTasks.Rows.Add()];
-                    row.Tag = task;
-                    FillTaskRow(row, task);
-                }
+                    if (_taskRows.TryGetValue(task.Id, out DataGridViewRow? row)) FillTaskRow(row, task);
             }
 
             if (targetId is not null)
+            {
                 foreach (DataGridViewRow row in gridTasks.Rows)
-                    if (row.Tag is QueuedPackageTask candidate &&
-                        string.Equals(candidate.Id, targetId, StringComparison.Ordinal))
+                {
+                    if (row.Tag is not QueuedPackageTask candidate ||
+                        !string.Equals(candidate.Id, targetId, StringComparison.Ordinal)) continue;
+                    _suppressTaskSelection = true;
+                    try
                     {
-                        _suppressTaskSelection = true;
-                        try
-                        {
-                            row.Selected = true;
-                            if (row.Index >= 0) gridTasks.CurrentCell = row.Cells[0];
-                        }
-                        finally
-                        {
-                            _suppressTaskSelection = false;
-                        }
-                        // Only auto-scroll while following a running task; otherwise leave the view put.
-                        if (followId is not null && row.Index >= 0)
-                            gridTasks.FirstDisplayedScrollingRowIndex = row.Index;
-                        break;
+                        if (!row.Selected) row.Selected = true;
+                        if (row.Index >= 0) gridTasks.CurrentCell = row.Cells[0];
                     }
+                    finally
+                    {
+                        _suppressTaskSelection = false;
+                    }
+                    // Scroll to the running task only when it changes; otherwise restore the previous
+                    // scroll offset so scrolling through history is not interrupted.
+                    if (followId is not null && followChanged && row.Index >= 0)
+                        gridTasks.FirstDisplayedScrollingRowIndex = row.Index;
+                    else if (scrollRow >= 0 && scrollRow < gridTasks.Rows.Count)
+                        gridTasks.FirstDisplayedScrollingRowIndex = scrollRow;
+                    break;
+                }
+            }
+            else if (rebuild && scrollRow >= 0 && scrollRow < gridTasks.Rows.Count)
+            {
+                gridTasks.FirstDisplayedScrollingRowIndex = scrollRow;
+            }
         }
         finally
         {
             gridTasks.ResumeLayout();
         }
+
+        _lastFollowedTaskId = followId;
         UpdateTaskSummary();
         UpdateTaskDetails();
     }
@@ -506,14 +542,16 @@ public partial class MainForm
         : task.Progress.TaskPercent;
 
     /// <summary>
-    /// Keeps the last known stage on terminal tasks (so a failure shows where it stopped) and adds an
-    /// ellipsis only while the task is still active.
+    /// The Stage column is cleared once a task finishes; the last stage is kept on the task itself so
+    /// the detail panel and diagnostic report can still show where a failure stopped.
     /// </summary>
-    private static string StageText(QueuedPackageTask task) => string.IsNullOrWhiteSpace(task.Progress.Stage)
-        ? string.Empty
-        : task.Progress.Stage + (task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling
+    private static string StageText(QueuedPackageTask task)
+    {
+        if (task.IsTerminal || string.IsNullOrWhiteSpace(task.Progress.Stage)) return string.Empty;
+        return task.Progress.Stage + (task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling
             ? "\u2026"
             : string.Empty);
+    }
 
     private static string ElapsedText(QueuedPackageTask task)
     {
