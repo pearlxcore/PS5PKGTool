@@ -36,17 +36,31 @@ are design/robustness work.
 - **Medium — scan ownership:** each scan carries a generation; a superseded scan can no longer apply its
   results or clear the newer scan's busy state when it finishes, and F5 honors the refresh command's
   enabled state.
+- **High — context targeting:** the target is resolved per invocation — a mouse right-click keeps its hit
+  row, while keyboard Shift+F10/Menu uses the focused row instead of a stale index — and group-only
+  items are shown only for group rows.
+- **Medium — Reset view:** a "Reset view" command restores the default Title-ascending sort, clears
+  grouping and shows all columns in declared order, separate from "Reset filters".
+- **Medium — query feedback:** a "Check query" chip reports unbalanced quotes, unknown field prefixes,
+  missing values and malformed size/version comparisons while still running the query.
+- **Medium — column widths:** columns build from the declared default weights and remember user-resized
+  proportional widths across sessions (`LibraryColumnWeights`); Reset view and Reset column layout
+  restore the defaults.
+- **Medium — collision-safe artwork:** "Save all" uses a title-ID prefix and numbered suffix when a name
+  such as `icon0.png` already exists, so several games can share one output folder.
+- **Medium — settings grouping round-trip:** the Default group combo stores a label while the setting
+  stores a key, so the saved grouping was reset to None on every open; it now maps back to the label.
+- **Medium — thumbnail cache:** a superseded load re-checks its version before publishing (disposing a
+  stale image), clearing the cache disposes images the grid no longer shows, and per-source removal is
+  centralized for rename/move.
+- **Medium — export scope:** Export is a submenu (selected / visible / all) rather than guessing from the
+  selection, and library-wide Rename All moved from the row context menu to the File menu.
+- **Medium — scan feedback:** Escape cancels an in-progress refresh, and scan warnings open a scrollable
+  full report instead of a truncated dialog.
 
 ## Remaining
 
 | Priority | Item |
 |---|---|
-| High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
-| Medium | Reset semantics: add a separate **Reset view** (default sort/group/columns) distinct from "Reset filters". |
-| Medium | Query parser: inline feedback for unknown prefixes, unmatched quotes and malformed comparisons; clarify OR syntax. |
-| Medium | Columns: apply declared default widths, persist widths, default compact layout, keep Format and Status separate. |
-| Medium | Rename/move previews enumerate all affected items and conflicts; remove `Rename All` from row context; export scope selector. |
-| Medium | Collision-safe Save Artwork; recent-source persistence consistency. |
-| Medium | Thumbnail cancellation state, bounded cache with image disposal, existence-check caching; parse-once filters. |
-| Medium | Settings default-group key/label mismatch; scan feedback (summary, cancel, full error report). |
+| Medium | Rename/move previews enumerate all affected items and conflicts. |
 | Optional | Family/relationship views (base/update/DLC), highest/older-local updates, possible/byte-identical duplicates; multi-sort editor; saved views; density; accessibility/DPI pass; Help update wording. |
