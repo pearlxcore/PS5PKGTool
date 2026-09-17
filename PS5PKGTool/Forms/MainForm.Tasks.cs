@@ -318,6 +318,8 @@ public partial class MainForm
         if (task.SourcePath.Length > 0) parts.Add("From " + Path.GetFileName(task.SourcePath));
         if (task.OutputPath.Length > 0) parts.Add("To " + Path.GetFileName(task.OutputPath));
         parts.Add("Elapsed " + ElapsedText(task));
+        if (task.StartedUtc is { } startedAt) parts.Add("Started " + startedAt.ToLocalTime().ToString("HH:mm:ss"));
+        if (task.CompletedUtc is { } endedAt) parts.Add("Ended " + endedAt.ToLocalTime().ToString("HH:mm:ss"));
         if (EtaText(task) is { } eta) parts.Add(eta);
         lblTaskMeta.Text = string.Join("   |   ", parts);
     }
@@ -563,7 +565,8 @@ public partial class MainForm
             SourceFormat = entry.SourceFormat,
             TargetFormat = entry.TargetFormat,
             StagePlan = PlanForType(entry.Type, fields),
-            Execute = execute
+            Execute = execute,
+            CreatedUtc = entry.CreatedUtc == default ? DateTime.UtcNow : entry.CreatedUtc
         };
         task.Changed += TaskQueue_Changed;
         return task;

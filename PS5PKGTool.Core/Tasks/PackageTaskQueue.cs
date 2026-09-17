@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace PS5PKGTool.Core.Tasks;
 
 /// <summary>Serializable projection of a <see cref="QueuedPackageTask"/> for restart-resume.</summary>
-public sealed record PersistedPackageTask(
+    public sealed record PersistedPackageTask(
     string Id,
     string Type,
     string DisplayName,
@@ -14,7 +14,13 @@ public sealed record PersistedPackageTask(
     PackageTaskStatus Status,
     string Operation = "",
     string SourceFormat = "",
-    string TargetFormat = "");
+    string TargetFormat = "",
+    DateTime CreatedUtc = default,
+    DateTime? StartedUtc = null,
+    DateTime? CompletedUtc = null,
+    string Message = "",
+    string Stage = "",
+    string FailureText = "");
 
 /// <summary>
 /// Sequential, resumable task queue modelled after a desktop download manager: long package
@@ -216,7 +222,9 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         {
             PersistedPackageTask[] entries = Tasks.Select(task => new PersistedPackageTask(
                 task.Id, task.Type, task.DisplayName, task.SourcePath, task.OutputPath,
-                task.PersistencePayload, task.Status, task.Operation, task.SourceFormat, task.TargetFormat)).ToArray();
+                task.PersistencePayload, task.Status, task.Operation, task.SourceFormat, task.TargetFormat,
+                task.CreatedUtc, task.StartedUtc, task.CompletedUtc, task.Message, task.Progress.Stage,
+                task.Failure?.ToString() ?? string.Empty)).ToArray();
             string directory = Path.GetDirectoryName(path) ?? ".";
             Directory.CreateDirectory(directory);
             string temporary = path + ".tmp";
@@ -259,7 +267,9 @@ public sealed class PackageTaskQueue : IAsyncDisposable
             if (entry.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling)
                 task.Apply(PackageTaskStatus.Interrupted, "Interrupted during a previous session; retry to resume.");
             else
-                task.Apply(entry.Status, task.Message);
+                task.Apply(entry.Status, string.IsNullOrEmpty(entry.Message) ? task.Message : entry.Message);
+            // Restore the recorded timing, last stage and failure text so history stays truthful.
+            task.RestoreHistory(entry.StartedUtc, entry.CompletedUtc, entry.Message, entry.Stage, entry.FailureText);
             lock (_gate) _tasks.Add(task);
             restored++;
         }

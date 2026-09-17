@@ -256,4 +256,18 @@ public sealed class QueuedPackageTask
         if (IsTerminal) CompletedUtc ??= DateTime.UtcNow;
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Restores persisted history metadata (timing, last stage, failure text) after a restart so the
+    /// past attempt is shown truthfully rather than as a bare status.
+    /// </summary>
+    internal void RestoreHistory(DateTime? startedUtc, DateTime? completedUtc, string message, string stage,
+        string failureText)
+    {
+        if (startedUtc is { } started) StartedUtc = started;
+        if (completedUtc is { } completed) CompletedUtc = completed;
+        if (!string.IsNullOrEmpty(message)) Message = message;
+        if (!string.IsNullOrEmpty(stage)) Progress = Progress with { Stage = stage };
+        if (!string.IsNullOrEmpty(failureText)) Failure = new InvalidOperationException(failureText);
+    }
 }

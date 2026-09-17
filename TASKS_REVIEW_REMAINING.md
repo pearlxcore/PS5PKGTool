@@ -16,6 +16,9 @@ history-depth improvements.
   blanking.
 - **Show output:** opens the task's actual output only; it no longer falls back to the source.
 - Control text: `Auto-start` → `Run queue`, `Clear Completed` → `Clear successful`.
+- **History depth:** `PersistedPackageTask` now stores created/started/completed times, the task
+  message, the last stage and the failure text; `RestoreFromDisk` reapplies them, and the detail
+  panel shows Started/Ended alongside Elapsed.
 
 ## Remaining
 
@@ -27,6 +30,6 @@ history-depth improvements.
 | Details | Captured configuration, masked passcode, timestamps, attempt number; per-operation live/result fields (builder/version, route, staging cleanup, counts, verification scope). |
 | State/result | "Completed with warnings" badge; verification failure as a domain result distinct from an exception; truthful Cancelling. |
 | Progress/time | Stage checklist with measured counters (`Files x/y`, `Bytes a/b`) instead of equal-stage weighting; validity-checked ETA; running clock independent of progress notifications; visible adapter fallback and plan reset. |
-| History | Persist timing/error/result per attempt; keep attempts separate from requested options; revalidate waiting inputs before running; do not auto-restart interrupted tasks. |
+| History | Timing (created/started/completed), last stage and failure text are now persisted and restored. Still to do: separate attempt records, revalidate waiting inputs before running, do not auto-restart interrupted tasks. |
 | Error/logs | Concise cause + expandable diagnostic with Copy/Export report (task-filtered); task/attempt IDs in the global log; fallback visible in the final result. |
 | Interaction | Empty-queue/empty-filter messages with actions; Ctrl+F scoping; queued notification without leaving Tools; accessible status text surviving row updates; selectable long paths/errors. |
