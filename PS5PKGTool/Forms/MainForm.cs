@@ -541,11 +541,17 @@ public partial class MainForm : DarkForm
         using var form = new SettingsForm(_settings, SaveSettingsFromDialog);
         if (form.ShowDialog(this) != DialogResult.OK) return;
 
-        bool libraryChanged = !_settings.LibraryFolders.SequenceEqual(form.Settings.LibraryFolders, StringComparer.OrdinalIgnoreCase)
-                              || _settings.RecursiveScan != form.Settings.RecursiveScan;
-        bool presentationChanged = _settings.ShowThumbnails != form.Settings.ShowThumbnails
-                                   || _settings.DefaultGroupBy != form.Settings.DefaultGroupBy
-                                   || _settings.GridRowHeight != form.Settings.GridRowHeight;
+        AppSettings previous = _settings;
+        // Import can change manual sources without touching library folders, so compare both.
+        bool libraryChanged = !previous.LibraryFolders.SequenceEqual(form.Settings.LibraryFolders, StringComparer.OrdinalIgnoreCase)
+                              || !previous.ManualSources.SequenceEqual(form.Settings.ManualSources, StringComparer.OrdinalIgnoreCase)
+                              || previous.RecursiveScan != form.Settings.RecursiveScan;
+        bool presentationChanged = previous.ShowThumbnails != form.Settings.ShowThumbnails
+                                   || previous.DefaultGroupBy != form.Settings.DefaultGroupBy
+                                   || previous.GridRowHeight != form.Settings.GridRowHeight;
+        bool layoutChanged = !previous.LibraryColumnOrder.SequenceEqual(form.Settings.LibraryColumnOrder)
+                             || !previous.LibraryHiddenColumns.SequenceEqual(form.Settings.LibraryHiddenColumns)
+                             || !previous.LibrarySortKeys.SequenceEqual(form.Settings.LibrarySortKeys);
         _settings = form.Settings;
         ApplyRuntimeSettings();
         ApplyDefaultGrouping();
@@ -553,6 +559,7 @@ public partial class MainForm : DarkForm
         RebuildRecentMenu();
         RebuildLibraryViewsMenu();
         if (form.ResetLayout) ResetLibraryColumnLayout();
+        else if (layoutChanged) ReconcileLibraryLayout();
         if (form.ClearCaches) ClearRuntimeCaches();
         if (presentationChanged) ApplyFilter();
 
@@ -586,6 +593,20 @@ public partial class MainForm : DarkForm
         {
             return (false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Re-applies an imported or reset column layout to the live grid, so the layout captured when the
+    /// form closes cannot write the old arrangement back over the new preference.
+    /// </summary>
+    private void ReconcileLibraryLayout()
+    {
+        if (!_libraryColumnsReady) return;
+        ApplyLibraryColumnVisibility();
+        ApplyLibraryColumnWeights();
+        RestoreLibraryColumnLayout();
+        LoadLibrarySortKeys();
+        ApplyFilter();
     }
 
     private void ResetLibraryColumnLayout()

@@ -410,7 +410,10 @@ public partial class MainForm
         if (_imageSourcePath is null) { box.Clear(); return; }
         bool directory = Directory.Exists(_imageSourcePath);
         string name = directory ? new DirectoryInfo(_imageSourcePath).Name : Path.GetFileNameWithoutExtension(_imageSourcePath);
-        string? parent = directory ? Directory.GetParent(_imageSourcePath)?.FullName : Path.GetDirectoryName(_imageSourcePath);
+        // The default output folder (when set and available) takes precedence for suggested outputs.
+        string? parent = !string.IsNullOrWhiteSpace(_settings.OutputDirectory) && Directory.Exists(_settings.OutputDirectory)
+            ? _settings.OutputDirectory
+            : directory ? Directory.GetParent(_imageSourcePath)?.FullName : Path.GetDirectoryName(_imageSourcePath);
         box.Text = Path.Combine(parent ?? _imageSourcePath, name + suffix);
     }
 
