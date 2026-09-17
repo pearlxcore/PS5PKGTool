@@ -58,7 +58,8 @@ Every long action runs on the Tasks tab; the form only queues work and reports p
 **Package (FPKG) Support**
 
 - Read, verify, and extract debug PS5 packages (FPKG), including inner PFS browsing, trophies, activities, and PlayGo data.
-- Build a debug package from an unpacked dump or directly from an image. Content ID and passcode are configurable, and an optional seed gives byte reproducible output.
+- Build a debug package from an unpacked dump or directly from an image. The Content ID is read from the source automatically and the passcode is configurable; an optional seed gives byte reproducible output.
+- Choose the builder: `LibProsperoPkg` (the default) or `ProsperoPkgTool`, the app's own internal FPKG builder, which is an alternative to LibProsperoPkg and is still experimental.
 - Build settings include inner compression (Auto - Kraken where it helps, Kraken forced, or Uncompressed), Kraken level and thread count, PlayGo chunk count (default 1), an SDK version override, and an optional workspace folder. Package type is APP; AC (additional content) is not supported yet.
 - Convert a debug package to exFAT, FFPKG, or FFPFSC.
 - Retail packages are recognized but cannot be decoded without matching image key material. Only debug packages built with the default or a known passcode are fully readable.
@@ -85,19 +86,18 @@ a save failure keeps your edits and offers Retry. Import validates the file and 
 export leaves the debug passcode out unless you ask for it; Reset restores preference defaults but keeps
 your folders, sources, recent folders and saved views.
 
-# How To Convert
-
-1. Select a dump or image in the library, or open Tools and choose a file.
-2. Pick the action (usually Create / Convert) and the target format.
-3. Set the output path and any options, then Run.
-4. Watch the Tasks tab. The source is never modified, and a failed conversion only removes its own temporary output.
-
 # How To Build A Debug Package
 
 1. Select an unpacked dump (or an image of one) in Image Tools.
 2. Choose the `Debug Package (FPKG)` target.
-3. Enter the 36 character Content ID and the 32 character passcode, or leave the passcode blank for the default.
-4. Run. The package is written to the output path and queued for the Tasks tab.
+3. Optionally set the passcode (blank uses the default all-zero passcode). The Content ID is read from the source's `param.json` automatically, so there is no field to fill in.
+4. Pick a **builder**:
+   - `LibProsperoPkg` — the default third-party builder.
+   - `ProsperoPkgTool` — the app's own internal FPKG builder, offered as an alternative to LibProsperoPkg. It is **still experimental**; see the note below.
+5. Optionally tick **Advanced options** to set compression (Auto / Kraken / Uncompressed), Kraken level and thread count, PlayGo chunks, package type, an SDK version override, a workspace folder, DRM handling, and fake-sign / right.sprx injection.
+6. Run. Free disk space is checked before the build starts, the package is written to the output path, and progress is shown stage by stage on the Tasks tab.
+
+> **Note:** ProsperoPkgTool is the app's own internal package builder, provided alongside LibProsperoPkg. It is still experimental — output has been validated on PC but not on jailbroken PS5 hardware. Keep originals and verify any produced package before relying on it.
 
 # Updates
 
