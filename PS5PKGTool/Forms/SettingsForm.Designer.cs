@@ -6,22 +6,21 @@ partial class SettingsForm
 {
     private System.ComponentModel.IContainer? components = null;
     private DarkUI.Controls.DarkTabControl tabsSettings = null!;
+
     private DarkUI.Controls.DarkTabPage tabLibrary = null!;
     private DarkUI.Controls.DarkLabel lblLibraryInfo = null!;
+    private DarkUI.Controls.DarkLabel lblFolders = null!;
     private DarkUI.Controls.DarkListBox lstFolders = null!;
     private DarkUI.Controls.DarkButton btnAdd = null!;
     private DarkUI.Controls.DarkButton btnRemove = null!;
-    private DarkUI.Controls.DarkTabPage tabAppearance = null!;
-    private DarkUI.Controls.DarkTabPage tabFiles = null!;
-    private DarkUI.Controls.DarkTabPage tabPaths = null!;
-    private DarkUI.Controls.DarkTabPage tabSafety = null!;
-    private DarkUI.Controls.DarkTabPage tabDiagnostics = null!;
-    private DarkUI.Controls.DarkCheckBox chkRefreshOnStartup = null!;
+    private DarkUI.Controls.DarkLabel lblManualSources = null!;
+    private DarkUI.Controls.DarkListBox lstManualSources = null!;
+    private DarkUI.Controls.DarkButton btnRemoveSource = null!;
     private DarkUI.Controls.DarkCheckBox chkRecursive = null!;
-    private DarkUI.Controls.DarkLabel lblRenameFormat = null!;
-    private DarkUI.Controls.DarkTextBox txtRenameFormat = null!;
-    private DarkUI.Controls.DarkLabel lblRenameTokens = null!;
-    private DarkUI.Controls.DarkLabel lblRenameTokens2 = null!;
+    private DarkUI.Controls.DarkCheckBox chkRefreshOnStartup = null!;
+    private DarkUI.Controls.DarkLabel lblLibraryNotice = null!;
+
+    private DarkUI.Controls.DarkTabPage tabAppearance = null!;
     private DarkUI.Controls.DarkLabel lblAppearanceInfo = null!;
     private DarkUI.Controls.DarkLabel lblTheme = null!;
     private DarkUI.Controls.DarkComboBox cboTheme = null!;
@@ -34,6 +33,21 @@ partial class SettingsForm
     private DarkUI.Controls.DarkLabel lblDefaultGroup = null!;
     private DarkUI.Controls.DarkComboBox cboDefaultGroup = null!;
     private DarkUI.Controls.DarkButton btnResetLayout = null!;
+    private DarkUI.Controls.DarkLabel lblAppearanceNotice = null!;
+
+    private DarkUI.Controls.DarkTabPage tabNaming = null!;
+    private DarkUI.Controls.DarkLabel lblNamingInfo = null!;
+    private DarkUI.Controls.DarkLabel lblRenameFormat = null!;
+    private DarkUI.Controls.DarkTextBox txtRenameFormat = null!;
+    private DarkUI.Controls.DarkLabel lblRenamePreset = null!;
+    private DarkUI.Controls.DarkComboBox cboRenamePreset = null!;
+    private DarkUI.Controls.DarkLabel lblRenameToken = null!;
+    private DarkUI.Controls.DarkComboBox cboRenameToken = null!;
+    private DarkUI.Controls.DarkButton btnInsertToken = null!;
+    private DarkUI.Controls.DarkLabel lblRenamePreview = null!;
+    private DarkUI.Controls.DarkLabel lblRenameUnknown = null!;
+
+    private DarkUI.Controls.DarkTabPage tabFiles = null!;
     private DarkUI.Controls.DarkLabel lblViewingInfo = null!;
     private DarkUI.Controls.DarkLabel lblMaxPreview = null!;
     private DarkUI.Controls.DarkNumericUpDown nudMaxPreviewMb = null!;
@@ -41,25 +55,40 @@ partial class SettingsForm
     private DarkUI.Controls.DarkNumericUpDown nudHexPageKb = null!;
     private DarkUI.Controls.DarkLabel lblThumbCache = null!;
     private DarkUI.Controls.DarkNumericUpDown nudThumbnailCache = null!;
+    private DarkUI.Controls.DarkLabel lblThumbCacheHint = null!;
+    private DarkUI.Controls.DarkLabel lblViewingNotice = null!;
+
+    private DarkUI.Controls.DarkTabPage tabPaths = null!;
     private DarkUI.Controls.DarkLabel lblPathsInfo = null!;
     private DarkUI.Controls.DarkLabel lblOutputDir = null!;
     private DarkUI.Controls.DarkTextBox txtOutputDirectory = null!;
     private DarkUI.Controls.DarkButton btnBrowseOutput = null!;
-    private DarkUI.Controls.DarkCheckBox chkOpenOutputAfterTask = null!;
+    private DarkUI.Controls.DarkLabel lblDefaultBackend = null!;
+    private DarkUI.Controls.DarkComboBox cboDefaultBackend = null!;
     private DarkUI.Controls.DarkLabel lblPasscode = null!;
     private DarkUI.Controls.DarkTextBox txtDebugPasscode = null!;
     private DarkUI.Controls.DarkCheckBox chkShowPasscode = null!;
     private DarkUI.Controls.DarkLabel lblPasscodeHint = null!;
+    private DarkUI.Controls.DarkCheckBox chkOpenOutputAfterTask = null!;
+    private DarkUI.Controls.DarkLabel lblOutputNotice = null!;
+
+    private DarkUI.Controls.DarkTabPage tabSafety = null!;
     private DarkUI.Controls.DarkLabel lblSafetyInfo = null!;
-    private DarkUI.Controls.DarkCheckBox chkConfirmDelete = null!;
     private DarkUI.Controls.DarkCheckBox chkConfirmMove = null!;
+    private DarkUI.Controls.DarkCheckBox chkConfirmDelete = null!;
     private DarkUI.Controls.DarkCheckBox chkPermanentDelete = null!;
+    private DarkUI.Controls.DarkLabel lblPermanentNotice = null!;
+
+    private DarkUI.Controls.DarkTabPage tabDiagnostics = null!;
     private DarkUI.Controls.DarkLabel lblMaintenanceInfo = null!;
     private DarkUI.Controls.DarkButton btnExportSettings = null!;
+    private DarkUI.Controls.DarkCheckBox chkExportCredentials = null!;
     private DarkUI.Controls.DarkButton btnImportSettings = null!;
     private DarkUI.Controls.DarkButton btnResetSettings = null!;
     private DarkUI.Controls.DarkButton btnClearCaches = null!;
     private DarkUI.Controls.DarkButton btnOpenLogs = null!;
+    private DarkUI.Controls.DarkLabel lblMaintenanceNotice = null!;
+
     private DarkUI.Controls.DarkButton btnSave = null!;
     private DarkUI.Controls.DarkButton btnCancel = null!;
     private FolderBrowserDialog folderBrowserDialog = null!;
@@ -79,15 +108,16 @@ partial class SettingsForm
         tabsSettings = new DarkUI.Controls.DarkTabControl();
         tabLibrary = new DarkUI.Controls.DarkTabPage();
         lblLibraryInfo = new DarkUI.Controls.DarkLabel();
+        lblFolders = new DarkUI.Controls.DarkLabel();
         lstFolders = new DarkUI.Controls.DarkListBox();
         btnAdd = new DarkUI.Controls.DarkButton();
         btnRemove = new DarkUI.Controls.DarkButton();
-        chkRefreshOnStartup = new DarkUI.Controls.DarkCheckBox();
+        lblManualSources = new DarkUI.Controls.DarkLabel();
+        lstManualSources = new DarkUI.Controls.DarkListBox();
+        btnRemoveSource = new DarkUI.Controls.DarkButton();
         chkRecursive = new DarkUI.Controls.DarkCheckBox();
-        lblRenameFormat = new DarkUI.Controls.DarkLabel();
-        txtRenameFormat = new DarkUI.Controls.DarkTextBox();
-        lblRenameTokens = new DarkUI.Controls.DarkLabel();
-        lblRenameTokens2 = new DarkUI.Controls.DarkLabel();
+        chkRefreshOnStartup = new DarkUI.Controls.DarkCheckBox();
+        lblLibraryNotice = new DarkUI.Controls.DarkLabel();
         tabAppearance = new DarkUI.Controls.DarkTabPage();
         lblAppearanceInfo = new DarkUI.Controls.DarkLabel();
         lblTheme = new DarkUI.Controls.DarkLabel();
@@ -101,6 +131,18 @@ partial class SettingsForm
         lblDefaultGroup = new DarkUI.Controls.DarkLabel();
         cboDefaultGroup = new DarkUI.Controls.DarkComboBox();
         btnResetLayout = new DarkUI.Controls.DarkButton();
+        lblAppearanceNotice = new DarkUI.Controls.DarkLabel();
+        tabNaming = new DarkUI.Controls.DarkTabPage();
+        lblNamingInfo = new DarkUI.Controls.DarkLabel();
+        lblRenameFormat = new DarkUI.Controls.DarkLabel();
+        txtRenameFormat = new DarkUI.Controls.DarkTextBox();
+        lblRenamePreset = new DarkUI.Controls.DarkLabel();
+        cboRenamePreset = new DarkUI.Controls.DarkComboBox();
+        lblRenameToken = new DarkUI.Controls.DarkLabel();
+        cboRenameToken = new DarkUI.Controls.DarkComboBox();
+        btnInsertToken = new DarkUI.Controls.DarkButton();
+        lblRenamePreview = new DarkUI.Controls.DarkLabel();
+        lblRenameUnknown = new DarkUI.Controls.DarkLabel();
         tabFiles = new DarkUI.Controls.DarkTabPage();
         lblViewingInfo = new DarkUI.Controls.DarkLabel();
         lblMaxPreview = new DarkUI.Controls.DarkLabel();
@@ -109,28 +151,36 @@ partial class SettingsForm
         nudHexPageKb = new DarkUI.Controls.DarkNumericUpDown();
         lblThumbCache = new DarkUI.Controls.DarkLabel();
         nudThumbnailCache = new DarkUI.Controls.DarkNumericUpDown();
+        lblThumbCacheHint = new DarkUI.Controls.DarkLabel();
+        lblViewingNotice = new DarkUI.Controls.DarkLabel();
         tabPaths = new DarkUI.Controls.DarkTabPage();
         lblPathsInfo = new DarkUI.Controls.DarkLabel();
         lblOutputDir = new DarkUI.Controls.DarkLabel();
         txtOutputDirectory = new DarkUI.Controls.DarkTextBox();
         btnBrowseOutput = new DarkUI.Controls.DarkButton();
-        chkOpenOutputAfterTask = new DarkUI.Controls.DarkCheckBox();
+        lblDefaultBackend = new DarkUI.Controls.DarkLabel();
+        cboDefaultBackend = new DarkUI.Controls.DarkComboBox();
         lblPasscode = new DarkUI.Controls.DarkLabel();
         txtDebugPasscode = new DarkUI.Controls.DarkTextBox();
         chkShowPasscode = new DarkUI.Controls.DarkCheckBox();
         lblPasscodeHint = new DarkUI.Controls.DarkLabel();
+        chkOpenOutputAfterTask = new DarkUI.Controls.DarkCheckBox();
+        lblOutputNotice = new DarkUI.Controls.DarkLabel();
         tabSafety = new DarkUI.Controls.DarkTabPage();
         lblSafetyInfo = new DarkUI.Controls.DarkLabel();
-        chkConfirmDelete = new DarkUI.Controls.DarkCheckBox();
         chkConfirmMove = new DarkUI.Controls.DarkCheckBox();
+        chkConfirmDelete = new DarkUI.Controls.DarkCheckBox();
         chkPermanentDelete = new DarkUI.Controls.DarkCheckBox();
+        lblPermanentNotice = new DarkUI.Controls.DarkLabel();
         tabDiagnostics = new DarkUI.Controls.DarkTabPage();
         lblMaintenanceInfo = new DarkUI.Controls.DarkLabel();
         btnExportSettings = new DarkUI.Controls.DarkButton();
+        chkExportCredentials = new DarkUI.Controls.DarkCheckBox();
         btnImportSettings = new DarkUI.Controls.DarkButton();
         btnResetSettings = new DarkUI.Controls.DarkButton();
         btnClearCaches = new DarkUI.Controls.DarkButton();
         btnOpenLogs = new DarkUI.Controls.DarkButton();
+        lblMaintenanceNotice = new DarkUI.Controls.DarkLabel();
         btnSave = new DarkUI.Controls.DarkButton();
         btnCancel = new DarkUI.Controls.DarkButton();
         folderBrowserDialog = new FolderBrowserDialog();
@@ -139,6 +189,7 @@ partial class SettingsForm
         tabsSettings.SuspendLayout();
         tabLibrary.SuspendLayout();
         tabAppearance.SuspendLayout();
+        tabNaming.SuspendLayout();
         tabFiles.SuspendLayout();
         tabPaths.SuspendLayout();
         tabSafety.SuspendLayout();
@@ -154,6 +205,7 @@ partial class SettingsForm
         tabsSettings.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         tabsSettings.Controls.Add(tabLibrary);
         tabsSettings.Controls.Add(tabAppearance);
+        tabsSettings.Controls.Add(tabNaming);
         tabsSettings.Controls.Add(tabFiles);
         tabsSettings.Controls.Add(tabPaths);
         tabsSettings.Controls.Add(tabSafety);
@@ -161,35 +213,44 @@ partial class SettingsForm
         tabsSettings.Location = new Point(12, 12);
         tabsSettings.Name = "tabsSettings";
         tabsSettings.SelectedIndex = 0;
-        tabsSettings.Size = new Size(696, 372);
+        tabsSettings.Size = new Size(696, 392);
         tabsSettings.TabIndex = 0;
         // 
         // tabLibrary
         // 
         tabLibrary.BackColor = Color.FromArgb(60, 63, 65);
         tabLibrary.Controls.Add(lblLibraryInfo);
+        tabLibrary.Controls.Add(lblFolders);
         tabLibrary.Controls.Add(lstFolders);
         tabLibrary.Controls.Add(btnAdd);
         tabLibrary.Controls.Add(btnRemove);
+        tabLibrary.Controls.Add(lblManualSources);
+        tabLibrary.Controls.Add(lstManualSources);
+        tabLibrary.Controls.Add(btnRemoveSource);
         tabLibrary.Controls.Add(chkRecursive);
         tabLibrary.Controls.Add(chkRefreshOnStartup);
-        tabLibrary.Controls.Add(lblRenameFormat);
-        tabLibrary.Controls.Add(txtRenameFormat);
-        tabLibrary.Controls.Add(lblRenameTokens);
-        tabLibrary.Controls.Add(lblRenameTokens2);
+        tabLibrary.Controls.Add(lblLibraryNotice);
         tabLibrary.Location = new Point(4, 26);
         tabLibrary.Name = "tabLibrary";
-        tabLibrary.Size = new Size(688, 342);
+        tabLibrary.Size = new Size(688, 362);
         tabLibrary.TabIndex = 0;
         tabLibrary.Text = "Library";
         // 
         // lblLibraryInfo
         // 
-        lblLibraryInfo.Location = new Point(16, 16);
+        lblLibraryInfo.Location = new Point(16, 14);
         lblLibraryInfo.Name = "lblLibraryInfo";
         lblLibraryInfo.Size = new Size(656, 15);
         lblLibraryInfo.TabIndex = 0;
-        lblLibraryInfo.Text = "Folders scanned for games.";
+        lblLibraryInfo.Text = "Folders scanned for dumps, packages and images, plus sources added individually.";
+        // 
+        // lblFolders
+        // 
+        lblFolders.Location = new Point(16, 40);
+        lblFolders.Name = "lblFolders";
+        lblFolders.Size = new Size(380, 15);
+        lblFolders.TabIndex = 1;
+        lblFolders.Text = "Library folders";
         // 
         // lstFolders
         // 
@@ -197,79 +258,84 @@ partial class SettingsForm
         lstFolders.DrawMode = DrawMode.OwnerDrawFixed;
         lstFolders.FormattingEnabled = true;
         lstFolders.ItemHeight = 20;
-        lstFolders.Location = new Point(16, 40);
+        lstFolders.Location = new Point(16, 58);
         lstFolders.Name = "lstFolders";
         lstFolders.SelectionMode = SelectionMode.MultiExtended;
-        lstFolders.Size = new Size(656, 184);
-        lstFolders.TabIndex = 1;
+        lstFolders.Size = new Size(380, 174);
+        lstFolders.TabIndex = 2;
         // 
         // btnAdd
         // 
-        btnAdd.Location = new Point(16, 232);
+        btnAdd.Location = new Point(16, 240);
         btnAdd.Name = "btnAdd";
-        btnAdd.Size = new Size(130, 30);
-        btnAdd.TabIndex = 2;
+        btnAdd.Size = new Size(120, 30);
+        btnAdd.TabIndex = 3;
         btnAdd.Text = "Add Folder...";
         btnAdd.Click += btnAdd_Click;
         // 
         // btnRemove
         // 
-        btnRemove.Location = new Point(152, 232);
+        btnRemove.Location = new Point(142, 240);
         btnRemove.Name = "btnRemove";
-        btnRemove.Size = new Size(110, 30);
-        btnRemove.TabIndex = 3;
-        btnRemove.Text = "Remove";
+        btnRemove.Size = new Size(140, 30);
+        btnRemove.TabIndex = 4;
+        btnRemove.Text = "Remove from Library";
         btnRemove.Click += btnRemove_Click;
+        // 
+        // lblManualSources
+        // 
+        lblManualSources.Location = new Point(420, 40);
+        lblManualSources.Name = "lblManualSources";
+        lblManualSources.Size = new Size(252, 15);
+        lblManualSources.TabIndex = 5;
+        lblManualSources.Text = "Manually added sources";
+        // 
+        // lstManualSources
+        // 
+        lstManualSources.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
+        lstManualSources.DrawMode = DrawMode.OwnerDrawFixed;
+        lstManualSources.FormattingEnabled = true;
+        lstManualSources.ItemHeight = 20;
+        lstManualSources.Location = new Point(420, 58);
+        lstManualSources.Name = "lstManualSources";
+        lstManualSources.SelectionMode = SelectionMode.MultiExtended;
+        lstManualSources.Size = new Size(252, 174);
+        lstManualSources.TabIndex = 6;
+        // 
+        // btnRemoveSource
+        // 
+        btnRemoveSource.Location = new Point(420, 240);
+        btnRemoveSource.Name = "btnRemoveSource";
+        btnRemoveSource.Size = new Size(180, 30);
+        btnRemoveSource.TabIndex = 7;
+        btnRemoveSource.Text = "Forget Source";
+        btnRemoveSource.Click += btnRemoveSource_Click;
         // 
         // chkRecursive
         // 
         chkRecursive.AutoSize = true;
-        chkRecursive.Location = new Point(16, 276);
+        chkRecursive.Location = new Point(16, 282);
         chkRecursive.Name = "chkRecursive";
-        chkRecursive.Size = new Size(240, 19);
-        chkRecursive.TabIndex = 4;
-        chkRecursive.Text = "Search nested dump folders";
+        chkRecursive.Size = new Size(300, 19);
+        chkRecursive.TabIndex = 8;
+        chkRecursive.Text = "Scan subfolders (dumps, packages and images)";
         // 
         // chkRefreshOnStartup
         // 
         chkRefreshOnStartup.AutoSize = true;
-        chkRefreshOnStartup.Location = new Point(16, 302);
+        chkRefreshOnStartup.Location = new Point(16, 306);
         chkRefreshOnStartup.Name = "chkRefreshOnStartup";
-        chkRefreshOnStartup.Size = new Size(220, 19);
-        chkRefreshOnStartup.TabIndex = 5;
-        chkRefreshOnStartup.Text = "Refresh library on startup";
+        chkRefreshOnStartup.Size = new Size(300, 19);
+        chkRefreshOnStartup.TabIndex = 9;
+        chkRefreshOnStartup.Text = "Refresh library on startup (rescans every launch)";
         // 
-        // lblRenameFormat
+        // lblLibraryNotice
         // 
-        lblRenameFormat.Location = new Point(360, 268);
-        lblRenameFormat.Name = "lblRenameFormat";
-        lblRenameFormat.Size = new Size(320, 15);
-        lblRenameFormat.TabIndex = 6;
-        lblRenameFormat.Text = "Rename format";
-        // 
-        // txtRenameFormat
-        // 
-        txtRenameFormat.Location = new Point(360, 286);
-        txtRenameFormat.Name = "txtRenameFormat";
-        txtRenameFormat.PlaceholderText = "{TITLE} [{TITLE_ID}]";
-        txtRenameFormat.Size = new Size(320, 23);
-        txtRenameFormat.TabIndex = 7;
-        // 
-        // lblRenameTokens
-        // 
-        lblRenameTokens.Location = new Point(360, 314);
-        lblRenameTokens.Name = "lblRenameTokens";
-        lblRenameTokens.Size = new Size(320, 13);
-        lblRenameTokens.TabIndex = 8;
-        lblRenameTokens.Text = "Tokens: {TITLE} {TITLE_ID} {CONTENT_ID} {PLATFORM} {CATEGORY} {REGION}";
-        // 
-        // lblRenameTokens2
-        // 
-        lblRenameTokens2.Location = new Point(360, 328);
-        lblRenameTokens2.Name = "lblRenameTokens2";
-        lblRenameTokens2.Size = new Size(320, 13);
-        lblRenameTokens2.TabIndex = 9;
-        lblRenameTokens2.Text = "{VERSION} {SYSTEM_VERSION} {SOURCE} {SIZE} {LANGUAGE} {DRM} {DATE}";
+        lblLibraryNotice.Location = new Point(16, 330);
+        lblLibraryNotice.Name = "lblLibraryNotice";
+        lblLibraryNotice.Size = new Size(656, 15);
+        lblLibraryNotice.TabIndex = 10;
+        lblLibraryNotice.Text = "Changing folders or Scan subfolders rescans the library when you save. Removing a folder never deletes files.";
         // 
         // tabAppearance
         // 
@@ -286,19 +352,20 @@ partial class SettingsForm
         tabAppearance.Controls.Add(lblDefaultGroup);
         tabAppearance.Controls.Add(cboDefaultGroup);
         tabAppearance.Controls.Add(btnResetLayout);
+        tabAppearance.Controls.Add(lblAppearanceNotice);
         tabAppearance.Location = new Point(4, 26);
         tabAppearance.Name = "tabAppearance";
-        tabAppearance.Size = new Size(688, 342);
+        tabAppearance.Size = new Size(688, 362);
         tabAppearance.TabIndex = 1;
         tabAppearance.Text = "Appearance";
         // 
         // lblAppearanceInfo
         // 
-        lblAppearanceInfo.Location = new Point(16, 16);
+        lblAppearanceInfo.Location = new Point(16, 14);
         lblAppearanceInfo.Name = "lblAppearanceInfo";
         lblAppearanceInfo.Size = new Size(656, 15);
         lblAppearanceInfo.TabIndex = 0;
-        lblAppearanceInfo.Text = "Theme and library grid display.";
+        lblAppearanceInfo.Text = "Theme and library grid display. Visual preferences apply when you save.";
         // 
         // lblTheme
         // 
@@ -306,7 +373,7 @@ partial class SettingsForm
         lblTheme.Name = "lblTheme";
         lblTheme.Size = new Size(170, 15);
         lblTheme.TabIndex = 1;
-        lblTheme.Text = "Theme";
+        lblTheme.Text = "Theme (live preview)";
         // 
         // cboTheme
         // 
@@ -339,17 +406,17 @@ partial class SettingsForm
         // 
         lblDensity.Location = new Point(300, 83);
         lblDensity.Name = "lblDensity";
-        lblDensity.Size = new Size(120, 15);
-        lblDensity.TabIndex = 10;
+        lblDensity.Size = new Size(90, 15);
+        lblDensity.TabIndex = 5;
         lblDensity.Text = "Density";
         // 
         // cboDensity
         // 
         cboDensity.DropDownStyle = ComboBoxStyle.DropDownList;
-        cboDensity.Location = new Point(400, 79);
+        cboDensity.Location = new Point(396, 79);
         cboDensity.Name = "cboDensity";
         cboDensity.Size = new Size(160, 23);
-        cboDensity.TabIndex = 11;
+        cboDensity.TabIndex = 6;
         // 
         // chkShowThumbnails
         // 
@@ -357,7 +424,7 @@ partial class SettingsForm
         chkShowThumbnails.Location = new Point(16, 118);
         chkShowThumbnails.Name = "chkShowThumbnails";
         chkShowThumbnails.Size = new Size(260, 19);
-        chkShowThumbnails.TabIndex = 5;
+        chkShowThumbnails.TabIndex = 7;
         chkShowThumbnails.Text = "Show game thumbnails in the list";
         // 
         // chkShowGridLines
@@ -366,7 +433,7 @@ partial class SettingsForm
         chkShowGridLines.Location = new Point(16, 146);
         chkShowGridLines.Name = "chkShowGridLines";
         chkShowGridLines.Size = new Size(260, 19);
-        chkShowGridLines.TabIndex = 6;
+        chkShowGridLines.TabIndex = 8;
         chkShowGridLines.Text = "Show grid lines";
         // 
         // lblDefaultGroup
@@ -374,7 +441,7 @@ partial class SettingsForm
         lblDefaultGroup.Location = new Point(16, 181);
         lblDefaultGroup.Name = "lblDefaultGroup";
         lblDefaultGroup.Size = new Size(170, 15);
-        lblDefaultGroup.TabIndex = 7;
+        lblDefaultGroup.TabIndex = 9;
         lblDefaultGroup.Text = "Default grouping";
         // 
         // cboDefaultGroup
@@ -382,17 +449,127 @@ partial class SettingsForm
         cboDefaultGroup.DropDownStyle = ComboBoxStyle.DropDownList;
         cboDefaultGroup.Location = new Point(196, 177);
         cboDefaultGroup.Name = "cboDefaultGroup";
-        cboDefaultGroup.Size = new Size(220, 23);
-        cboDefaultGroup.TabIndex = 8;
+        cboDefaultGroup.Size = new Size(320, 23);
+        cboDefaultGroup.TabIndex = 10;
         // 
         // btnResetLayout
         // 
         btnResetLayout.Location = new Point(196, 210);
         btnResetLayout.Name = "btnResetLayout";
-        btnResetLayout.Size = new Size(190, 30);
-        btnResetLayout.TabIndex = 9;
-        btnResetLayout.Text = "Reset Column Layout";
+        btnResetLayout.Size = new Size(220, 30);
+        btnResetLayout.TabIndex = 11;
+        btnResetLayout.Text = "Reset Column Layout (on Save)";
         btnResetLayout.Click += btnResetLayout_Click;
+        // 
+        // lblAppearanceNotice
+        // 
+        lblAppearanceNotice.Location = new Point(16, 330);
+        lblAppearanceNotice.Name = "lblAppearanceNotice";
+        lblAppearanceNotice.Size = new Size(656, 15);
+        lblAppearanceNotice.TabIndex = 12;
+        lblAppearanceNotice.Text = "The default grouping is applied to the open library when you save.";
+        // 
+        // tabNaming
+        // 
+        tabNaming.BackColor = Color.FromArgb(60, 63, 65);
+        tabNaming.Controls.Add(lblNamingInfo);
+        tabNaming.Controls.Add(lblRenameFormat);
+        tabNaming.Controls.Add(txtRenameFormat);
+        tabNaming.Controls.Add(lblRenamePreset);
+        tabNaming.Controls.Add(cboRenamePreset);
+        tabNaming.Controls.Add(lblRenameToken);
+        tabNaming.Controls.Add(cboRenameToken);
+        tabNaming.Controls.Add(btnInsertToken);
+        tabNaming.Controls.Add(lblRenamePreview);
+        tabNaming.Controls.Add(lblRenameUnknown);
+        tabNaming.Location = new Point(4, 26);
+        tabNaming.Name = "tabNaming";
+        tabNaming.Size = new Size(688, 362);
+        tabNaming.TabIndex = 2;
+        tabNaming.Text = "Naming";
+        // 
+        // lblNamingInfo
+        // 
+        lblNamingInfo.Location = new Point(16, 14);
+        lblNamingInfo.Name = "lblNamingInfo";
+        lblNamingInfo.Size = new Size(656, 15);
+        lblNamingInfo.TabIndex = 0;
+        lblNamingInfo.Text = "Default format used by the custom rename option.";
+        // 
+        // lblRenameFormat
+        // 
+        lblRenameFormat.Location = new Point(16, 49);
+        lblRenameFormat.Name = "lblRenameFormat";
+        lblRenameFormat.Size = new Size(170, 15);
+        lblRenameFormat.TabIndex = 1;
+        lblRenameFormat.Text = "Rename format";
+        // 
+        // txtRenameFormat
+        // 
+        txtRenameFormat.Location = new Point(196, 45);
+        txtRenameFormat.Name = "txtRenameFormat";
+        txtRenameFormat.PlaceholderText = "{TITLE} [{TITLE_ID}]";
+        txtRenameFormat.Size = new Size(460, 23);
+        txtRenameFormat.TabIndex = 2;
+        txtRenameFormat.TextChanged += txtRenameFormat_TextChanged;
+        // 
+        // lblRenamePreset
+        // 
+        lblRenamePreset.Location = new Point(16, 87);
+        lblRenamePreset.Name = "lblRenamePreset";
+        lblRenamePreset.Size = new Size(170, 15);
+        lblRenamePreset.TabIndex = 3;
+        lblRenamePreset.Text = "Start from a preset";
+        // 
+        // cboRenamePreset
+        // 
+        cboRenamePreset.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboRenamePreset.Location = new Point(196, 83);
+        cboRenamePreset.Name = "cboRenamePreset";
+        cboRenamePreset.Size = new Size(460, 23);
+        cboRenamePreset.TabIndex = 4;
+        cboRenamePreset.SelectedIndexChanged += cboRenamePreset_SelectedIndexChanged;
+        // 
+        // lblRenameToken
+        // 
+        lblRenameToken.Location = new Point(16, 125);
+        lblRenameToken.Name = "lblRenameToken";
+        lblRenameToken.Size = new Size(170, 15);
+        lblRenameToken.TabIndex = 5;
+        lblRenameToken.Text = "Insert a token";
+        // 
+        // cboRenameToken
+        // 
+        cboRenameToken.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboRenameToken.Location = new Point(196, 121);
+        cboRenameToken.Name = "cboRenameToken";
+        cboRenameToken.Size = new Size(300, 23);
+        cboRenameToken.TabIndex = 6;
+        // 
+        // btnInsertToken
+        // 
+        btnInsertToken.Location = new Point(504, 120);
+        btnInsertToken.Name = "btnInsertToken";
+        btnInsertToken.Size = new Size(152, 26);
+        btnInsertToken.TabIndex = 7;
+        btnInsertToken.Text = "Insert";
+        btnInsertToken.Click += btnInsertToken_Click;
+        // 
+        // lblRenamePreview
+        // 
+        lblRenamePreview.Location = new Point(16, 168);
+        lblRenamePreview.Name = "lblRenamePreview";
+        lblRenamePreview.Size = new Size(656, 15);
+        lblRenamePreview.TabIndex = 8;
+        lblRenamePreview.Text = "Example: ...";
+        // 
+        // lblRenameUnknown
+        // 
+        lblRenameUnknown.Location = new Point(16, 192);
+        lblRenameUnknown.Name = "lblRenameUnknown";
+        lblRenameUnknown.Size = new Size(656, 30);
+        lblRenameUnknown.TabIndex = 9;
+        lblRenameUnknown.Text = "";
         // 
         // tabFiles
         // 
@@ -404,19 +581,21 @@ partial class SettingsForm
         tabFiles.Controls.Add(nudHexPageKb);
         tabFiles.Controls.Add(lblThumbCache);
         tabFiles.Controls.Add(nudThumbnailCache);
+        tabFiles.Controls.Add(lblThumbCacheHint);
+        tabFiles.Controls.Add(lblViewingNotice);
         tabFiles.Location = new Point(4, 26);
         tabFiles.Name = "tabFiles";
-        tabFiles.Size = new Size(688, 342);
-        tabFiles.TabIndex = 2;
-        tabFiles.Text = "Viewing";
+        tabFiles.Size = new Size(688, 362);
+        tabFiles.TabIndex = 3;
+        tabFiles.Text = "Viewing && Cache";
         // 
         // lblViewingInfo
         // 
-        lblViewingInfo.Location = new Point(16, 16);
+        lblViewingInfo.Location = new Point(16, 14);
         lblViewingInfo.Name = "lblViewingInfo";
         lblViewingInfo.Size = new Size(656, 15);
         lblViewingInfo.TabIndex = 0;
-        lblViewingInfo.Text = "Preview limits and cache size.";
+        lblViewingInfo.Text = "Preview limits and thumbnail cache. Limits bound what is loaded for a preview, not total memory.";
         // 
         // lblMaxPreview
         // 
@@ -424,7 +603,7 @@ partial class SettingsForm
         lblMaxPreview.Name = "lblMaxPreview";
         lblMaxPreview.Size = new Size(170, 15);
         lblMaxPreview.TabIndex = 1;
-        lblMaxPreview.Text = "Max auto-preview (MB)";
+        lblMaxPreview.Text = "Max auto-preview (MiB)";
         // 
         // nudMaxPreviewMb
         // 
@@ -442,7 +621,7 @@ partial class SettingsForm
         lblHexPage.Name = "lblHexPage";
         lblHexPage.Size = new Size(170, 15);
         lblHexPage.TabIndex = 3;
-        lblHexPage.Text = "Hex page size (KB)";
+        lblHexPage.Text = "Hex page size (KiB)";
         // 
         // nudHexPageKb
         // 
@@ -466,10 +645,27 @@ partial class SettingsForm
         // 
         nudThumbnailCache.Location = new Point(196, 113);
         nudThumbnailCache.Maximum = new decimal(new int[] { 100000, 0, 0, 0 });
+        nudThumbnailCache.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
         nudThumbnailCache.Name = "nudThumbnailCache";
         nudThumbnailCache.Size = new Size(80, 23);
         nudThumbnailCache.TabIndex = 6;
         nudThumbnailCache.Value = new decimal(new int[] { 512, 0, 0, 0 });
+        // 
+        // lblThumbCacheHint
+        // 
+        lblThumbCacheHint.Location = new Point(286, 117);
+        lblThumbCacheHint.Name = "lblThumbCacheHint";
+        lblThumbCacheHint.Size = new Size(386, 15);
+        lblThumbCacheHint.TabIndex = 7;
+        lblThumbCacheHint.Text = "Minimum 1. Older thumbnails are evicted first.";
+        // 
+        // lblViewingNotice
+        // 
+        lblViewingNotice.Location = new Point(16, 330);
+        lblViewingNotice.Name = "lblViewingNotice";
+        lblViewingNotice.Size = new Size(656, 15);
+        lblViewingNotice.TabIndex = 8;
+        lblViewingNotice.Text = "Hex page size applies the next time a page is read. Cache entries are decoded images held in memory.";
         // 
         // tabPaths
         // 
@@ -478,24 +674,27 @@ partial class SettingsForm
         tabPaths.Controls.Add(lblOutputDir);
         tabPaths.Controls.Add(txtOutputDirectory);
         tabPaths.Controls.Add(btnBrowseOutput);
-        tabPaths.Controls.Add(chkOpenOutputAfterTask);
+        tabPaths.Controls.Add(lblDefaultBackend);
+        tabPaths.Controls.Add(cboDefaultBackend);
         tabPaths.Controls.Add(lblPasscode);
         tabPaths.Controls.Add(txtDebugPasscode);
         tabPaths.Controls.Add(chkShowPasscode);
         tabPaths.Controls.Add(lblPasscodeHint);
+        tabPaths.Controls.Add(chkOpenOutputAfterTask);
+        tabPaths.Controls.Add(lblOutputNotice);
         tabPaths.Location = new Point(4, 26);
         tabPaths.Name = "tabPaths";
-        tabPaths.Size = new Size(688, 342);
-        tabPaths.TabIndex = 3;
-        tabPaths.Text = "Paths and Build";
+        tabPaths.Size = new Size(688, 362);
+        tabPaths.TabIndex = 4;
+        tabPaths.Text = "Output && Defaults";
         // 
         // lblPathsInfo
         // 
-        lblPathsInfo.Location = new Point(16, 16);
+        lblPathsInfo.Location = new Point(16, 14);
         lblPathsInfo.Name = "lblPathsInfo";
         lblPathsInfo.Size = new Size(656, 15);
         lblPathsInfo.TabIndex = 0;
-        lblPathsInfo.Text = "Default output location and package passcode.";
+        lblPathsInfo.Text = "Defaults for output, the builder and package credentials. New jobs inherit these; existing jobs keep their own values.";
         // 
         // lblOutputDir
         // 
@@ -521,87 +720,113 @@ partial class SettingsForm
         btnBrowseOutput.Text = "Browse...";
         btnBrowseOutput.Click += btnBrowseOutput_Click;
         // 
-        // chkOpenOutputAfterTask
+        // lblDefaultBackend
         // 
-        chkOpenOutputAfterTask.AutoSize = true;
-        chkOpenOutputAfterTask.Location = new Point(16, 80);
-        chkOpenOutputAfterTask.Name = "chkOpenOutputAfterTask";
-        chkOpenOutputAfterTask.Size = new Size(320, 19);
-        chkOpenOutputAfterTask.TabIndex = 4;
-        chkOpenOutputAfterTask.Text = "Open output folder when a task finishes";
+        lblDefaultBackend.Location = new Point(16, 87);
+        lblDefaultBackend.Name = "lblDefaultBackend";
+        lblDefaultBackend.Size = new Size(170, 15);
+        lblDefaultBackend.TabIndex = 4;
+        lblDefaultBackend.Text = "Default builder";
+        // 
+        // cboDefaultBackend
+        // 
+        cboDefaultBackend.DropDownStyle = ComboBoxStyle.DropDownList;
+        cboDefaultBackend.Location = new Point(196, 83);
+        cboDefaultBackend.Name = "cboDefaultBackend";
+        cboDefaultBackend.Size = new Size(320, 23);
+        cboDefaultBackend.TabIndex = 5;
         // 
         // lblPasscode
         // 
-        lblPasscode.Location = new Point(16, 117);
+        lblPasscode.Location = new Point(16, 125);
         lblPasscode.Name = "lblPasscode";
         lblPasscode.Size = new Size(170, 15);
-        lblPasscode.TabIndex = 5;
+        lblPasscode.TabIndex = 6;
         lblPasscode.Text = "Default debug passcode";
         // 
         // txtDebugPasscode
         // 
-        txtDebugPasscode.Location = new Point(196, 113);
+        txtDebugPasscode.Location = new Point(196, 121);
         txtDebugPasscode.Name = "txtDebugPasscode";
         txtDebugPasscode.Size = new Size(280, 23);
-        txtDebugPasscode.TabIndex = 6;
+        txtDebugPasscode.TabIndex = 7;
         txtDebugPasscode.UseSystemPasswordChar = true;
+        txtDebugPasscode.TextChanged += txtDebugPasscode_TextChanged;
         // 
         // chkShowPasscode
         // 
         chkShowPasscode.AutoSize = true;
-        chkShowPasscode.Location = new Point(486, 115);
+        chkShowPasscode.Location = new Point(486, 123);
         chkShowPasscode.Name = "chkShowPasscode";
         chkShowPasscode.Size = new Size(60, 19);
-        chkShowPasscode.TabIndex = 7;
+        chkShowPasscode.TabIndex = 8;
         chkShowPasscode.Text = "Show";
         chkShowPasscode.CheckedChanged += chkShowPasscode_CheckedChanged;
         // 
         // lblPasscodeHint
         // 
-        lblPasscodeHint.Location = new Point(196, 142);
+        lblPasscodeHint.Location = new Point(196, 150);
         lblPasscodeHint.Name = "lblPasscodeHint";
-        lblPasscodeHint.Size = new Size(470, 15);
-        lblPasscodeHint.TabIndex = 8;
-        lblPasscodeHint.Text = "32 characters. Leave blank to use the default all-zero passcode.";
+        lblPasscodeHint.Size = new Size(470, 30);
+        lblPasscodeHint.TabIndex = 9;
+        lblPasscodeHint.Text = "Blank uses the default all-zero passcode. Otherwise exactly 32 printable ASCII characters.";
+        // 
+        // chkOpenOutputAfterTask
+        // 
+        chkOpenOutputAfterTask.AutoSize = true;
+        chkOpenOutputAfterTask.Location = new Point(16, 192);
+        chkOpenOutputAfterTask.Name = "chkOpenOutputAfterTask";
+        chkOpenOutputAfterTask.Size = new Size(400, 19);
+        chkOpenOutputAfterTask.TabIndex = 10;
+        chkOpenOutputAfterTask.Text = "Open the output folder after a task succeeds";
+        // 
+        // lblOutputNotice
+        // 
+        lblOutputNotice.Location = new Point(16, 330);
+        lblOutputNotice.Name = "lblOutputNotice";
+        lblOutputNotice.Size = new Size(656, 15);
+        lblOutputNotice.TabIndex = 11;
+        lblOutputNotice.Text = "The output folder also seeds the Move and Save artwork dialogs. Builder changes apply to new jobs.";
         // 
         // tabSafety
         // 
         tabSafety.BackColor = Color.FromArgb(60, 63, 65);
         tabSafety.Controls.Add(lblSafetyInfo);
-        tabSafety.Controls.Add(chkConfirmDelete);
         tabSafety.Controls.Add(chkConfirmMove);
+        tabSafety.Controls.Add(chkConfirmDelete);
         tabSafety.Controls.Add(chkPermanentDelete);
+        tabSafety.Controls.Add(lblPermanentNotice);
         tabSafety.Location = new Point(4, 26);
         tabSafety.Name = "tabSafety";
-        tabSafety.Size = new Size(688, 342);
-        tabSafety.TabIndex = 4;
-        tabSafety.Text = "Safety";
+        tabSafety.Size = new Size(688, 362);
+        tabSafety.TabIndex = 5;
+        tabSafety.Text = "File Operations";
         // 
         // lblSafetyInfo
         // 
-        lblSafetyInfo.Location = new Point(16, 16);
+        lblSafetyInfo.Location = new Point(16, 14);
         lblSafetyInfo.Name = "lblSafetyInfo";
         lblSafetyInfo.Size = new Size(656, 15);
         lblSafetyInfo.TabIndex = 0;
-        lblSafetyInfo.Text = "Confirmation prompts before destructive actions.";
-        // 
-        // chkConfirmDelete
-        // 
-        chkConfirmDelete.AutoSize = true;
-        chkConfirmDelete.Location = new Point(16, 49);
-        chkConfirmDelete.Name = "chkConfirmDelete";
-        chkConfirmDelete.Size = new Size(320, 19);
-        chkConfirmDelete.TabIndex = 1;
-        chkConfirmDelete.Text = "Confirm before deleting a source";
+        lblSafetyInfo.Text = "Confirmation prompts and deletion mode for sources in the library.";
         // 
         // chkConfirmMove
         // 
         chkConfirmMove.AutoSize = true;
-        chkConfirmMove.Location = new Point(16, 77);
+        chkConfirmMove.Location = new Point(16, 49);
         chkConfirmMove.Name = "chkConfirmMove";
-        chkConfirmMove.Size = new Size(320, 19);
-        chkConfirmMove.TabIndex = 2;
-        chkConfirmMove.Text = "Confirm before moving a source";
+        chkConfirmMove.Size = new Size(400, 19);
+        chkConfirmMove.TabIndex = 1;
+        chkConfirmMove.Text = "Confirm before moving sources on disk";
+        // 
+        // chkConfirmDelete
+        // 
+        chkConfirmDelete.AutoSize = true;
+        chkConfirmDelete.Location = new Point(16, 77);
+        chkConfirmDelete.Name = "chkConfirmDelete";
+        chkConfirmDelete.Size = new Size(400, 19);
+        chkConfirmDelete.TabIndex = 2;
+        chkConfirmDelete.Text = "Confirm before sending a source to the Recycle Bin";
         // 
         // chkPermanentDelete
         // 
@@ -612,24 +837,34 @@ partial class SettingsForm
         chkPermanentDelete.TabIndex = 3;
         chkPermanentDelete.Text = "Delete permanently instead of sending to the Recycle Bin";
         // 
+        // lblPermanentNotice
+        // 
+        lblPermanentNotice.Location = new Point(16, 132);
+        lblPermanentNotice.Name = "lblPermanentNotice";
+        lblPermanentNotice.Size = new Size(656, 30);
+        lblPermanentNotice.TabIndex = 4;
+        lblPermanentNotice.Text = "Permanent deletion always asks for confirmation, even when the Recycle Bin prompt is turned off.";
+        // 
         // tabDiagnostics
         // 
         tabDiagnostics.BackColor = Color.FromArgb(60, 63, 65);
         tabDiagnostics.Controls.Add(lblMaintenanceInfo);
         tabDiagnostics.Controls.Add(btnExportSettings);
+        tabDiagnostics.Controls.Add(chkExportCredentials);
         tabDiagnostics.Controls.Add(btnImportSettings);
         tabDiagnostics.Controls.Add(btnResetSettings);
         tabDiagnostics.Controls.Add(btnClearCaches);
         tabDiagnostics.Controls.Add(btnOpenLogs);
+        tabDiagnostics.Controls.Add(lblMaintenanceNotice);
         tabDiagnostics.Location = new Point(4, 26);
         tabDiagnostics.Name = "tabDiagnostics";
-        tabDiagnostics.Size = new Size(688, 342);
-        tabDiagnostics.TabIndex = 5;
+        tabDiagnostics.Size = new Size(688, 362);
+        tabDiagnostics.TabIndex = 6;
         tabDiagnostics.Text = "Maintenance";
         // 
         // lblMaintenanceInfo
         // 
-        lblMaintenanceInfo.Location = new Point(16, 16);
+        lblMaintenanceInfo.Location = new Point(16, 14);
         lblMaintenanceInfo.Name = "lblMaintenanceInfo";
         lblMaintenanceInfo.Size = new Size(656, 15);
         lblMaintenanceInfo.TabIndex = 0;
@@ -639,51 +874,68 @@ partial class SettingsForm
         // 
         btnExportSettings.Location = new Point(16, 48);
         btnExportSettings.Name = "btnExportSettings";
-        btnExportSettings.Size = new Size(190, 30);
+        btnExportSettings.Size = new Size(220, 30);
         btnExportSettings.TabIndex = 1;
-        btnExportSettings.Text = "Export Settings...";
+        btnExportSettings.Text = "Export Preferences...";
         btnExportSettings.Click += btnExportSettings_Click;
+        // 
+        // chkExportCredentials
+        // 
+        chkExportCredentials.AutoSize = true;
+        chkExportCredentials.Location = new Point(250, 54);
+        chkExportCredentials.Name = "chkExportCredentials";
+        chkExportCredentials.Size = new Size(300, 19);
+        chkExportCredentials.TabIndex = 2;
+        chkExportCredentials.Text = "Include the debug passcode (private backup)";
         // 
         // btnImportSettings
         // 
         btnImportSettings.Location = new Point(16, 84);
         btnImportSettings.Name = "btnImportSettings";
-        btnImportSettings.Size = new Size(190, 30);
-        btnImportSettings.TabIndex = 2;
-        btnImportSettings.Text = "Import Settings...";
+        btnImportSettings.Size = new Size(220, 30);
+        btnImportSettings.TabIndex = 3;
+        btnImportSettings.Text = "Import Preferences...";
         btnImportSettings.Click += btnImportSettings_Click;
         // 
         // btnResetSettings
         // 
         btnResetSettings.Location = new Point(16, 120);
         btnResetSettings.Name = "btnResetSettings";
-        btnResetSettings.Size = new Size(190, 30);
-        btnResetSettings.TabIndex = 3;
-        btnResetSettings.Text = "Reset Settings";
+        btnResetSettings.Size = new Size(220, 30);
+        btnResetSettings.TabIndex = 4;
+        btnResetSettings.Text = "Reset Preferences...";
         btnResetSettings.Click += btnResetSettings_Click;
         // 
         // btnClearCaches
         // 
         btnClearCaches.Location = new Point(16, 156);
         btnClearCaches.Name = "btnClearCaches";
-        btnClearCaches.Size = new Size(190, 30);
-        btnClearCaches.TabIndex = 4;
-        btnClearCaches.Text = "Clear Caches";
+        btnClearCaches.Size = new Size(220, 30);
+        btnClearCaches.TabIndex = 5;
+        btnClearCaches.Text = "Clear Caches (on Save)";
         btnClearCaches.Click += btnClearCaches_Click;
         // 
         // btnOpenLogs
         // 
         btnOpenLogs.Location = new Point(16, 192);
         btnOpenLogs.Name = "btnOpenLogs";
-        btnOpenLogs.Size = new Size(190, 30);
-        btnOpenLogs.TabIndex = 5;
+        btnOpenLogs.Size = new Size(220, 30);
+        btnOpenLogs.TabIndex = 6;
         btnOpenLogs.Text = "Open Log Folder";
         btnOpenLogs.Click += btnOpenLogs_Click;
+        // 
+        // lblMaintenanceNotice
+        // 
+        lblMaintenanceNotice.Location = new Point(16, 236);
+        lblMaintenanceNotice.Name = "lblMaintenanceNotice";
+        lblMaintenanceNotice.Size = new Size(656, 60);
+        lblMaintenanceNotice.TabIndex = 7;
+        lblMaintenanceNotice.Text = "Export and Import cover preferences; library folders, sources and window layout are included. Open Log Folder is immediate. Clear Caches takes effect when you save; Cancel discards it.";
         // 
         // btnSave
         // 
         btnSave.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-        btnSave.Location = new Point(478, 396);
+        btnSave.Location = new Point(478, 416);
         btnSave.Name = "btnSave";
         btnSave.Size = new Size(110, 32);
         btnSave.TabIndex = 1;
@@ -694,7 +946,7 @@ partial class SettingsForm
         // 
         btnCancel.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
         btnCancel.DialogResult = DialogResult.Cancel;
-        btnCancel.Location = new Point(598, 396);
+        btnCancel.Location = new Point(598, 416);
         btnCancel.Name = "btnCancel";
         btnCancel.Size = new Size(110, 32);
         btnCancel.TabIndex = 2;
@@ -707,14 +959,14 @@ partial class SettingsForm
         AutoScaleMode = AutoScaleMode.Font;
         BackColor = Color.FromArgb(60, 63, 65);
         CancelButton = btnCancel;
-        ClientSize = new Size(720, 440);
+        ClientSize = new Size(720, 460);
         Controls.Add(btnCancel);
         Controls.Add(btnSave);
         Controls.Add(tabsSettings);
         FormBorderStyle = FormBorderStyle.Sizable;
         MaximizeBox = false;
         MinimizeBox = false;
-        MinimumSize = new Size(600, 380);
+        MinimumSize = new Size(620, 420);
         Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
         Name = "SettingsForm";
         ShowInTaskbar = false;
@@ -725,6 +977,8 @@ partial class SettingsForm
         tabLibrary.PerformLayout();
         tabAppearance.ResumeLayout(false);
         tabAppearance.PerformLayout();
+        tabNaming.ResumeLayout(false);
+        tabNaming.PerformLayout();
         tabFiles.ResumeLayout(false);
         tabFiles.PerformLayout();
         tabPaths.ResumeLayout(false);

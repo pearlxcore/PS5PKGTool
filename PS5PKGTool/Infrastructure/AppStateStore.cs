@@ -84,6 +84,9 @@ public sealed class LibraryManifest
     public List<Ps5GameInfo> Games { get; set; } = [];
 }
 
+/// <summary>Result of loading settings, including a non-fatal warning worth surfacing to the user.</summary>
+public sealed record SettingsLoadResult(AppSettings Settings, string? Warning);
+
 public sealed class AppStateStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -102,9 +105,46 @@ public sealed class AppStateStore
     public string SettingsPath => Path.Combine(AppDataDirectory, "settings.json");
     public string ManifestPath => Path.Combine(AppDataDirectory, "manifest.json");
 
-    public AppSettings LoadSettings() => Load<AppSettings>(SettingsPath) ?? new AppSettings();
-    public LibraryManifest LoadManifest() => Load<LibraryManifest>(ManifestPath) ?? new LibraryManifest();
-    public void SaveSettings(AppSettings settings) => Save(SettingsPath, settings);
+    public AppSettings LoadSettings() => LoadSettingsWithDiagnostics().Settings;
+
+    /// <summary>
+    /// Loads and normalizes settings. A missing file simply yields defaults; an unreadable file is
+    /// quarantined (renamed) rather than silently overwritten by a later automatic save, and a warning
+    /// describing what happened is returned.
+    /// </summary>
+    public SettingsLoadResult LoadSettingsWithDiagnostics()
+    {
+        if (!File.Exists(SettingsPath)) return new SettingsLoadResult(new AppSettings(), null);
+        try
+        {
+            AppSettings settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath), JsonOptions)
+                ?? new AppSettings();
+            return new SettingsLoadResult(AppSettingsNormalizer.Normalize(settings), null);
+        }
+        catch (JsonException ex)
+        {
+            string quarantine = SettingsPath + ".invalid-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+            try { File.Move(SettingsPath, quarantine, overwrite: true); }
+            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException) { }
+            return new SettingsLoadResult(new AppSettings(),
+                $"The settings file could not be read and was moved to {Path.GetFileName(quarantine)}. " +
+                $"Defaults are in use. ({ex.Message})");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new SettingsLoadResult(new AppSettings(),
+                $"Settings could not be read: {ex.Message}. Defaults are in use for this session.");
+        }
+    }
+
+    public LibraryManifest LoadManifest()
+    {
+        LibraryManifest manifest = Load<LibraryManifest>(ManifestPath) ?? new LibraryManifest();
+        manifest.Games ??= [];
+        return manifest;
+    }
+
+    public void SaveSettings(AppSettings settings) => Save(SettingsPath, AppSettingsNormalizer.Normalize(settings));
     public void SaveManifest(IReadOnlyCollection<Ps5GameInfo> games) => Save(ManifestPath, new LibraryManifest
     {
         CreatedUtc = DateTime.UtcNow,

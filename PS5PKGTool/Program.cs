@@ -38,6 +38,24 @@ internal static class Program
             return;
         }
 
+        if (args.Length > 0 && args[0] == "--settings-smoke")
+        {
+            // Headless construction check for the settings dialog (no manual interaction).
+            try
+            {
+                using var form = new SettingsForm(new AppSettings(), _ => (true, null));
+                form.CreateControl();
+                Logger.Info("Settings smoke: OK");
+                Environment.ExitCode = 0;
+            }
+            catch (Exception ex)
+            {
+                Logger.Exception("Settings smoke", ex);
+                Environment.ExitCode = 1;
+            }
+            return;
+        }
+
         string? externalPath = args.Length >= 2 && args[0] == "--open" ? args[1] : null;
 
         using var singleInstance = new Mutex(true, SingleInstanceName, out bool createdNew);

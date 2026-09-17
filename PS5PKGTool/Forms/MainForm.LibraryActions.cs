@@ -523,7 +523,8 @@ public partial class MainForm
         if (RefuseIfBusy(games)) return;
 
         bool permanent = _settings.PermanentDelete;
-        if (_settings.ConfirmDelete && !ConfirmDelete(games, permanent)) return;
+        // Permanent deletion always confirms, even when the Recycle Bin prompt is turned off.
+        if ((permanent || _settings.ConfirmDelete) && !ConfirmDelete(games, permanent)) return;
 
         var recycle = permanent
             ? Microsoft.VisualBasic.FileIO.RecycleOption.DeletePermanently

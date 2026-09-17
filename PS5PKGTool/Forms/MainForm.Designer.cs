@@ -3978,7 +3978,6 @@ partial class MainForm
         txtDbgPasscode.Name = "txtDbgPasscode";
         txtDbgPasscode.Size = new Size(288, 23);
         txtDbgPasscode.TabIndex = 35;
-        txtDbgPasscode.Text = "00000000000000000000000000000000";
         // 
         // lblImageSdk
         // 
@@ -4274,7 +4273,6 @@ partial class MainForm
         txtImagePasscode.Name = "txtImagePasscode";
         txtImagePasscode.Size = new Size(300, 23);
         txtImagePasscode.TabIndex = 35;
-        txtImagePasscode.Text = "00000000000000000000000000000000";
         txtImagePasscode.Visible = false;
         // 
         // toolsFooter

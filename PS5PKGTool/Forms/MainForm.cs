@@ -41,6 +41,7 @@ public partial class MainForm : DarkForm
     private bool _fileSortAscending = true;
     private string _currentDetailsRoot = string.Empty;
     private AppSettings _settings = new();
+    private string? _settingsWarning;
     private List<Ps5GameInfo> _games = [];
     private List<Ps5GameInfo> _visibleGames = [];
     private CancellationTokenSource? _scanCancellation;
@@ -83,6 +84,11 @@ public partial class MainForm : DarkForm
         mediaFileViewer.LoadedBehavior = System.Windows.Controls.MediaState.Manual;
         mediaFileViewer.UnloadedBehavior = System.Windows.Controls.MediaState.Close;
         FileIconProvider.Populate(imageListFiles);
+        // Load preferences before initializing any consumer (builder combo, saved-views menu, task list)
+        // so those controls start from the persisted values rather than built-in defaults.
+        SettingsLoadResult load = _stateStore.LoadSettingsWithDiagnostics();
+        _settings = load.Settings;
+        _settingsWarning = load.Warning;
         InitializeTaskQueue();
         InitializeTasksLayout();
         InitializeLibraryTools();
@@ -90,6 +96,7 @@ public partial class MainForm : DarkForm
         RefreshImageTools();
         InitializeImageSdkList();
         InitializeImageBuildLists();
+        ApplyDefaultCredentials();
         _pendingExternalPath = externalPath;
     }
 
@@ -104,8 +111,7 @@ public partial class MainForm : DarkForm
 
     private async void MainForm_Shown(object? sender, EventArgs e)
     {
-        _settings = _stateStore.LoadSettings();
-        _settings.ManualSources.RemoveAll(path => !File.Exists(path) && !Directory.Exists(path));
+        // Manually added sources are kept even when offline; they are only removed on an explicit action.
         chkLogAutoScroll.Checked = _settings.LogAutoScroll;
         RestoreWindowBounds();
         ApplyRuntimeSettings();
@@ -154,6 +160,13 @@ public partial class MainForm : DarkForm
         int missingNow = _games.Count(game => !SourceExists(game));
         if (missingNow > 0)
             BeginInvoke(new Action(() => NotifyMissingSources(missingNow)));
+
+        if (!string.IsNullOrWhiteSpace(_settingsWarning))
+        {
+            string warning = _settingsWarning;
+            _settingsWarning = null;
+            BeginInvoke(new Action(() => AppDialog.ShowWarning(warning, "Settings")));
+        }
 
         // Fill in dump folder sizes in the background so the Size column is populated without
         // opening each dump.
@@ -248,10 +261,31 @@ public partial class MainForm : DarkForm
             string.Equals(candidate.Name, _settings.Theme, StringComparison.OrdinalIgnoreCase)) ?? ThemeManager.BuiltIn.Default;
         ThemeManager.Apply(theme);
 
-        gridLibrary.RowTemplate.Height = Math.Max(16, _settings.GridRowHeight);
+        int rowHeight = Math.Max(16, _settings.GridRowHeight);
+        gridLibrary.RowTemplate.Height = rowHeight;
         gridLibrary.CellBorderStyle = _settings.ShowGridLines
             ? DataGridViewCellBorderStyle.Single
             : DataGridViewCellBorderStyle.None;
+        // Apply to the rows already on screen, not just future ones.
+        foreach (DataGridViewRow row in gridLibrary.Rows)
+            if (row.Tag is Ps5GameInfo) row.Height = rowHeight;
+        RefreshLibraryPresentation();
+
+        // The builder selector is the next job's default; keep it in step with the saved preference.
+        if (cboImageBackend.Items.Count > 0)
+            cboImageBackend.SelectedIndex = IndexOfBackend(_settings.BuildBackend);
+    }
+
+    /// <summary>
+    /// Re-applies presentation-only preferences (thumbnail visibility) to the current rows without
+    /// touching the filesystem or rescanning sources.
+    /// </summary>
+    private void RefreshLibraryPresentation()
+    {
+        if (!_libraryColumnsReady) return;
+        foreach (DataGridViewRow row in gridLibrary.Rows)
+            if (row.Tag is Ps5GameInfo game) row.Cells["Icon"].Value = LibraryIcon(game);
+        if (_settings.ShowThumbnails) StartLibraryThumbnailLoad(_visibleGames);
     }
 
     private void ApplyDefaultGrouping()
@@ -503,17 +537,24 @@ public partial class MainForm : DarkForm
 
     private async void Settings_Click(object? sender, EventArgs e)
     {
-        using var form = new SettingsForm(_settings);
+        // The dialog persists the draft itself, so "Save" only closes after the file is written.
+        using var form = new SettingsForm(_settings, SaveSettingsFromDialog);
         if (form.ShowDialog(this) != DialogResult.OK) return;
 
         bool libraryChanged = !_settings.LibraryFolders.SequenceEqual(form.Settings.LibraryFolders, StringComparer.OrdinalIgnoreCase)
                               || _settings.RecursiveScan != form.Settings.RecursiveScan;
+        bool presentationChanged = _settings.ShowThumbnails != form.Settings.ShowThumbnails
+                                   || _settings.DefaultGroupBy != form.Settings.DefaultGroupBy
+                                   || _settings.GridRowHeight != form.Settings.GridRowHeight;
         _settings = form.Settings;
-        SaveSettingsQuietly();
         ApplyRuntimeSettings();
+        ApplyDefaultGrouping();
         SyncFilterControls();
+        RebuildRecentMenu();
+        RebuildLibraryViewsMenu();
         if (form.ResetLayout) ResetLibraryColumnLayout();
         if (form.ClearCaches) ClearRuntimeCaches();
+        if (presentationChanged) ApplyFilter();
 
         if (!libraryChanged)
         {
@@ -533,6 +574,20 @@ public partial class MainForm : DarkForm
         await ScanAsync(ScanRoots(), merge: false);
     }
 
+    /// <summary>Persists the dialog's draft, returning the failure reason so the dialog can offer Retry.</summary>
+    private (bool Success, string? Error) SaveSettingsFromDialog(AppSettings settings)
+    {
+        try
+        {
+            _stateStore.SaveSettings(settings);
+            return (true, null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (false, ex.Message);
+        }
+    }
+
     private void ResetLibraryColumnLayout()
     {
         _settings.LibraryColumnOrder = [];
@@ -549,9 +604,12 @@ public partial class MainForm : DarkForm
 
     private void ClearRuntimeCaches()
     {
+        // Cancel in-flight reads so they cannot repopulate the caches just cleared.
+        _detailCancellation?.Cancel();
+        _filePreviewCancellation?.Cancel();
         _detailsCache.Clear();
         ClearLibraryThumbnails();
-        statusLabel.Text = "Caches cleared.";
+        statusLabel.Text = "Details and thumbnail caches cleared. Sources and settings are untouched.";
     }
 
     private void Exit_Click(object? sender, EventArgs e) => Close();

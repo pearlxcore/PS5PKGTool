@@ -297,20 +297,34 @@ public partial class MainForm
         }
     }
 
-    private void SaveSettingsQuietly()
+    private void CaptureVolatileSettings()
     {
+        // Remember the task list/details split (only while the details panel is shown).
+        if (!_settings.TaskDetailsCollapsed && splitTasks.PanelCount > 0)
+        {
+            int[] sizes = splitTasks.PanelSizes;
+            if (sizes.Length > 0 && sizes[0] > 0) _settings.TaskSplitterDistance = sizes[0];
+        }
+    }
+
+    /// <summary>Persists preferences, reporting I/O failures so an explicit Save can react to them.</summary>
+    private bool TrySaveSettings(out string? error)
+    {
+        CaptureVolatileSettings();
         try
         {
-            // Remember the task list/details split (only while the details panel is shown).
-            if (!_settings.TaskDetailsCollapsed && splitTasks.PanelCount > 0)
-            {
-                int[] sizes = splitTasks.PanelSizes;
-                if (sizes.Length > 0 && sizes[0] > 0) _settings.TaskSplitterDistance = sizes[0];
-            }
             _stateStore.SaveSettings(_settings);
+            error = null;
+            return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            error = ex.Message;
+            return false;
+        }
     }
+
+    private void SaveSettingsQuietly() => TrySaveSettings(out _);
 
     private void menuSaveManifest_Click(object? sender, EventArgs e)
     {

@@ -661,6 +661,19 @@ public partial class MainForm
         }
     }
 
+    /// <summary>
+    /// Seeds the passcode boxes from the saved default (or the all-zero default) once, so a new job
+    /// inherits the preference instead of a hard-coded value. User edits are never overwritten here.
+    /// </summary>
+    private void ApplyDefaultCredentials()
+    {
+        string passcode = string.IsNullOrEmpty(_settings.DebugPasscode)
+            ? SonyDebugPackageCredentials.DefaultPasscode
+            : _settings.DebugPasscode;
+        if (txtImagePasscode.Text.Length == 0) txtImagePasscode.Text = passcode;
+        if (txtDbgPasscode.Text.Length == 0) txtDbgPasscode.Text = passcode;
+    }
+
     private string ImagePasscode() => ImagePasscodeBox().Text.Length > 0
         ? ImagePasscodeBox().Text
         : !string.IsNullOrEmpty(_settings.DebugPasscode)
