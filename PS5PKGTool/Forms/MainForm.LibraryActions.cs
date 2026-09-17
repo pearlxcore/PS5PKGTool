@@ -291,10 +291,7 @@ public partial class MainForm
                 "Move to folder", DarkDialogButton.YesNo) == DialogResult.Yes;
 
         string modeLabel = MoveModeLabel(mode);
-        if (_settings.ConfirmMove && AppDialog.ShowWarning(
-                $"Move {games.Count:N0} source(s) into:\n\n{destinationRoot}\n\nGrouped by: {modeLabel}\n\nProceed?",
-                "Move to folder", DarkDialogButton.YesNo) != DialogResult.Yes)
-            return;
+        if (_settings.ConfirmMove && !ConfirmMovePreview(games, destinationRoot, mode, modeLabel)) return;
 
         var snapshot = games.ToList();
         var outcome = new MoveOutcome();
@@ -381,6 +378,73 @@ public partial class MainForm
             }
         }
         progress.Report(new PackageTaskProgress("Moving", total, total, 0, 0, total, total, string.Empty));
+    }
+
+    /// <summary>
+    /// Enumerates every planned move (relative destination, skipped items and conflicts) and asks the
+    /// user to confirm. Mirrors the target computation used by the worker so the preview cannot mislead.
+    /// </summary>
+    private static bool ConfirmMovePreview(IReadOnlyList<Ps5GameInfo> games, string destinationRoot,
+        MoveMode mode, string modeLabel)
+    {
+        var entries = new List<string>();
+        int moves = 0, skipped = 0;
+        foreach (Ps5GameInfo game in games)
+        {
+            string source = game.RootPath;
+            string name = LibraryFileName(game);
+            if (string.IsNullOrWhiteSpace(source) || (!Directory.Exists(source) && !File.Exists(source)))
+            {
+                skipped++;
+                entries.Add($"  x {name} — source not found");
+                continue;
+            }
+            string? group = GroupFolder(game, mode);
+            if (group is null)
+            {
+                skipped++;
+                entries.Add($"  x {name} — no {modeLabel} value");
+                continue;
+            }
+            string target = Path.Combine(destinationRoot, group, name);
+            if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase))
+            {
+                skipped++;
+                entries.Add($"  = {name} (already in the destination)");
+                continue;
+            }
+            if (File.Exists(target) || Directory.Exists(target))
+            {
+                skipped++;
+                entries.Add($"  x {name} — destination already exists");
+                continue;
+            }
+            moves++;
+            entries.Add($"  {name} -> {Path.GetRelativePath(destinationRoot, target)}");
+        }
+
+        var lines = new List<string>
+        {
+            $"Move {games.Count:N0} source(s) into:",
+            $"  {destinationRoot}",
+            string.Empty,
+            $"Grouped by: {modeLabel}",
+            $"{moves:N0} to move, {skipped:N0} skipped.",
+            string.Empty
+        };
+        const int limit = 40;
+        lines.AddRange(entries.Take(limit));
+        if (entries.Count > limit) lines.Add($"  … and {entries.Count - limit:N0} more");
+        lines.Add(string.Empty);
+        lines.Add("Proceed?");
+
+        if (moves == 0)
+        {
+            AppDialog.ShowInformation(string.Join(Environment.NewLine, lines), "Move to folder");
+            return false;
+        }
+        return AppDialog.ShowWarning(string.Join(Environment.NewLine, lines), "Move to folder",
+            DarkDialogButton.YesNo) == DialogResult.Yes;
     }
 
     private static string? GroupFolder(Ps5GameInfo game, MoveMode mode)

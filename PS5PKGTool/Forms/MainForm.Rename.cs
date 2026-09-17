@@ -100,11 +100,9 @@ public partial class MainForm
     private void RenameGames(IReadOnlyList<Ps5GameInfo> games, string question, string format)
     {
         if (RefuseIfBusy(games)) return;
-        string example = BuildBaseName(games[0], format) + Path.GetExtension(games[0].RootPath);
-        if (AppDialog.ShowWarning($"{question}\n\nExample: {example}", "Rename",
-                DarkDialogButton.YesNo) != DialogResult.Yes)
-            return;
-        ApplyRenames(games, useInstallOrder: false, format);
+        List<(Ps5GameInfo Game, string BaseName)> plans = BuildRenamePlans(games, format);
+        if (!ConfirmRenamePreview(plans, question)) return;
+        ApplyRenames(plans);
     }
 
     private void RenameGamesByInstallOrder()
@@ -117,23 +115,68 @@ public partial class MainForm
             AppDialog.ShowInformation("Select one or more package (.pkg) files.", "Rename by install order");
             return;
         }
-        if (AppDialog.ShowWarning(
+        if (RefuseIfBusy(packages)) return;
+        string format = RenameFormatOrDefault(_settings.RenameFormat);
+        var plans = new List<(Ps5GameInfo Game, string BaseName)>(BuildInstallOrderPlans(packages, format));
+        if (!ConfirmRenamePreview(plans,
                 $"Rename {packages.Count:N0} package(s) by install order?\n\n" +
-                "Each Title ID group is numbered base game first, then updates, then add-ons.",
-                "Rename by install order", DarkDialogButton.YesNo) != DialogResult.Yes)
+                "Each Title ID group is numbered base game first, then updates, then add-ons."))
             return;
-        ApplyRenames(packages, useInstallOrder: true, RenameFormatOrDefault(_settings.RenameFormat));
+        ApplyRenames(plans);
     }
 
-    private void ApplyRenames(IReadOnlyList<Ps5GameInfo> games, bool useInstallOrder, string format)
+    /// <summary>Builds the base name for each selected item in selection order.</summary>
+    private static List<(Ps5GameInfo Game, string BaseName)> BuildRenamePlans(
+        IReadOnlyList<Ps5GameInfo> games, string format)
     {
-        var plans = new List<(Ps5GameInfo Game, string BaseName)>();
-        if (useInstallOrder)
-            plans.AddRange(BuildInstallOrderPlans(games, format));
-        else
-            foreach (Ps5GameInfo game in games)
-                plans.Add((game, BuildBaseName(game, format)));
+        var plans = new List<(Ps5GameInfo Game, string BaseName)>(games.Count);
+        foreach (Ps5GameInfo game in games)
+            plans.Add((game, BuildBaseName(game, format)));
+        return plans;
+    }
 
+    /// <summary>
+    /// Shows every planned rename (old name, new name, conflicts and no-ops) and returns true when the
+    /// user confirms. Conflicts are shown with the numbered name they will actually receive.
+    /// </summary>
+    private bool ConfirmRenamePreview(IReadOnlyList<(Ps5GameInfo Game, string BaseName)> plans, string question)
+    {
+        var lines = new List<string> { question, string.Empty };
+        int moves = 0, conflicts = 0, unchanged = 0, errors = 0;
+        foreach ((Ps5GameInfo game, string baseName) in plans)
+        {
+            if (!TryResolveRenameTarget(game, baseName, out string source, out string target, out bool conflict, out string? error))
+            {
+                errors++;
+                lines.Add($"  x {LibraryFileName(game)} — {error}");
+                continue;
+            }
+            if (target.Length == 0)
+            {
+                unchanged++;
+                lines.Add($"  = {LibraryFileName(game)} (unchanged)");
+                continue;
+            }
+            moves++;
+            if (conflict) conflicts++;
+            lines.Add($"  {LibraryFileName(game)}");
+            lines.Add($"    -> {Path.GetFileName(target)}{(conflict ? "   [name already taken]" : string.Empty)}");
+        }
+
+        lines.Insert(1,
+            $"{moves:N0} to rename, {conflicts:N0} renamed to avoid a clash, {unchanged:N0} unchanged" +
+            (errors > 0 ? $", {errors:N0} cannot be renamed" : string.Empty) + ".");
+        if (moves == 0)
+        {
+            AppDialog.ShowInformation(string.Join(Environment.NewLine, lines), "Rename");
+            return false;
+        }
+        return AppDialog.ShowWarning(string.Join(Environment.NewLine, lines), "Rename",
+            DarkDialogButton.YesNo) == DialogResult.Yes;
+    }
+
+    private void ApplyRenames(IReadOnlyList<(Ps5GameInfo Game, string BaseName)> plans)
+    {
         int renamed = 0;
         int skipped = 0;
         foreach ((Ps5GameInfo game, string baseName) in plans)
@@ -196,8 +239,38 @@ public partial class MainForm
 
     private bool TryRenamePath(Ps5GameInfo game, string baseName, out string? error)
     {
+        if (!TryResolveRenameTarget(game, baseName, out string source, out string target, out _, out error))
+            return false;
+        if (target.Length == 0) return false; // already has the requested name
+
+        try
+        {
+            if (Directory.Exists(source)) Directory.Move(source, target);
+            else File.Move(source, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            error = ex.Message;
+            return false;
+        }
+
+        RewriteGamePath(game, source, target);
+        return true;
+    }
+
+    /// <summary>
+    /// Computes where a rename would land without touching disk. Returns false only on an error; a
+    /// successful call with an empty <paramref name="target"/> means the name is already correct.
+    /// <paramref name="conflict"/> is true when the plain target existed and a numbered name was chosen.
+    /// </summary>
+    private static bool TryResolveRenameTarget(Ps5GameInfo game, string baseName,
+        out string source, out string target, out bool conflict, out string? error)
+    {
+        source = game.RootPath;
+        target = string.Empty;
+        conflict = false;
         error = null;
-        string source = game.RootPath;
+
         if (string.IsNullOrWhiteSpace(source))
         {
             error = "empty path";
@@ -227,22 +300,11 @@ public partial class MainForm
         }
 
         string extension = isDirectory ? string.Empty : Path.GetExtension(source);
-        string target = Path.Combine(parent, safeBase + extension);
-        if (string.Equals(target, source, StringComparison.OrdinalIgnoreCase)) return false;
-        target = MakeUniquePath(target, isDirectory);
+        string raw = Path.Combine(parent, safeBase + extension);
+        if (string.Equals(raw, source, StringComparison.OrdinalIgnoreCase)) return true;
 
-        try
-        {
-            if (isDirectory) Directory.Move(source, target);
-            else File.Move(source, target);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            error = ex.Message;
-            return false;
-        }
-
-        RewriteGamePath(game, source, target);
+        conflict = File.Exists(raw) || Directory.Exists(raw);
+        target = conflict ? MakeUniquePath(raw, isDirectory) : raw;
         return true;
     }
 
