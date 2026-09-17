@@ -313,6 +313,10 @@ public partial class MainForm
 
     private Ps5GameInfo? SelectedGame()
     {
+        // Prefer the focused row so single-row actions target what the user is looking at, not an
+        // arbitrary member of a multi-selection.
+        DataGridViewRow? current = gridLibrary.CurrentRow;
+        if (current is { Selected: true } && current.Tag is Ps5GameInfo focused) return focused;
         foreach (DataGridViewRow row in gridLibrary.SelectedRows)
             if (row.Tag is Ps5GameInfo game) return game;
         return null;

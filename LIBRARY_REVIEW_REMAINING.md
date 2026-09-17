@@ -20,15 +20,20 @@ are design/robustness work.
   package, or an image whose volume will not open, instead of dropping it to a scan-error string.
 - **High — mutation gating:** delete refuses sources that a queued/running task is using (same-path or
   parent/child overlap). Rename/delete wiring still to extend to rename/move.
+- **High — typed sorting:** Version and Required System sort by parsed numeric value (1.10 after 1.9)
+  via `VersionKey`, matching the filter's component comparison.
+- **High — grouped sorting:** `GroupCellValueComparer` is now set and compares byte-size text
+  numerically (2 GiB before 10 GiB) instead of as text.
+- **High — multi-selection preserved:** rebuilds restore the full selected set and the focused row by
+  root path; selections that are no longer visible are dropped instead of retained invisibly.
+- **High (partial) — focused row:** `SelectedGame()` now prefers the focused/current row; single-only
+  actions are not yet disabled for a multi-selection.
 
 ## Remaining
 
 | Priority | Item |
 |---|---|
-| High | Typed version/system/size sorting everywhere (flat grid sorts some strings lexically; unify with the filter's component comparison). |
-| High | Grouped cell sorting uses formatted strings (`GroupCellValueComparer` is null). Compare raw values in grouped mode (needs raw values on the cells). |
-| High | Preserve the **full multi-selection** (and focus/scroll anchor) across filter/sort rebuilds; `PopulateLibraryGrid` restores only one root. |
-| High | Single active row: single-row actions currently use the first selected row; disable single-only actions for multi-selection or define a focused row. |
+| High | Disable single-only actions (Copy/Reveal) when multiple rows are selected, or route them to the focused row explicitly. |
 | High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
 | High | Extend the busy-path gate to rename/move (delete is done) and account for an active scan. |
 | Medium | `Clear all`/preset semantics: separate Reset filters vs Reset view; `All` should clear the query too. |

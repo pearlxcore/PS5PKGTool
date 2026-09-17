@@ -47,6 +47,8 @@ public partial class MainForm
 
         gridLibrary.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridLibrary.AutoSortGroups = false;
+        // Grouped rows sort on cell values; compare byte-size text numerically so 10 GB sorts after 2 GB.
+        gridLibrary.GroupCellValueComparer = CompareLibraryCellValues;
         gridLibrary.GroupLabelFormatter = (keyObject, count) =>
         {
             string key = keyObject as string ?? keyObject?.ToString() ?? string.Empty;
@@ -95,7 +97,9 @@ public partial class MainForm
     {
         EnsureLibraryColumns();
 
-        string? previousRoot = SelectedGame()?.RootPath;
+        // Capture the whole selection and the focused row by stable root path, not just one.
+        string[] selectedRoots = SelectedGames().Select(game => game.RootPath).ToArray();
+        string? focusedRoot = SelectedGame()?.RootPath;
         _groupApplied = false;
 
         gridLibrary.SuspendLayout();
@@ -135,12 +139,12 @@ public partial class MainForm
             ApplyLibrarySortGlyph();
         }
 
-        RestoreLibrarySelection(previousRoot);
+        RestoreLibrarySelection(selectedRoots, focusedRoot);
 
         // On the first load there is no previous selection. The grid highlights the first row while
         // populating (selection suppressed), so promote it to a real selection to load the details
         // pane and the Tools source immediately.
-        if (previousRoot is null && _visibleGames.Count > 0)
+        if (selectedRoots.Length == 0 && _visibleGames.Count > 0)
         {
             DataGridViewRow? first = null;
             foreach (DataGridViewRow row in gridLibrary.Rows)
@@ -155,20 +159,36 @@ public partial class MainForm
         StartLibraryThumbnailLoad(_visibleGames);
     }
 
-    private void RestoreLibrarySelection(string? rootPath)
+    /// <summary>
+    /// Restores the full multi-selection and the focused row by stable root path after a rebuild.
+    /// Identities that are no longer visible are dropped, so a narrowed view never keeps an
+    /// invisible destructive scope.
+    /// </summary>
+    private void RestoreLibrarySelection(string[] roots, string? focusedRoot)
     {
-        if (rootPath is null) return;
+        if (roots.Length == 0 && focusedRoot is null) return;
+        var wanted = new HashSet<string>(roots, StringComparer.OrdinalIgnoreCase);
         _suppressLibrarySelection = true;
         try
         {
+            gridLibrary.ClearSelection();
+            DataGridViewRow? focused = null;
             foreach (DataGridViewRow row in gridLibrary.Rows)
             {
-                if (row.Tag is Ps5GameInfo game &&
-                    string.Equals(game.RootPath, rootPath, StringComparison.OrdinalIgnoreCase))
+                if (row.Tag is not Ps5GameInfo game) continue;
+                if (wanted.Contains(game.RootPath))
                 {
                     row.Selected = true;
-                    break;
+                    focused ??= row;
                 }
+                if (focusedRoot is not null &&
+                    string.Equals(game.RootPath, focusedRoot, StringComparison.OrdinalIgnoreCase))
+                    focused = row;
+            }
+            if (focused is { Index: >= 0 })
+            {
+                gridLibrary.CurrentCell = focused.Cells[0];
+                gridLibrary.FirstDisplayedScrollingRowIndex = focused.Index;
             }
         }
         finally
@@ -199,8 +219,9 @@ public partial class MainForm
             "Region" => game => RegionOf(game),
             "Source" => game => game.SourceDescription,
             "Size" => game => game.SourceSize,
-            "Version" => game => game.DisplayVersion,
-            "Firmware" => game => game.RequiredSystemSoftware,
+            // Typed keys so 1.10 sorts after 1.9 instead of lexically.
+            "Version" => game => VersionKey.Parse(game.DisplayVersion),
+            "Firmware" => game => VersionKey.Parse(game.RequiredSystemSoftware),
             "Features" => game => string.Join(", ", game.DeclaredFeatures),
             "Drm" => game => game.DrmType,
             "FileName" => game => LibraryFileName(game),
@@ -214,9 +235,80 @@ public partial class MainForm
             object? right = selector(b);
             int result = left is long lx && right is long ly
                 ? lx.CompareTo(ly)
-                : string.Compare(left?.ToString(), right?.ToString(), StringComparison.CurrentCultureIgnoreCase);
+                : left is VersionKey vx && right is VersionKey vy
+                    ? vx.CompareTo(vy)
+                    : string.Compare(left?.ToString(), right?.ToString(), StringComparison.CurrentCultureIgnoreCase);
             return result * sign;
         };
+    }
+
+    /// <summary>
+    /// Orders dotted numeric version/system strings by value (1.10 after 1.9) with a text tie-break.
+    /// Non-numeric or unknown values stay comparable and sort before/after per their text.
+    /// </summary>
+    private readonly record struct VersionKey(long Packed, string Raw) : IComparable<VersionKey>
+    {
+        public static VersionKey Parse(string? value)
+        {
+            string raw = value ?? string.Empty;
+            long packed = 0;
+            long current = 0;
+            bool any = false;
+            int groups = 0;
+            foreach (char c in raw)
+            {
+                if (char.IsDigit(c))
+                {
+                    current = Math.Min(current * 10 + (c - '0'), 9_999);
+                    any = true;
+                }
+                else if (c == '.')
+                {
+                    packed = packed * 10_000 + current;
+                    current = 0;
+                    any = false;
+                    if (++groups >= 3) break;
+                }
+            }
+            if (any) packed = packed * 10_000 + current;
+            return new VersionKey(packed, raw);
+        }
+
+        public int CompareTo(VersionKey other)
+        {
+            int byValue = Packed.CompareTo(other.Packed);
+            return byValue != 0 ? byValue : string.Compare(Raw, other.Raw, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>Numeric-aware comparison for grouped cell values (formatted byte sizes).</summary>
+    private static int CompareLibraryCellValues(object? left, object? right)
+    {
+        if (TryParseSize(left, out double a) && TryParseSize(right, out double b)) return a.CompareTo(b);
+        return string.Compare(left?.ToString(), right?.ToString(), StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    /// <summary>Parses a "3.20 GiB" style size string (as produced by FormatBytes) back to bytes.</summary>
+    private static bool TryParseSize(object? value, out double bytes)
+    {
+        bytes = 0;
+        if (value is not string text || text.Length == 0) return false;
+        string[] parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || !double.TryParse(parts[0], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.CurrentCulture, out double amount))
+            return false;
+        double scale = parts[1] switch
+        {
+            "B" => 1d,
+            "KiB" => 1024d,
+            "MiB" => 1024d * 1024,
+            "GiB" => 1024d * 1024 * 1024,
+            "TiB" => 1024d * 1024 * 1024 * 1024,
+            _ => 0d
+        };
+        if (scale == 0d) return false;
+        bytes = amount * scale;
+        return true;
     }
 
     private void AddLibraryGameRow(Ps5GameInfo game)
