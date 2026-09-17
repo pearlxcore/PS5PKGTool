@@ -42,7 +42,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         nudRowHeight.Value = Clamp(Settings.GridRowHeight, nudRowHeight);
         chkShowThumbnails.Checked = Settings.ShowThumbnails;
         chkShowGridLines.Checked = Settings.ShowGridLines;
-        SelectCombo(cboDefaultGroup, string.IsNullOrEmpty(Settings.DefaultGroupBy) ? "None" : Settings.DefaultGroupBy);
+        SelectCombo(cboDefaultGroup, GroupLabelFor(Settings.DefaultGroupBy));
 
         nudMaxPreviewMb.Value = Clamp(Settings.MaxPreviewMb, nudMaxPreviewMb);
         nudHexPageKb.Value = Clamp(Settings.HexPageKb, nudHexPageKb);
@@ -95,6 +95,17 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         "Source format" => "source",
         "Required firmware" => "firmware",
         _ => string.Empty
+    };
+
+    // The combo lists labels while the setting stores keys; map back so the saved choice round-trips.
+    private static string GroupLabelFor(string? key) => key switch
+    {
+        "titleid" => "Title ID",
+        "category" => "Category",
+        "region" => "Region",
+        "source" => "Source format",
+        "firmware" => "Required firmware",
+        _ => "None"
     };
 
     private static void SelectCombo(DarkUI.Controls.DarkComboBox combo, string value)
