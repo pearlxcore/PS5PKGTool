@@ -14,6 +14,8 @@ public sealed class AppSettings
     public bool WindowMaximized { get; set; }
     public string LibrarySortColumn { get; set; } = "Title";
     public bool LibrarySortAscending { get; set; } = true;
+    /// <summary>Ordered sort keys ("Title:asc", "Size:desc") for multi-column sorting.</summary>
+    public List<string> LibrarySortKeys { get; set; } = [];
     public List<string> LibraryColumnOrder { get; set; } = [];
     public List<string> LibraryHiddenColumns { get; set; } = [];
     /// <summary>Remembered column fill weights by column name so user-resized widths survive a restart.</summary>

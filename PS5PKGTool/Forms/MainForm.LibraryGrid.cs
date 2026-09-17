@@ -26,8 +26,9 @@ public partial class MainForm
         ("Location", "Location", 240, 26)
     ];
 
-    private string _librarySortColumn = "Title";
-    private bool _librarySortAscending = true;
+    private readonly List<(string Column, bool Ascending)> _librarySortKeys = [];
+    private string PrimarySortColumn => _librarySortKeys.Count > 0 ? _librarySortKeys[0].Column : "Title";
+    private bool PrimarySortAscending => _librarySortKeys.Count > 0 && _librarySortKeys[0].Ascending;
     private bool _libraryColumnsReady;
     private bool _suppressLibrarySelection;
     private bool _groupApplied;
@@ -41,8 +42,6 @@ public partial class MainForm
         if (_libraryColumnsReady) return;
         _libraryColumnsReady = true;
 
-        _librarySortColumn = string.IsNullOrWhiteSpace(_settings.LibrarySortColumn) ? "Title" : _settings.LibrarySortColumn;
-        _librarySortAscending = _settings.LibrarySortAscending;
         _settings.LibraryColumnOrder ??= [];
         _settings.LibraryHiddenColumns ??= [];
         _settings.LibraryColumnWeights ??= [];
@@ -93,6 +92,34 @@ public partial class MainForm
         RestoreLibraryColumnLayout();
         ApplyLibraryColumnVisibility();
         BuildLibraryColumnMenu();
+        LoadLibrarySortKeys();
+    }
+
+    /// <summary>Restores the multi-sort keys, falling back to the single legacy sort setting.</summary>
+    private void LoadLibrarySortKeys()
+    {
+        _librarySortKeys.Clear();
+        foreach (string entry in _settings.LibrarySortKeys ?? [])
+        {
+            string[] parts = entry.Split(':');
+            if (parts.Length != 2 || !gridLibrary.Columns.Contains(parts[0])) continue;
+            if (_librarySortKeys.Any(key => string.Equals(key.Column, parts[0], StringComparison.Ordinal))) continue;
+            _librarySortKeys.Add((parts[0], !string.Equals(parts[1], "desc", StringComparison.OrdinalIgnoreCase)));
+        }
+        if (_librarySortKeys.Count == 0)
+        {
+            string column = string.IsNullOrWhiteSpace(_settings.LibrarySortColumn) ? "Title" : _settings.LibrarySortColumn;
+            _librarySortKeys.Add((column, _settings.LibrarySortAscending));
+        }
+    }
+
+    private void PersistLibrarySortKeys()
+    {
+        _settings.LibrarySortKeys = _librarySortKeys
+            .Select(key => $"{key.Column}:{(key.Ascending ? "asc" : "desc")}")
+            .ToList();
+        _settings.LibrarySortColumn = PrimarySortColumn;
+        _settings.LibrarySortAscending = PrimarySortAscending;
     }
 
     private void PopulateLibraryGrid()
@@ -133,11 +160,11 @@ public partial class MainForm
 
         if (_groupApplied)
         {
-            int sortIndex = gridLibrary.Columns.Contains(_librarySortColumn)
-                ? gridLibrary.Columns[_librarySortColumn]!.Index
+            int sortIndex = gridLibrary.Columns.Contains(PrimarySortColumn)
+                ? gridLibrary.Columns[PrimarySortColumn]!.Index
                 : gridLibrary.Columns["Title"]!.Index;
             gridLibrary.SortGroups(sortIndex,
-                _librarySortAscending ? ListSortDirection.Ascending : ListSortDirection.Descending);
+                PrimarySortAscending ? ListSortDirection.Ascending : ListSortDirection.Descending);
         }
         else
         {
@@ -234,7 +261,26 @@ public partial class MainForm
 
     private Comparison<Ps5GameInfo> LibrarySortComparison()
     {
-        Func<Ps5GameInfo, object?> selector = _librarySortColumn switch
+        IReadOnlyList<(string Column, bool Ascending)> keys =
+            _librarySortKeys.Count > 0 ? _librarySortKeys : [("Title", true)];
+        if (keys.Count == 1) return LibraryKeyComparison(keys[0]);
+
+        // Multi-sort: compare by each key in turn; the first non-equal key decides.
+        var comparisons = keys.Select(LibraryKeyComparison).ToList();
+        return (a, b) =>
+        {
+            foreach (Comparison<Ps5GameInfo> comparison in comparisons)
+            {
+                int result = comparison(a, b);
+                if (result != 0) return result;
+            }
+            return 0;
+        };
+    }
+
+    private Comparison<Ps5GameInfo> LibraryKeyComparison((string Column, bool Ascending) key)
+    {
+        Func<Ps5GameInfo, object?> selector = key.Column switch
         {
             "TitleId" => game => game.TitleId,
             "ContentId" => game => game.ContentId,
@@ -252,7 +298,7 @@ public partial class MainForm
             "Location" => game => game.RootPath,
             _ => game => game.Title
         };
-        int sign = _librarySortAscending ? 1 : -1;
+        int sign = key.Ascending ? 1 : -1;
         return (a, b) =>
         {
             object? left = selector(a);
@@ -431,22 +477,31 @@ public partial class MainForm
         string column = gridLibrary.Columns[e.ColumnIndex].Name;
         if (column == "Icon") return;
 
-        if (string.Equals(_librarySortColumn, column, StringComparison.Ordinal))
-            _librarySortAscending = !_librarySortAscending;
+        bool shift = (ModifierKeys & Keys.Shift) == Keys.Shift;
+        if (shift)
+        {
+            // Shift+click adds or toggles a secondary sort key.
+            int index = _librarySortKeys.FindIndex(key => string.Equals(key.Column, column, StringComparison.Ordinal));
+            if (index >= 0) _librarySortKeys[index] = (column, !_librarySortKeys[index].Ascending);
+            else _librarySortKeys.Add((column, true));
+        }
         else
         {
-            _librarySortColumn = column;
-            _librarySortAscending = true;
+            // A plain click sorts by this column alone, toggling direction when it was already primary.
+            bool wasPrimary = _librarySortKeys.Count > 0 &&
+                string.Equals(_librarySortKeys[0].Column, column, StringComparison.Ordinal);
+            bool ascending = wasPrimary ? !_librarySortKeys[0].Ascending : true;
+            _librarySortKeys.Clear();
+            _librarySortKeys.Add((column, ascending));
         }
 
-        _settings.LibrarySortColumn = _librarySortColumn;
-        _settings.LibrarySortAscending = _librarySortAscending;
+        PersistLibrarySortKeys();
         SaveSettingsQuietly();
 
         if (_groupApplied)
         {
             gridLibrary.SortGroups(e.ColumnIndex,
-                _librarySortAscending ? ListSortDirection.Ascending : ListSortDirection.Descending);
+                PrimarySortAscending ? ListSortDirection.Ascending : ListSortDirection.Descending);
             return;
         }
 
@@ -457,9 +512,10 @@ public partial class MainForm
     {
         foreach (DataGridViewColumn column in gridLibrary.Columns)
             column.HeaderCell.SortGlyphDirection = SortOrder.None;
-        if (gridLibrary.Columns.Contains(_librarySortColumn))
-            gridLibrary.Columns[_librarySortColumn]!.HeaderCell.SortGlyphDirection =
-                _librarySortAscending ? SortOrder.Ascending : SortOrder.Descending;
+        foreach ((string name, bool ascending) in _librarySortKeys)
+            if (gridLibrary.Columns.Contains(name))
+                gridLibrary.Columns[name]!.HeaderCell.SortGlyphDirection =
+                    ascending ? SortOrder.Ascending : SortOrder.Descending;
     }
 
     private static Ps5GameInfo? GameOf(DataGridViewRow? row) => row?.Tag as Ps5GameInfo;
@@ -636,10 +692,9 @@ public partial class MainForm
     /// </summary>
     private void ResetLibraryView()
     {
-        _librarySortColumn = "Title";
-        _librarySortAscending = true;
-        _settings.LibrarySortColumn = _librarySortColumn;
-        _settings.LibrarySortAscending = _librarySortAscending;
+        _librarySortKeys.Clear();
+        _librarySortKeys.Add(("Title", true));
+        PersistLibrarySortKeys();
 
         _settings.LibraryHiddenColumns.Clear();
         _settings.LibraryColumnWeights.Clear();
