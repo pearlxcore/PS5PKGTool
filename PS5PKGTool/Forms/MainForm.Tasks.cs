@@ -25,6 +25,7 @@ public partial class MainForm
     private readonly Dictionary<string, DataGridViewRow> _taskRows = new(StringComparer.Ordinal);
     private string _taskGridSignature = string.Empty;
     private string? _lastFollowedTaskId;
+    private string? _pendingSelectTaskId;
 
     private void InitializeTaskQueue()
     {
@@ -144,14 +145,16 @@ public partial class MainForm
                 _notifiedTasks.Add("open:" + task.Id))
                 RunOnUi(() => OpenOutputFolder(task.OutputPath));
         };
-        bool wasEmpty = _taskQueue.Tasks.Count == 0;
         _taskQueue.Enqueue(task);
         Logger.Info($"Queued task: {displayName} (see the Tasks tab)");
         _taskRefreshPending = true;
-        // Show Tasks for the first job only; later jobs queue without switching away from the current tab.
-        if (wasEmpty && tabTasks is not null) tabsWorkspace.SelectedTab = tabTasks;
+        // Bring the Tasks workspace forward for every new job and re-enable follow so the running task
+        // is selected and scrolled into view.
+        if (tabTasks is not null) tabsWorkspace.SelectedTab = tabTasks;
         _autoFollowRunning = true;
         SyncFollowCheckbox();
+        _lastFollowedTaskId = null;
+        _pendingSelectTaskId = task.Id;
         RefreshTaskGrid();
         return task;
     }
@@ -229,9 +232,12 @@ public partial class MainForm
         bool rebuild = !string.Equals(signature, _taskGridSignature, StringComparison.Ordinal);
         bool followChanged = !string.Equals(followId, _lastFollowedTaskId, StringComparison.Ordinal);
         int scrollRow = gridTasks.FirstDisplayedScrollingRowIndex;
+        string? pendingSelectId = _pendingSelectTaskId;
         string? targetId = rebuild
-            ? (followId is not null && followChanged ? followId : selectedId)
+            ? (followId is not null && followChanged ? followId : (pendingSelectId ?? selectedId))
             : null;
+        bool scrollToTarget = (followId is not null && followChanged) ||
+            (targetId is not null && string.Equals(targetId, pendingSelectId, StringComparison.Ordinal));
 
         gridTasks.SuspendLayout();
         try
@@ -280,9 +286,9 @@ public partial class MainForm
                     {
                         _suppressTaskSelection = false;
                     }
-                    // Scroll to the running task only when it changes; otherwise restore the previous
-                    // scroll offset so scrolling through history is not interrupted.
-                    if (followId is not null && followChanged && row.Index >= 0)
+                    // Scroll to the newly started/queued task, otherwise restore the previous scroll
+                    // offset so scrolling through history is not interrupted.
+                    if (scrollToTarget && row.Index >= 0)
                         gridTasks.FirstDisplayedScrollingRowIndex = row.Index;
                     else if (scrollRow >= 0 && scrollRow < gridTasks.Rows.Count)
                         gridTasks.FirstDisplayedScrollingRowIndex = scrollRow;
@@ -300,6 +306,9 @@ public partial class MainForm
         }
 
         _lastFollowedTaskId = followId;
+        if (pendingSelectId is not null &&
+            string.Equals(pendingSelectId, targetId, StringComparison.Ordinal))
+            _pendingSelectTaskId = null;
         UpdateTaskSummary();
         UpdateTaskDetails();
     }
