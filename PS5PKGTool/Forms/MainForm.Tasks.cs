@@ -326,10 +326,15 @@ public partial class MainForm
         ? 1d
         : task.Progress.TaskPercent;
 
-    private static string StageText(QueuedPackageTask task) => task.Status is PackageTaskStatus.Running
-        or PackageTaskStatus.Cancelling && !string.IsNullOrWhiteSpace(task.Progress.Stage)
-        ? task.Progress.Stage + "\u2026"
-        : string.Empty;
+    /// <summary>
+    /// Keeps the last known stage on terminal tasks (so a failure shows where it stopped) and adds an
+    /// ellipsis only while the task is still active.
+    /// </summary>
+    private static string StageText(QueuedPackageTask task) => string.IsNullOrWhiteSpace(task.Progress.Stage)
+        ? string.Empty
+        : task.Progress.Stage + (task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling
+            ? "\u2026"
+            : string.Empty);
 
     private static string ElapsedText(QueuedPackageTask task)
     {
@@ -405,14 +410,13 @@ public partial class MainForm
         string output = task.OutputPath;
         try
         {
+            // Show output opens the task's actual output only; it never falls back to the source.
             if (File.Exists(output))
                 Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{output}\"") { UseShellExecute = true });
             else if (Directory.Exists(output))
                 Process.Start(new ProcessStartInfo("explorer.exe", $"\"{output}\"") { UseShellExecute = true });
-            else if (File.Exists(task.SourcePath))
-                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{task.SourcePath}\"") { UseShellExecute = true });
             else
-                AppDialog.ShowInformation("The task has no existing output or source path to open.", "PS5 PKG Tool");
+                AppDialog.ShowInformation("This task has no existing output to open.", "PS5 PKG Tool");
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or ArgumentException)
         {
@@ -433,8 +437,8 @@ public partial class MainForm
             Status: PackageTaskStatus.Failed or PackageTaskStatus.Cancelled or PackageTaskStatus.Interrupted
         };
         btnTaskRemove.Enabled = task is not null && !busy;
-        btnTaskOpen.Enabled = task is not null && (task.OutputPath.Length > 0 || task.SourcePath.Length > 0);
-        btnTaskClear.Enabled = tasks.Any(candidate => candidate.IsTerminal);
+        btnTaskOpen.Enabled = task is not null && task.OutputPath.Length > 0;
+        btnTaskClear.Enabled = tasks.Any(candidate => candidate.Status == PackageTaskStatus.Completed);
 
         menuTaskStart.Enabled = btnTaskStart.Enabled;
         menuTaskCancel.Enabled = btnTaskCancel.Enabled;
@@ -545,7 +549,8 @@ public partial class MainForm
             PackageTaskTypes.ImageBuildPackage => RebuildImageBuildPackage(fields),
             _ => null
         };
-        if (execute is null) return null;
+        // Keep the record even when the operation cannot be rebuilt (for example a library move):
+        // history must stay truthful and displayable, it simply is not rerunnable.
         var task = new QueuedPackageTask
         {
             Id = entry.Id,

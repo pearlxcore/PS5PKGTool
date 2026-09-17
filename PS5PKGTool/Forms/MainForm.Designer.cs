@@ -4335,9 +4335,9 @@ partial class MainForm
         chkTaskAutoStart.AutoSize = true;
         chkTaskAutoStart.Location = new Point(3, 9);
         chkTaskAutoStart.Name = "chkTaskAutoStart";
-        chkTaskAutoStart.Size = new Size(74, 19);
+        chkTaskAutoStart.Size = new Size(86, 19);
         chkTaskAutoStart.TabIndex = 0;
-        chkTaskAutoStart.Text = "Auto-start";
+        chkTaskAutoStart.Text = "Run queue";
         chkTaskAutoStart.CheckedChanged += chkTaskAutoStart_CheckedChanged;
         // 
         // btnTaskStart
@@ -4397,7 +4397,7 @@ partial class MainForm
         btnTaskClear.Name = "btnTaskClear";
         btnTaskClear.Size = new Size(104, 26);
         btnTaskClear.TabIndex = 6;
-        btnTaskClear.Text = "Clear Completed";
+        btnTaskClear.Text = "Clear successful";
         btnTaskClear.Click += btnTaskClear_Click;
         // 
         // lblTaskGroup

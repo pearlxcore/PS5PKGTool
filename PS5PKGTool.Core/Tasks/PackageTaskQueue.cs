@@ -44,8 +44,23 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         _worker = Task.Run(() => WorkerAsync(_lifetime.Token));
     }
 
-    /// <summary>When true (default) enqueued tasks begin automatically; otherwise use <see cref="StartNext"/>.</summary>
-    public bool AutoStart { get; set; } = true;
+    private bool _autoStart = true;
+
+    /// <summary>
+    /// When true (default) the queue drains waiting tasks automatically. When false the queue is
+    /// held: the running task continues, waiting tasks stay queued, and only <see cref="StartNext"/>
+    /// runs one. This is scheduling, not pause/resume of a build.
+    /// </summary>
+    public bool AutoStart
+    {
+        get => _autoStart;
+        set
+        {
+            bool wasHeld = !_autoStart;
+            _autoStart = value;
+            if (value && wasHeld) RunQueue();
+        }
+    }
 
     public IReadOnlyList<QueuedPackageTask> Tasks
     {
@@ -94,10 +109,23 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         });
     }
 
+    /// <summary>Runs exactly the next waiting task, even while the queue is held.</summary>
     public void StartNext()
     {
-        lock (_gate) _requested = _tasks.FirstOrDefault(task => task.Status == PackageTaskStatus.Queued);
-        if (_requested is not null) _signal.Release();
+        lock (_gate)
+        {
+            _requested = _tasks.FirstOrDefault(task => task.Status == PackageTaskStatus.Queued);
+            if (_requested is null) return;
+        }
+        _signal.Release();
+    }
+
+    /// <summary>Drains all waiting tasks, used by the Run queue control and when hold is released.</summary>
+    public void RunQueue()
+    {
+        bool hasQueued;
+        lock (_gate) hasQueued = _tasks.Any(task => task.Status == PackageTaskStatus.Queued);
+        if (hasQueued) _signal.Release();
     }
 
     public bool Cancel(string id)
@@ -127,7 +155,8 @@ public sealed class PackageTaskQueue : IAsyncDisposable
     public bool Retry(string id)
     {
         QueuedPackageTask? task = Find(id);
-        if (task is null || task.Status is not (PackageTaskStatus.Failed or PackageTaskStatus.Cancelled or PackageTaskStatus.Interrupted))
+        if (task is null || task.Execute is null ||
+            task.Status is not (PackageTaskStatus.Failed or PackageTaskStatus.Cancelled or PackageTaskStatus.Interrupted))
             return false;
         lock (_gate)
         {
@@ -155,10 +184,14 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         return removed;
     }
 
+    /// <summary>
+    /// Removes only successful completed records from history. Failed, cancelled and interrupted
+    /// records are retained so a problem is never silently cleared away.
+    /// </summary>
     public int ClearCompleted()
     {
         int removed;
-        lock (_gate) removed = _tasks.RemoveAll(task => task.IsTerminal);
+        lock (_gate) removed = _tasks.RemoveAll(task => task.Status == PackageTaskStatus.Completed);
         if (removed > 0) { Notify(); Persist(); }
         return removed;
     }
@@ -233,13 +266,8 @@ public sealed class PackageTaskQueue : IAsyncDisposable
         if (restored > 0)
         {
             Notify();
-            // One signal per restored queued task, matching the one-signal-per-task
-            // worker so auto-start resumes every task that was still pending.
-            if (AutoStart)
-            {
-                int queued = _tasks.Count(task => task.Status == PackageTaskStatus.Queued);
-                if (queued > 0) _signal.Release(queued);
-            }
+            // A single signal wakes the worker, which drains every still-queued task itself.
+            if (AutoStart) _signal.Release();
         }
         return restored;
     }
@@ -253,12 +281,14 @@ public sealed class PackageTaskQueue : IAsyncDisposable
             try { await _signal.WaitAsync(cancellationToken).ConfigureAwait(false); }
             catch (OperationCanceledException) { break; }
 
-            // One signal runs exactly one task. Auto-start releases a signal per
-            // enqueued/retried task, so the queue still drains on its own; manual
-            // "Start Next" releases a single signal and starts a single task.
-            QueuedPackageTask? task = TakeNext();
-            if (task is not null)
+            // Drain the queue while it is running. Holding stops the drain after the current task;
+            // TakeNext decides whether anything may start. A single signal wakes this loop.
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                QueuedPackageTask? task = TakeNext();
+                if (task is null) break;
                 await RunAsync(task, cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -266,11 +296,11 @@ public sealed class PackageTaskQueue : IAsyncDisposable
     {
         lock (_gate)
         {
-            QueuedPackageTask? task = _requested is { Status: PackageTaskStatus.Queued } requested
-                ? requested
-                : _tasks.FirstOrDefault(candidate => candidate.Status == PackageTaskStatus.Queued);
+            QueuedPackageTask? requested = _requested is { Status: PackageTaskStatus.Queued } value ? value : null;
             _requested = null;
-            return task;
+            if (requested is not null) return requested; // an explicit Start next works while held
+            if (!AutoStart) return null;                 // held: no automatic starts
+            return _tasks.FirstOrDefault(candidate => candidate.Status == PackageTaskStatus.Queued);
         }
     }
 
