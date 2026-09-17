@@ -42,6 +42,8 @@ public sealed class AppSettings
     public int GridRowHeight { get; set; } = 22;
     public bool ShowThumbnails { get; set; } = true;
     public bool ShowGridLines { get; set; } = true;
+    /// <summary>Show the inline file preview pane in the Files tab (list-only when disabled).</summary>
+    public bool ShowFilePreview { get; set; } = true;
     public string DefaultGroupBy { get; set; } = string.Empty;
 
     // Library & scanning

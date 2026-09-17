@@ -57,6 +57,7 @@ public partial class MainForm : DarkForm
     private bool _currentSourceIsContainer;
     private bool _isScanning;
     private int _scanGeneration;
+    private int[]? _savedFilePreviewSizes;
     private bool _isFileBusy;
     private int _detailVersion;
     private int _filePreviewVersion;
@@ -274,6 +275,29 @@ public partial class MainForm : DarkForm
         // The builder selector is the next job's default; keep it in step with the saved preference.
         if (cboImageBackend.Items.Count > 0)
             cboImageBackend.SelectedIndex = IndexOfBackend(_settings.BuildBackend);
+
+        SetFilePreviewPaneVisible(_settings.ShowFilePreview);
+    }
+
+    /// <summary>
+    /// Shows or hides the inline file preview pane in the Files tab. Hiding removes the pane so the
+    /// file list takes the full width; the previous split sizes are restored when it returns.
+    /// </summary>
+    private void SetFilePreviewPaneVisible(bool visible)
+    {
+        if (splitFileContentPreview is null) return;
+        bool present = splitFileContentPreview.Panels.Contains(splitFileContentPreviewPane2);
+        if (visible && !present)
+        {
+            splitFileContentPreview.AddPanel(splitFileContentPreviewPane2);
+            if (_savedFilePreviewSizes is { Length: 2 }) splitFileContentPreview.PanelSizes = _savedFilePreviewSizes;
+        }
+        else if (!visible && present)
+        {
+            _savedFilePreviewSizes = splitFileContentPreview.PanelSizes;
+            splitFileContentPreview.RemovePanel(splitFileContentPreviewPane2);
+        }
+        BalanceFilePanes();
     }
 
     /// <summary>
@@ -1032,8 +1056,11 @@ public partial class MainForm : DarkForm
         // weights must stay above 40 or the outer 1:2 collapses to 1:1.
         splitFileBrowser.SetPanelSize(0, 100);
         splitFileBrowser.SetPanelSize(1, 200);
-        splitFileContentPreview.SetPanelSize(0, 100);
-        splitFileContentPreview.SetPanelSize(1, 100);
+        if (splitFileContentPreview.Panels.Contains(splitFileContentPreviewPane2))
+        {
+            splitFileContentPreview.SetPanelSize(0, 100);
+            splitFileContentPreview.SetPanelSize(1, 100);
+        }
     }
 
     private void PopulateActiveDetailTab()
@@ -2294,6 +2321,9 @@ public partial class MainForm : DarkForm
 
     private async void listFiles_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        // The preview pane is hidden: skip the inspection work entirely.
+        if (!_settings.ShowFilePreview) return;
+
         _filePreviewCancellation?.Cancel();
         _filePreviewCancellation?.Dispose();
         _filePreviewCancellation = new CancellationTokenSource();

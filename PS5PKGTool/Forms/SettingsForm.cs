@@ -79,6 +79,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
             SyncDensityFromRowHeight();
             chkShowThumbnails.Checked = Settings.ShowThumbnails;
             chkShowGridLines.Checked = Settings.ShowGridLines;
+            chkShowFilePreview.Checked = Settings.ShowFilePreview;
             SelectCombo(cboDefaultGroup, GroupLabelFor(Settings.DefaultGroupBy));
 
             txtRenameFormat.Text = Settings.RenameFormat;
@@ -115,6 +116,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         Settings.GridRowHeight = (int)nudRowHeight.Value;
         Settings.ShowThumbnails = chkShowThumbnails.Checked;
         Settings.ShowGridLines = chkShowGridLines.Checked;
+        Settings.ShowFilePreview = chkShowFilePreview.Checked;
         Settings.DefaultGroupBy = GroupKeyFor(cboDefaultGroup.SelectedItem as string);
 
         Settings.RenameFormat = txtRenameFormat.Text.Trim();
@@ -522,6 +524,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         AppendChange(changes, "Refresh on startup", before.RefreshOnStartup, after.RefreshOnStartup);
         AppendChange(changes, "Theme", before.Theme, after.Theme);
         AppendChange(changes, "Grid row height", before.GridRowHeight, after.GridRowHeight);
+        AppendChange(changes, "Show file preview pane", before.ShowFilePreview, after.ShowFilePreview);
         AppendChange(changes, "Default grouping", before.DefaultGroupBy, after.DefaultGroupBy);
         AppendChange(changes, "Rename format", before.RenameFormat, after.RenameFormat);
         AppendChange(changes, "Max preview (MiB)", before.MaxPreviewMb, after.MaxPreviewMb);

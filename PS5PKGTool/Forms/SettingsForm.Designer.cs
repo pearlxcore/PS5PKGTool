@@ -30,6 +30,7 @@ partial class SettingsForm
     private DarkUI.Controls.DarkComboBox cboDensity = null!;
     private DarkUI.Controls.DarkCheckBox chkShowThumbnails = null!;
     private DarkUI.Controls.DarkCheckBox chkShowGridLines = null!;
+    private DarkUI.Controls.DarkCheckBox chkShowFilePreview = null!;
     private DarkUI.Controls.DarkLabel lblDefaultGroup = null!;
     private DarkUI.Controls.DarkComboBox cboDefaultGroup = null!;
     private DarkUI.Controls.DarkButton btnResetLayout = null!;
@@ -128,6 +129,7 @@ partial class SettingsForm
         cboDensity = new DarkUI.Controls.DarkComboBox();
         chkShowThumbnails = new DarkUI.Controls.DarkCheckBox();
         chkShowGridLines = new DarkUI.Controls.DarkCheckBox();
+        chkShowFilePreview = new DarkUI.Controls.DarkCheckBox();
         lblDefaultGroup = new DarkUI.Controls.DarkLabel();
         cboDefaultGroup = new DarkUI.Controls.DarkComboBox();
         btnResetLayout = new DarkUI.Controls.DarkButton();
@@ -349,6 +351,7 @@ partial class SettingsForm
         tabAppearance.Controls.Add(cboDensity);
         tabAppearance.Controls.Add(chkShowThumbnails);
         tabAppearance.Controls.Add(chkShowGridLines);
+        tabAppearance.Controls.Add(chkShowFilePreview);
         tabAppearance.Controls.Add(lblDefaultGroup);
         tabAppearance.Controls.Add(cboDefaultGroup);
         tabAppearance.Controls.Add(btnResetLayout);
@@ -436,25 +439,34 @@ partial class SettingsForm
         chkShowGridLines.TabIndex = 8;
         chkShowGridLines.Text = "Show grid lines";
         // 
+        // chkShowFilePreview
+        // 
+        chkShowFilePreview.AutoSize = true;
+        chkShowFilePreview.Location = new Point(16, 170);
+        chkShowFilePreview.Name = "chkShowFilePreview";
+        chkShowFilePreview.Size = new Size(400, 19);
+        chkShowFilePreview.TabIndex = 13;
+        chkShowFilePreview.Text = "Show the file preview pane in the Files tab";
+        // 
         // lblDefaultGroup
         // 
-        lblDefaultGroup.Location = new Point(16, 181);
+        lblDefaultGroup.Location = new Point(16, 205);
         lblDefaultGroup.Name = "lblDefaultGroup";
         lblDefaultGroup.Size = new Size(170, 15);
-        lblDefaultGroup.TabIndex = 9;
+        lblDefaultGroup.TabIndex = 7;
         lblDefaultGroup.Text = "Default grouping";
         // 
         // cboDefaultGroup
         // 
         cboDefaultGroup.DropDownStyle = ComboBoxStyle.DropDownList;
-        cboDefaultGroup.Location = new Point(196, 177);
+        cboDefaultGroup.Location = new Point(196, 201);
         cboDefaultGroup.Name = "cboDefaultGroup";
         cboDefaultGroup.Size = new Size(320, 23);
         cboDefaultGroup.TabIndex = 10;
         // 
         // btnResetLayout
         // 
-        btnResetLayout.Location = new Point(196, 210);
+        btnResetLayout.Location = new Point(196, 234);
         btnResetLayout.Name = "btnResetLayout";
         btnResetLayout.Size = new Size(220, 30);
         btnResetLayout.TabIndex = 11;
