@@ -14,6 +14,7 @@ public partial class MainForm
         ("TitleId", "Title ID", 110, 12),
         ("ContentId", "Content ID", 190, 20),
         ("Category", "Category", 80, 9),
+        ("Role", "Role", 90, 10),
         ("Region", "Region", 80, 9),
         ("Source", "Source", 120, 13),
         ("Size", "Size", 80, 9),
@@ -110,7 +111,10 @@ public partial class MainForm
             if (_libraryGroupBy.Length > 0)
             {
                 ConfigureGroupHeaderColumn();
-                gridLibrary.SetGroups(_visibleGames, game => GroupKey(game), FillLibraryRow);
+                IEnumerable<Ps5GameInfo> grouped = string.Equals(_libraryGroupBy, "family", StringComparison.Ordinal)
+                    ? OrderLibraryGamesByFamily()
+                    : _visibleGames;
+                gridLibrary.SetGroups(grouped, game => GroupKey(game), FillLibraryRow);
                 _groupApplied = gridLibrary.IsGrouped;
             }
             else
@@ -210,6 +214,24 @@ public partial class MainForm
         return list;
     }
 
+    /// <summary>
+    /// Family order: grouped by title, then base game, updates (highest version first), DLC and apps, so
+    /// a family reads top-down as the install chain.
+    /// </summary>
+    private IReadOnlyList<Ps5GameInfo> OrderLibraryGamesByFamily()
+    {
+        var list = new List<Ps5GameInfo>(_visibleGames);
+        list.Sort((a, b) =>
+        {
+            int byFamily = string.Compare(a.TitleId, b.TitleId, StringComparison.OrdinalIgnoreCase);
+            if (byFamily != 0) return byFamily;
+            int byRole = RolePriority(a).CompareTo(RolePriority(b));
+            if (byRole != 0) return byRole;
+            return VersionKey.Parse(b.DisplayVersion).CompareTo(VersionKey.Parse(a.DisplayVersion));
+        });
+        return list;
+    }
+
     private Comparison<Ps5GameInfo> LibrarySortComparison()
     {
         Func<Ps5GameInfo, object?> selector = _librarySortColumn switch
@@ -217,6 +239,7 @@ public partial class MainForm
             "TitleId" => game => game.TitleId,
             "ContentId" => game => game.ContentId,
             "Category" => game => CategoryOf(game),
+            "Role" => game => RelationshipLabel(game),
             "Region" => game => RegionOf(game),
             "Source" => game => game.SourceDescription,
             "Size" => game => game.SourceSize,
@@ -326,6 +349,7 @@ public partial class MainForm
         row.Cells["TitleId"].Value = game.TitleId;
         row.Cells["ContentId"].Value = game.ContentId;
         row.Cells["Category"].Value = CategoryOf(game);
+        row.Cells["Role"].Value = RelationshipLabel(game);
         row.Cells["Region"].Value = RegionOf(game);
         row.Cells["Source"].Value = game.SourceDescription;
         row.Cells["Size"].Value = game.SourceSize > 0 ? FormatBytes(game.SourceSize) : string.Empty;

@@ -48,7 +48,7 @@ public partial class MainForm
         return true;
     }
 
-    private static readonly string[] FilterGroupKeys = ["", "titleid", "category", "region", "source", "firmware"];
+    private static readonly string[] FilterGroupKeys = ["", "family", "titleid", "category", "region", "source", "firmware"];
 
     private void ClearFilters()
     {
@@ -271,7 +271,7 @@ public partial class MainForm
     private static readonly string[] QueryFieldKeys =
     [
         "title", "id", "titleid", "title-id", "content", "contentid", "content-id",
-        "category", "region", "source", "format", "drm", "path", "location",
+        "category", "role", "region", "source", "format", "drm", "path", "location",
         "feature", "features", "size", "version", "fw", "firmware"
     ];
 
@@ -296,7 +296,7 @@ public partial class MainForm
             string field = body[..colon].ToLowerInvariant();
             string value = body[(colon + 1)..];
             if (Array.IndexOf(QueryFieldKeys, field) < 0)
-                return $"unknown field '{field}:'. Valid fields: title, id, content, category, region, source, size, version, fw, feature, drm, path.";
+                return $"unknown field '{field}:'. Valid fields: title, id, content, category, role, region, source, size, version, fw, feature, drm, path.";
             if (value.Length == 0)
                 return $"'{field}:' needs a value.";
 
@@ -328,6 +328,7 @@ public partial class MainForm
         "id" or "titleid" or "title-id" => MatchText(game.TitleId, value),
         "content" or "contentid" or "content-id" => MatchText(game.ContentId, value),
         "category" => MatchAny(value, part => ContainsText(CategoryOf(game), part)),
+        "role" => MatchAny(value, part => ContainsText(RelationshipLabel(game), part)),
         "region" => MatchAny(value, part => ContainsText(RegionOf(game), part)),
         "source" or "format" => MatchAny(value, part =>
             ContainsText(game.SourceDescription, part) || ContainsText(SourceFilterValue(game), part)),

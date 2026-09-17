@@ -38,6 +38,7 @@ partial class MainForm
     private ToolStripMenuItem menuLibraryRenameByPriority = null!;
     private ToolStripMenuItem menuLibraryGroupBy = null!;
     private ToolStripMenuItem menuLibraryGroupNone = null!;
+    private ToolStripMenuItem menuLibraryGroupFamily = null!;
     private ToolStripMenuItem menuLibraryGroupTitleId = null!;
     private ToolStripMenuItem menuLibraryGroupCategory = null!;
     private ToolStripMenuItem menuLibraryGroupRegion = null!;
@@ -452,6 +453,7 @@ partial class MainForm
         menuLibrarySeparator3 = new DarkUI.Controls.DarkToolStripSeparator();
         menuLibraryGroupBy = new ToolStripMenuItem();
         menuLibraryGroupNone = new ToolStripMenuItem();
+        menuLibraryGroupFamily = new ToolStripMenuItem();
         menuLibraryGroupTitleId = new ToolStripMenuItem();
         menuLibraryGroupCategory = new ToolStripMenuItem();
         menuLibraryGroupRegion = new ToolStripMenuItem();
@@ -1262,7 +1264,7 @@ partial class MainForm
         // menuLibraryGroupBy
         // 
         menuLibraryGroupBy.BackColor = Color.FromArgb(60, 63, 65);
-        menuLibraryGroupBy.DropDownItems.AddRange(new ToolStripItem[] { menuLibraryGroupNone, menuLibraryGroupTitleId, menuLibraryGroupCategory, menuLibraryGroupRegion, menuLibraryGroupSource, menuLibraryGroupFirmware });
+        menuLibraryGroupBy.DropDownItems.AddRange(new ToolStripItem[] { menuLibraryGroupNone, menuLibraryGroupFamily, menuLibraryGroupTitleId, menuLibraryGroupCategory, menuLibraryGroupRegion, menuLibraryGroupSource, menuLibraryGroupFirmware });
         menuLibraryGroupBy.ForeColor = Color.FromArgb(220, 220, 220);
         menuLibraryGroupBy.Name = "menuLibraryGroupBy";
         menuLibraryGroupBy.Size = new Size(260, 22);
@@ -1281,6 +1283,13 @@ partial class MainForm
         menuLibraryGroupTitleId.Size = new Size(171, 22);
         menuLibraryGroupTitleId.Text = "Title ID";
         menuLibraryGroupTitleId.Click += menuLibraryGroupTitleId_Click;
+        // 
+        // menuLibraryGroupFamily
+        // 
+        menuLibraryGroupFamily.Name = "menuLibraryGroupFamily";
+        menuLibraryGroupFamily.Size = new Size(171, 22);
+        menuLibraryGroupFamily.Text = "Family (base + updates + DLC)";
+        menuLibraryGroupFamily.Click += menuLibraryGroupFamily_Click;
         // 
         // menuLibraryGroupCategory
         // 
@@ -1419,7 +1428,7 @@ partial class MainForm
         // 
         // cboFilterGroup
         // 
-        cboFilterGroup.Items.AddRange(new object[] { "None", "Title ID", "Category", "Region", "Format", "Firmware" });
+        cboFilterGroup.Items.AddRange(new object[] { "None", "Family", "Title ID", "Category", "Region", "Format", "Firmware" });
         cboFilterGroup.Location = new Point(712, 42);
         cboFilterGroup.Name = "cboFilterGroup";
         cboFilterGroup.Size = new Size(140, 24);
