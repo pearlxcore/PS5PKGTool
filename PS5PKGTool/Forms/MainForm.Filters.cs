@@ -168,6 +168,8 @@ public partial class MainForm
         string query = searchLibrary.SearchText.Trim();
         if (query.Length > 0)
             chipsFilter.AddChip("Search: " + query, (_, _) => searchLibrary.SearchText = string.Empty);
+        if (ValidateQuery(query) is string warning)
+            chipsFilter.AddChip("Check query: " + warning, (_, _) => { });
         AddChips(cboFilterCategory);
         AddChips(cboFilterRegion);
         AddChips(cboFilterFormat);
@@ -264,6 +266,52 @@ public partial class MainForm
         }
         if (current.Length > 0) tokens.Add(current.ToString());
         return tokens;
+    }
+
+    private static readonly string[] QueryFieldKeys =
+    [
+        "title", "id", "titleid", "title-id", "content", "contentid", "content-id",
+        "category", "region", "source", "format", "drm", "path", "location",
+        "feature", "features", "size", "version", "fw", "firmware"
+    ];
+
+    /// <summary>
+    /// Returns a human-readable hint when the query cannot be understood (unbalanced quotes, an unknown
+    /// field prefix, a missing value, or a malformed size/version comparison), or null when it is fine.
+    /// The query still runs — this only surfaces the likely mistake inline.
+    /// </summary>
+    private static string? ValidateQuery(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query)) return null;
+        if (query.Count(c => c == '"') % 2 != 0)
+            return "unbalanced quotation marks.";
+
+        foreach (string token in TokenizeQuery(query))
+        {
+            string body = token.Length > 1 && token[0] == '-' ? token[1..] : token;
+            if (body.Length == 0) continue;
+            int colon = body.IndexOf(':');
+            if (colon <= 0) continue;
+
+            string field = body[..colon].ToLowerInvariant();
+            string value = body[(colon + 1)..];
+            if (Array.IndexOf(QueryFieldKeys, field) < 0)
+                return $"unknown field '{field}:'. Valid fields: title, id, content, category, region, source, size, version, fw, feature, drm, path.";
+            if (value.Length == 0)
+                return $"'{field}:' needs a value.";
+
+            if (field == "size" &&
+                !(TryParseComparison(value, out _, out string sizeRest) && TryParseSize(sizeRest, out _)))
+                return $"'{value}' is not a valid size (try size:>50GB).";
+            if (field is "version" or "fw" or "firmware")
+            {
+                if (!TryParseComparison(value, out _, out string versionRest) || versionRest.Length == 0)
+                    return $"'{field}:' is missing a value after the comparison.";
+                if (CompareVersions(versionRest, versionRest) is null)
+                    return $"'{versionRest}' is not a valid version.";
+            }
+        }
+        return null;
     }
 
     private static bool MatchFreeText(Ps5GameInfo game, string value) =>
