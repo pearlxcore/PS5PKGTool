@@ -44,6 +44,7 @@ public partial class MainForm
         _librarySortAscending = _settings.LibrarySortAscending;
         _settings.LibraryColumnOrder ??= [];
         _settings.LibraryHiddenColumns ??= [];
+        _settings.LibraryColumnWeights ??= [];
 
         gridLibrary.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         gridLibrary.AutoSortGroups = false;
@@ -79,7 +80,7 @@ public partial class MainForm
             {
                 Name = name,
                 HeaderText = header,
-                FillWeight = weight,
+                FillWeight = ResolveLibraryColumnWeight(name, weight),
                 SortMode = DataGridViewColumnSortMode.Programmatic,
                 ReadOnly = true
             };
@@ -593,8 +594,10 @@ public partial class MainForm
         _settings.LibrarySortAscending = _librarySortAscending;
 
         _settings.LibraryHiddenColumns.Clear();
+        _settings.LibraryColumnWeights.Clear();
         _settings.LibraryColumnOrder = LibraryColumnDefinitions.Select(definition => definition.Name).ToList();
         ApplyLibraryColumnVisibility();
+        ApplyLibraryColumnWeights();
         RestoreLibraryColumnLayout();
         foreach (DataGridViewColumn column in gridLibrary.Columns)
             column.HeaderCell.SortGlyphDirection = SortOrder.None;
@@ -627,5 +630,39 @@ public partial class MainForm
             .OrderBy(column => column.DisplayIndex)
             .Select(column => column.Name)
             .ToList();
+        CaptureLibraryColumnWeights();
+    }
+
+    /// <summary>Remembers the current column fill weights (proportional widths) for the next session.</summary>
+    private void CaptureLibraryColumnWeights()
+    {
+        if (!_libraryColumnsReady) return;
+        _settings.LibraryColumnWeights ??= [];
+        foreach (DataGridViewColumn column in gridLibrary.Columns)
+        {
+            if (column.Name == "Icon" || !column.Visible) continue;
+            _settings.LibraryColumnWeights[column.Name] = column.FillWeight;
+        }
+    }
+
+    /// <summary>The saved width for a column, falling back to the declared default weight.</summary>
+    private float ResolveLibraryColumnWeight(string name, float fallback)
+    {
+        if (_settings.LibraryColumnWeights is { } weights &&
+            weights.TryGetValue(name, out float saved) && saved > 0)
+            return saved;
+        return fallback;
+    }
+
+    /// <summary>Re-applies the resolved weights to every column (used after resetting the view).</summary>
+    private void ApplyLibraryColumnWeights()
+    {
+        foreach (DataGridViewColumn column in gridLibrary.Columns)
+        {
+            if (column.Name == "Icon") continue;
+            float fallback = LibraryColumnDefinitions
+                .FirstOrDefault(definition => string.Equals(definition.Name, column.Name, StringComparison.Ordinal)).Weight;
+            column.FillWeight = ResolveLibraryColumnWeight(column.Name, fallback <= 0 ? 1 : fallback);
+        }
     }
 }

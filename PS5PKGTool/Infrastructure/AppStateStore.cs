@@ -16,6 +16,8 @@ public sealed class AppSettings
     public bool LibrarySortAscending { get; set; } = true;
     public List<string> LibraryColumnOrder { get; set; } = [];
     public List<string> LibraryHiddenColumns { get; set; } = [];
+    /// <summary>Remembered column fill weights by column name so user-resized widths survive a restart.</summary>
+    public Dictionary<string, float> LibraryColumnWeights { get; set; } = [];
 
     // Appearance
     public string Theme { get; set; } = "Default (Charcoal)";

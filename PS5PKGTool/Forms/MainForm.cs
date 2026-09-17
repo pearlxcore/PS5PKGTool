@@ -529,6 +529,7 @@ public partial class MainForm : DarkForm
     {
         _settings.LibraryColumnOrder = [];
         _settings.LibraryHiddenColumns = [];
+        _settings.LibraryColumnWeights = [];
         if (_libraryColumnsReady)
         {
             _libraryColumnsReady = false;
