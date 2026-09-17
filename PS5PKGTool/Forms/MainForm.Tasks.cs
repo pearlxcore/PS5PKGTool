@@ -247,7 +247,8 @@ public partial class MainForm
         row.Cells[1].Value = task.Operation.Length > 0 ? task.Operation : task.Type;
         row.Cells[2].Value = task.FormatRoute;
         row.Cells[3].Value = StatusText(task.Status);
-        row.Cells[4].Value = StageText(task);
+        // Waiting tasks show their queue position; active/terminal tasks show their last stage.
+        row.Cells[4].Value = task.Status == PackageTaskStatus.Queued ? QueuePositionText(task) : StageText(task);
         row.Cells[5].Value = ProgressText(task);
         row.Cells[6].Value = ElapsedText(task);
         Color? tint = task.Status switch
@@ -262,6 +263,20 @@ public partial class MainForm
             row.DefaultCellStyle.BackColor = color;
             row.DefaultCellStyle.ForeColor = Color.FromArgb(232, 232, 232);
         }
+    }
+
+    /// <summary>1-based position among the waiting tasks, so a held queue is understandable.</summary>
+    private string QueuePositionText(QueuedPackageTask task)
+    {
+        int position = 0;
+        int index = 0;
+        foreach (QueuedPackageTask candidate in _taskQueue.Tasks)
+        {
+            if (candidate.Status != PackageTaskStatus.Queued) continue;
+            index++;
+            if (ReferenceEquals(candidate, task)) { position = index; break; }
+        }
+        return position > 0 ? $"Queued #{position}" : "Queued";
     }
 
     private void UpdateTaskSummary()
