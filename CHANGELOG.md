@@ -2,17 +2,45 @@
 
 All notable changes to PS5 PKG Tool are documented here. This project uses semantic versioning.
 
-## [Unreleased]
+## [1.1.0] - unreleased
 
-### Image tools
+### New features
 
-- The Tools tab keeps the Job (source, action) pinned at the top with a pinned status and Run/Cancel footer. When the action is Create / Convert, the targets are tabs (exFAT, FFPKG, FFPFSC, Debug Package), each holding its own output and options. Other actions use a single Options tab (output/passcode).
-- The Source row is now driven by the library selection; the Use Selected and Choose File buttons were removed.
-- Debug package builds now expose build settings: compression (Auto - Kraken where it helps, Kraken forced, or Uncompressed), Kraken level and thread count, and PlayGo chunk count (default 1). The default is Auto/Kraken, so freshly built packages are smaller; choose Uncompressed to reproduce the older stored packages byte-for-byte.
-- The build panel shows the source Title ID and Version (read from param.json) next to the detected format, and a package type selector. APP is supported; AC (additional content) is shown but cannot be built yet and disables Run.
-- Advanced build setting: an off-by-default "Force DRM type to standard" checkbox. Left off, the source DRM token is preserved verbatim; checked, it forces "standard". (A raw DRM token entry is intentionally not exposed.)
-- The SDK version combo now includes an Auto option (use the source SDK) alongside the explicit release list; only an explicit release stamps param.json and the module .sceversion files.
-- Engine refresh (ProsperoPkgTool 88dd924): inner compression, Kraken level, Kraken thread count, PlayGo chunk count, and the opt-in DRM override are forwarded to the engine for both dump and image builds; the outer-PFS SHA3/XTS passes are parallel now.
+- **Debug package builder (Tools).** Build a debug package (FPKG) from a dump or image, with build settings for compression (Auto / Kraken / Uncompressed), Kraken level and thread count, PlayGo chunk count, package type, an optional SDK version override, an optional workspace folder, and a choice of builder. A free-space check runs before the build, and progress is shown stage by stage. Auto/Kraken keeps packages smaller; Uncompressed reproduces the older stored output.
+- **Structure-only inspection.** Sources without a readable `param.json` are still listed and openable, with a warning explaining the limited view.
+- **Richer game details.** Compute the eboot hash on demand, filter trophies and see clear scope states (present / protected / unsupported), and metadata-only labels.
+- **Redesigned Tasks tab.** Status filter (All / Active / Needs attention / Finished), task search, a details panel, "Follow running", attempt count, remembered timing, last stage and failure across restarts, a result line, diagnostic export, and queue position for waiting jobs.
+- **Saved library views.** Save the current filters, grouping, sort and columns under a name, and switch between them.
+- **Family view and roles.** Group a title's base game, updates and DLC together; a Role column marks Base / Update / DLC / App and flags older, superseded updates.
+- **Multi-column sorting.** Shift-click column headers to sort by more than one column.
+- **Find Duplicates.** Reports duplicate sources and separates byte-identical copies from merely similar ones.
+- **Rename and Move previews.** Review every affected item and any name or destination conflicts before anything is changed.
+
+### Improvements
+
+- **Faster, lighter startup and refresh.** Thumbnails load only as they are needed, and large dumps open and browse noticeably faster.
+- **Reorganized Settings.** Clear pages, settings are saved before the dialog closes, and import shows exactly what will change before it applies.
+- **Interface density and accessibility.** Compact / Normal / Comfortable presets and screen-reader names for key controls.
+- **Remembered layout.** Library column widths are kept between sessions.
+- **Toggle the file preview pane** to give the file list the full width.
+- **Reset view** command to restore the default sort, grouping and columns.
+- **Smarter search and sorting.** Helpful feedback for malformed queries; versions such as 1.10 sort after 1.9, and grouped sizes sort numerically.
+- **Cleaner task list.** No more jumping to the top or flickering, and the Stage column clears once a task finishes.
+- **Export with a scope.** Export the selected rows, the visible rows, or the whole library.
+- **Scan control.** Press Esc to cancel a scan; scan warnings open in a full, scrollable report.
+- **Layout polish** across the Tasks tab and Settings.
+
+### Changes and fixes
+
+- Package builds now work on Windows systems without CNG SHA-3 support.
+- Removed the redundant Content ID / Title / Title ID / Version fields from package builds; the content ID is read from the source automatically.
+- The default grouping is no longer reset just by opening and saving Settings.
+- "Save all artwork" no longer overwrites images that share a file name.
+- Right-click actions target the correct row when the menu is opened from the keyboard.
+- Delete confirmation is accurate and cancellable; DLC detection is corrected, and permanent deletion always asks for confirmation.
+- Rename and Move are blocked for sources a running task is using.
+- Unreadable sources stay in the library instead of disappearing.
+- "Rename All" moved out of the File menu (it remains in the library right-click menu), and the stale "Find Duplicates (Coming soon)" label was removed.
 
 ## [1.0.0] - 2026-09-12
 
