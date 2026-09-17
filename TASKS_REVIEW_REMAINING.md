@@ -24,7 +24,7 @@ history-depth improvements.
 
 | Area | Item |
 |---|---|
-| Layout | Queue strip (running/waiting/needs attention) done; task text filter added; Details toggle collapses the details panel to enlarge the list; the list/details split is remembered. Still to do: status-filter chips (All/Active/Needs attention/Finished), a distinct Result/Diagnostic section, wide-window side panel. |
+| Layout | Queue strip (running/waiting/needs attention) done; task text filter added; Details toggle collapses the details panel to enlarge the list; the list/details split is remembered. Status filter (All / Active / Needs attention / Finished) added. Still to do: a distinct Result/Diagnostic section, wide-window side panel. |
 | Controls | "Show source" and "Export report…" now in the task context menu; attempt count is tracked and shown. Still to do: explicit "Follow running" toggle naming; full separate attempt history records. |
 | Columns | Operation-aware Task/source title; builder label; queue position for waiting jobs; in-place row updates preserving selection/scroll/group/column widths; stop scrolling to selection when follow is off. |
 | Details | Captured configuration, masked passcode, timestamps, attempt number; per-operation live/result fields (builder/version, route, staging cleanup, counts, verification scope). |

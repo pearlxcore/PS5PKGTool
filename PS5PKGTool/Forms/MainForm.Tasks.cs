@@ -269,6 +269,7 @@ public partial class MainForm
 
     private bool MatchesTaskFilter(QueuedPackageTask task)
     {
+        if (!MatchesTaskStatusFilter(task)) return false;
         string filter = searchTasks.SearchText.Trim();
         if (filter.Length == 0) return true;
         return task.DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
@@ -291,9 +292,23 @@ public partial class MainForm
     private void UpdateDetailsToggleText() =>
         btnTaskToggleDetails.Text = _settings.TaskDetailsCollapsed ? "List \u25B4" : "Details \u25BE";
 
+    private void cboTaskFilter_SelectedIndexChanged(object? sender, EventArgs e) => RefreshTaskGrid();
+
+    /// <summary>Applies the status filter (All / Active / Needs attention / Finished).</summary>
+    private bool MatchesTaskStatusFilter(QueuedPackageTask task) => cboTaskFilter.SelectedIndex switch
+    {
+        1 => task.Status is PackageTaskStatus.Queued or PackageTaskStatus.Running or PackageTaskStatus.Cancelling,
+        2 => task.Status is PackageTaskStatus.Failed or PackageTaskStatus.Interrupted,
+        3 => task.Status is PackageTaskStatus.Completed or PackageTaskStatus.Cancelled,
+        _ => true
+    };
+
     /// <summary>Restores the remembered task list/details split and applies it when the tab is shown.</summary>
     private void InitializeTasksLayout()
     {
+        cboTaskFilter.Items.Clear();
+        cboTaskFilter.Items.AddRange(["All", "Active", "Needs attention", "Finished"]);
+        cboTaskFilter.SelectedIndex = 0;
         UpdateDetailsToggleText();
         ApplyTaskPanelSizes();
         // The splitter has no resize event here, so re-apply when the tab is entered and capture the
