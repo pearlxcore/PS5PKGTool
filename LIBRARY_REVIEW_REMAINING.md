@@ -18,8 +18,9 @@ are design/robustness work.
   content type 0x21/0x22 now classify as `DLC`, and the DLC preset selects `DLC`.
 - **High — rejected rows retained:** the scanner now keeps an **unreadable record** (path + error) for a
   package, or an image whose volume will not open, instead of dropping it to a scan-error string.
-- **High — mutation gating:** delete refuses sources that a queued/running task is using (same-path or
-  parent/child overlap). Rename/delete wiring still to extend to rename/move.
+- **High — mutation gating:** delete, rename and move all refuse sources that a queued/running task is
+  using (same-path or parent/child overlap) through a shared `RefuseIfBusy` check, so a running
+  operation's input cannot be renamed, moved or deleted out from under it.
 - **High — typed sorting:** Version and Required System sort by parsed numeric value (1.10 after 1.9)
   via `VersionKey`, matching the filter's component comparison.
 - **High — grouped sorting:** `GroupCellValueComparer` is now set and compares byte-size text
@@ -30,20 +31,22 @@ are design/robustness work.
   single-only actions (Reveal, Copy*, Save Artwork) are now disabled for a multi-selection.
 - **Medium — reset/preset semantics:** the clear button is "Reset filters", grouping no longer keeps it
   active, and the `All` preset clears the query. Version-comparison overflow is guarded.
+- **Medium — exact match:** `id:=PPSA12345` (also `title:=`, `content:=`) matches the whole value
+  case-insensitively instead of searching for a substring.
+- **Medium — scan ownership:** each scan carries a generation; a superseded scan can no longer apply its
+  results or clear the newer scan's busy state when it finishes, and F5 honors the refresh command's
+  enabled state.
 
 ## Remaining
 
 | Priority | Item |
 |---|---|
 | High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
-| High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
-| High | Extend the busy-path gate to rename/move (delete is done) and account for an active scan. |
-| Medium | Reset semantics: the button is now "Reset filters" and grouping no longer keeps it active; the `All` preset clears the query. A separate **Reset view** (default sort/group/columns) is still to do. |
-| Medium | Query parser: numeric overflow in version comparison is guarded (no throw). Still to do: inline feedback for unknown prefixes, unmatched quotes and malformed comparisons. |
-| Medium | Exact ID match (`id:=PPSA...`); clarify OR syntax. |
+| Medium | Reset semantics: add a separate **Reset view** (default sort/group/columns) distinct from "Reset filters". |
+| Medium | Query parser: inline feedback for unknown prefixes, unmatched quotes and malformed comparisons; clarify OR syntax. |
 | Medium | Columns: apply declared default widths, persist widths, default compact layout, keep Format and Status separate. |
 | Medium | Rename/move previews enumerate all affected items and conflicts; remove `Rename All` from row context; export scope selector. |
-| Medium | Collision-safe Save Artwork; recent-source persistence consistency; scan lifecycle ownership/generation. |
+| Medium | Collision-safe Save Artwork; recent-source persistence consistency. |
 | Medium | Thumbnail cancellation state, bounded cache with image disposal, existence-check caching; parse-once filters. |
 | Medium | Settings default-group key/label mismatch; scan feedback (summary, cancel, full error report). |
 | Optional | Family/relationship views (base/update/DLC), highest/older-local updates, possible/byte-identical duplicates; multi-sort editor; saved views; density; accessibility/DPI pass; Help update wording. |
