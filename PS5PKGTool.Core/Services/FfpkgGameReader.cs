@@ -35,7 +35,8 @@ public sealed class FfpkgGameReader
         game.VirtualRoot = virtualRoot;
         game.SourceSize = info.Length;
         game.ContainerInnerFileName = info.Name;
-        game.ContainerLogicalSize = volume.Entries.Where(entry => !entry.IsDirectory).Sum(entry => entry.Size);
+        game.ContainerFileLength = info.Length;
+        game.ContainerLogicalSize = info.Length; // UFS2 logical length equals the image length
         game.ContainerStoredSize = info.Length;
         return game;
     }

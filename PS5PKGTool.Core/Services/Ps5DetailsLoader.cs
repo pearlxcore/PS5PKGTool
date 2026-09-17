@@ -52,7 +52,9 @@ public sealed class Ps5DetailsLoader
             Background = pic0,
             Background1 = pic1,
             Background2 = pic2,
-            Errors = errors
+            Errors = errors,
+            Sections = BuildSections(game, icon is not null || pic0 is not null || pic1 is not null || pic2 is not null,
+                trophy, uds, executable, inventory, errors)
         };
         // The size of a loose dump is not computed during the scan (that would walk every dump
         // folder). Fill it in here, where the inventory walk already produced the total.
@@ -69,10 +71,11 @@ public sealed class Ps5DetailsLoader
         var reader = new SonyPkgReader();
         SonyPkgSummary package = ResolvePackage(game, reader);
         Ps5FileInventory files;
-        Ps5ImageData? icon;
+        Ps5ImageData? icon = null;
 
-        using (IReadOnlyGameFileSystem fileSystem = GameFileSystem.Open(game, cancellationToken))
+        try
         {
+            using IReadOnlyGameFileSystem fileSystem = GameFileSystem.Open(game, cancellationToken);
             // Report the icon as soon as the file system opens, before the inventory/asset decode.
             byte[]? iconPng = ReadOptional(fileSystem, "sce_sys/icon0.png");
             icon = iconPng is not null
@@ -84,6 +87,14 @@ public sealed class Ps5DetailsLoader
             if (readable.FileCount > 0)
                 return LoadReadablePackage(game, package, reader, fileSystem, readable, icon,
                     cancellationToken, errors, artwork);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The header/CNT metadata is still readable, so keep it and record the content failure
+            // rather than failing the whole load; the structure stays inspectable.
+            errors.Add("Game content: " + ex.Message);
+            if (icon is not null)
+                artwork?.Report(new Ps5Artwork(icon, null, null, null));
         }
 
         files = ReadPackageEntries(package);
@@ -100,7 +111,9 @@ public sealed class Ps5DetailsLoader
             Icon = icon,
             Background = pic0,
             Background1 = pic1,
-            Errors = errors
+            Errors = errors,
+            Sections = BuildSections(game, icon is not null || pic0 is not null || pic1 is not null,
+                null, null, null, files, errors)
         };
     }
 
@@ -139,7 +152,41 @@ public sealed class Ps5DetailsLoader
             Background = pic0,
             Background1 = pic1,
             Background2 = pic2,
-            Errors = errors
+            Errors = errors,
+            Sections = BuildSections(game, icon is not null || pic0 is not null || pic1 is not null || pic2 is not null,
+                trophy, uds, executable, inventory, errors)
+        };
+    }
+
+    /// <summary>
+    /// Describes each section's state and origin so empty results are not confused with failures.
+    /// </summary>
+    private static IReadOnlyDictionary<string, SectionStatus> BuildSections(Ps5GameInfo game, bool hasArtwork,
+        Ps5TrophySet? trophy, Ps5UdsSummary? uds, Ps5SelfInfo? executable, Ps5FileInventory files,
+        IReadOnlyList<string> errors)
+    {
+        string Scoped(string prefix) => errors.FirstOrDefault(error =>
+            error.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) ?? string.Empty;
+        static SectionStatus From(bool present, string error, string origin) =>
+            error.Length > 0 ? new SectionStatus(SectionState.Failed, origin, error)
+                : present ? new SectionStatus(SectionState.Available, origin)
+                    : new SectionStatus(SectionState.NotPresent, origin);
+
+        return new Dictionary<string, SectionStatus>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Metadata"] = string.IsNullOrWhiteSpace(game.RawParamJson)
+                ? new SectionStatus(SectionState.NotPresent, game.ParamPath.Length > 0 ? game.ParamPath : "param.json")
+                : new SectionStatus(SectionState.Available, game.ParamPath.Length > 0 ? game.ParamPath : "param.json"),
+            ["Artwork"] = From(hasArtwork, string.Empty, "sce_sys/icon0.png, pic0..pic2"),
+            ["Trophies"] = From(trophy is not null, Scoped("Trophies:"), "sce_sys/trophy2/trophy00.ucp"),
+            ["Activities"] = From(uds is not null, Scoped("Activities:"), "sce_sys/uds/uds00.ucp"),
+            ["Executable"] = From(executable is not null, Scoped("Executable:"), "eboot.bin"),
+            ["Files"] = files.FileCount > 0
+                ? new SectionStatus(SectionState.Available, "game filesystem", $"{files.FileCount:N0} files")
+                : new SectionStatus(SectionState.NotPresent, "game filesystem"),
+            ["Container"] = game.Package is not null
+                ? new SectionStatus(SectionState.Available, game.RootPath, game.Package.KindDisplayName)
+                : new SectionStatus(SectionState.NotApplicable, game.RootPath)
         };
     }
 
@@ -167,6 +214,7 @@ public sealed class Ps5DetailsLoader
             {
                 RelativePath = path,
                 Extension = Path.GetExtension(path),
+                Origin = "CNT",
                 Size = entry.DataSize,
                 Offset = checked((long)package.EmbeddedCntOffset + entry.DataOffset),
                 PackageEntryId = entry.Id,
@@ -227,6 +275,7 @@ public sealed class Ps5DetailsLoader
             {
                 RelativePath = relativePath,
                 Extension = Path.GetExtension(relativePath),
+                Origin = file.Origin,
                 Size = file.Size
             });
         }

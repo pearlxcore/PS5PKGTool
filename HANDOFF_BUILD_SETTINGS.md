@@ -3,10 +3,9 @@
 The engine now carries everything these settings need. This note maps each requested setting to the
 engine option/CLI and says what to change in PS5PKGTool. **Do not touch the unrelated Library work.**
 
-New engine build: **655,360 bytes, SHA-256 `3A112B5E3619587A90532AF2885A60BA05396A4FD2EE59D62940B643DB554079`**
-(head `0a84955` + byte-progress fields). **Re-vendored** into `ThirdParty\ProsperoPkgTool\`. Every setting
-in the table below is already wired in the GUI + Core; the engine now also carries the build-stage contract,
-byte-accurate progress, and the single-pass / prepositioned perf work.
+New engine build: **655,360 bytes, SHA-256 `EC2396D758C12FD3C8145B024C9600BB3A488AE5FFA4E69E24D5C0B49E26E819`**
+(head `0a84955` + no-copy free-space model + byte progress). **Re-vendored** into
+`ThirdParty\ProsperoPkgTool\`.
 
 ## Setting → engine → action
 | Setting | Engine | PS5PKGTool action |

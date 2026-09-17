@@ -10,15 +10,17 @@ working tree.
   - `Estimate(long rawPayloadBytes, string outputPath, string? tempDirectory)` → `IReadOnlyList<SpaceRequirement>`.
   - `Check(IReadOnlyList<SpaceRequirement> requirements, Func<string,long>? freeSpaceProbe = null)` → `DiskSpaceReport`
     with `Status` `Ok` / `NearLimit` / `Insufficient`.
-  - Model: peak ≈ **4× the image** (inner + outer + CNT re-copy + output FIH). Error threshold =
-    estimate + 12% + 512 MB; near-limit warning = estimate + 25% + 512 MB.
+- Model: peak ≈ **2× the image** (inner image + output package; the CNT is metadata-only and the outer
+  PFS is written directly into the final package, so there is no full-image copy). Error threshold =
+  estimate + 12% + 512 MB; near-limit warning = estimate + 25% + 512 MB. (It deliberately assumes no
+  compression, so it never blocks a build that could fit.)
 - `ProsperoPkgTool.Containers.ProsperoInsufficientSpaceException` (`: IOException`).
 - `ProsperoDebugPackageBuilder.Build` runs the preflight (unless `DebugPackageBuildOptions.SkipFreeSpaceCheck`),
   throws the exception on insufficient space, and logs a `warning: low free space …` line on near-limit.
 - CLI exit code **5** on insufficient space, with `Error: not enough free space: need ~X GB on <drive> (<what>), have Y GB free`.
 
-New engine build: **640,512 bytes, SHA-256 `B1EA363457F6C8D2BC62F111D87961B5E9424330BEBC17687CB4F7FF20859FDF`**
-(currently vendored: `074C5C65…` — stale).
+New engine build: **655,360 bytes, SHA-256 `EC2396D758C12FD3C8145B024C9600BB3A488AE5FFA4E69E24D5C0B49E26E819`**
+(head `0a84955` + no-copy free-space model).
 
 ## Step 0 — re-vendor
 1. `dotnet build C:\Users\User\source\repos\ProsperoPkgTool\ProsperoPkgTool\ProsperoPkgTool.csproj -c Release`

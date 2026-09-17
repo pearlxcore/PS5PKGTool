@@ -271,6 +271,7 @@ public static class Ufs2Operations
             await Task.Run(() =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var diagnostics = new StringWriter();
                 var creator = new Ufs2ImageCreator
                 {
                     FilesystemFormat = 2,
@@ -286,13 +287,49 @@ public static class Ufs2Operations
                     OptimizationPreference = "space",
                     NoSnapDir = true,
                     VolumeName = SanitizeVolumeName(volumeName),
-                    Output = TextWriter.Null,
-                    ErrorOutput = TextWriter.Null,
+                    Output = diagnostics,
+                    ErrorOutput = diagnostics,
                     CancellationToken = cancellationToken,
                     Progress = (stage, completed, total, unit) =>
                         progress?.Report(new Ufs2Progress(stage, completed, total, unit))
                 };
-                creator.CreateImageFromDirectory(temporary, source);
+                try
+                {
+                    creator.CreateImageFromDirectory(temporary, source);
+                }
+                catch (InvalidOperationException ex) when (IsImageTooSmall(ex))
+                {
+                    // The auto-size estimate can fall short of the real per-cylinder-group metadata
+                    // overhead on large trees, so retry with progressively larger images instead of
+                    // failing a long conversion. The size escalates by 25% per attempt, up to 3 times.
+                    var (_, diskSize, entries) = Ufs2ImageCreator.CalculateDirectorySizes(
+                        source, creator.BlockSize, creator.FragmentSize, creator.FilesystemFormat);
+                    long size = creator.CalculateImageSizeWithCgOverhead(diskSize, entries);
+                    bool succeeded = false;
+                    for (int attempt = 0; attempt < 3 && !succeeded; attempt++)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        // Grow 25% and keep the size a whole number of fragments (CreateImage requires it).
+                        long grown = size * 5 / 4;
+                        size = (grown + creator.FragmentSize - 1) / creator.FragmentSize * creator.FragmentSize;
+                        progress?.Report(new Ufs2Progress("Retrying FFPKG with a larger image", 0, 1));
+                        TryDeleteFile(temporary);
+                        try
+                        {
+                            creator.CreateImageFromDirectory(temporary, source, size);
+                            succeeded = true;
+                        }
+                        catch (InvalidOperationException retryEx) when (IsImageTooSmall(retryEx))
+                        {
+                            // Try again with a larger image.
+                        }
+                    }
+                    if (!succeeded)
+                        throw new InvalidOperationException(
+                            ex.Message + Environment.NewLine +
+                            "FFPKG creation still ran out of space after retrying with larger images." +
+                            Environment.NewLine + diagnostics, ex);
+                }
                 cancellationToken.ThrowIfCancellationRequested();
             }, cancellationToken).ConfigureAwait(false);
             Ufs2VerificationResult verification = await VerifyAsync(temporary, progress, cancellationToken)
@@ -308,6 +345,11 @@ public static class Ufs2Operations
             throw;
         }
     }
+
+    /// <summary>True when the UFS2 creator ran out of cylinder groups or inodes (image too small).</summary>
+    private static bool IsImageTooSmall(Exception exception) =>
+        exception is InvalidOperationException &&
+        exception.Message.Contains("Image is too small", StringComparison.Ordinal);
 
     public static async Task<Ufs2VerificationResult> RebuildWithEditsAsync(string imagePath,
         Action<string> editStaging, IProgress<Ufs2Progress>? progress = null,

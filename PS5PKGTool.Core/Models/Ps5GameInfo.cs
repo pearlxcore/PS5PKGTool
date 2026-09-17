@@ -19,9 +19,15 @@ public sealed class Ps5GameInfo
     public string VirtualRoot { get; set; } = string.Empty;
     public long SourceSize { get; set; }
     public string ContainerInnerFileName { get; set; } = string.Empty;
+    /// <summary>Host container file length (the on-disk image/PKG size), distinct from logical sizes.</summary>
+    public long ContainerFileLength { get; set; }
+    /// <summary>Logical length of the image's inner filesystem (not the container file, not a file sum).</summary>
     public long ContainerLogicalSize { get; set; }
+    /// <summary>Stored/compressed extent of the inner filesystem (wrapper length for FFPFSC).</summary>
     public long ContainerStoredSize { get; set; }
     public int ContainerBlockCount { get; set; }
+    /// <summary>Sum of the files exposed under the selected game root (set once the inventory is read).</summary>
+    public long GameRootBytes { get; set; }
     public string Title { get; set; } = string.Empty;
     public string TitleId { get; set; } = string.Empty;
     public string ContentId { get; set; } = string.Empty;

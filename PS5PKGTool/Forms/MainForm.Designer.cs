@@ -260,9 +260,13 @@ partial class MainForm
     private DarkUI.Controls.DarkDataGridView gridSelfSegments = null!;
     private DarkUI.Controls.DarkTabPage tabRaw = null!;
     private DarkUI.Controls.DarkButton btnCopyRawJson = null!;
+    private DarkUI.Controls.DarkButton btnRawFormatted = null!;
+    private DarkUI.Controls.DarkButton btnRawOriginal = null!;
     private DarkUI.Controls.DarkRichTextBox txtRawMetadata = null!;
     private DarkUI.Controls.DarkTabPage tabPackage = null!;
     private DarkUI.Controls.DarkTabControl tabsPackage = null!;
+    private DarkUI.Controls.DarkTabPage tabMetadata = null!;
+    private DarkUI.Controls.DarkTabControl tabsMetadata = null!;
     private DarkUI.Controls.DarkTabPage tabPkgContainer = null!;
     private DarkUI.Controls.DarkDataGridView gridPkgHeader = null!;
     private DarkUI.Controls.DarkTabPage tabPkgSegments = null!;
@@ -358,8 +362,16 @@ partial class MainForm
     private DarkUI.Controls.DarkNumericUpDown nudImageKrakenThreads = null!;
     private DarkUI.Controls.DarkLabel lblImagePlayGo = null!;
     private DarkUI.Controls.DarkNumericUpDown nudImagePlayGoChunks = null!;
-    private DarkUI.Controls.DarkCheckBox chkImageDrmStandard = null!;
-    private DarkUI.Controls.DarkLabel lblImageDrmHint = null!;
+    private DarkUI.Controls.DarkLabel lblImageDrm = null!;
+    private DarkUI.Controls.DarkComboBox cboImageDrm = null!;
+    private DarkUI.Controls.DarkLabel lblImageTitle = null!;
+    private DarkUI.Controls.DarkTextBox txtImageTitle = null!;
+    private DarkUI.Controls.DarkCheckBox chkImageFakeSign = null!;
+    private DarkUI.Controls.DarkCheckBox chkImageRightSprx = null!;
+    private DarkUI.Controls.DarkCheckBox chkImageDeterministic = null!;
+    private DarkUI.Controls.DarkLabel lblImageBackend = null!;
+    private DarkUI.Controls.DarkComboBox cboImageBackend = null!;
+    private DarkUI.Controls.DarkCheckBox chkImageAdvancedOptions = null!;
     private DarkUI.Controls.DarkLabel lblImageTemp = null!;
     private DarkUI.Controls.DarkTextBox txtImageTemp = null!;
     private DarkUI.Controls.DarkButton btnImageTempBrowse = null!;
@@ -585,8 +597,12 @@ partial class MainForm
         tabRaw = new DarkUI.Controls.DarkTabPage();
         txtRawMetadata = new DarkUI.Controls.DarkRichTextBox();
         btnCopyRawJson = new DarkUI.Controls.DarkButton();
+        btnRawFormatted = new DarkUI.Controls.DarkButton();
+        btnRawOriginal = new DarkUI.Controls.DarkButton();
         tabPackage = new DarkUI.Controls.DarkTabPage();
         tabsPackage = new DarkUI.Controls.DarkTabControl();
+        tabMetadata = new DarkUI.Controls.DarkTabPage();
+        tabsMetadata = new DarkUI.Controls.DarkTabControl();
         tabPkgContainer = new DarkUI.Controls.DarkTabPage();
         gridPkgHeader = new DarkUI.Controls.DarkDataGridView();
         tabPkgSegments = new DarkUI.Controls.DarkTabPage();
@@ -622,6 +638,8 @@ partial class MainForm
         lblImageAction = new DarkUI.Controls.DarkLabel();
         cboImageAction = new DarkUI.Controls.DarkComboBox();
         lblImageSource = new DarkUI.Controls.DarkLabel();
+        lblImageTitle = new DarkUI.Controls.DarkLabel();
+        txtImageTitle = new DarkUI.Controls.DarkTextBox();
         tabsImageTargets = new DarkUI.Controls.DarkTabControl();
         tabTargetExfat = new DarkUI.Controls.DarkTabPage();
         lblOutExfat = new DarkUI.Controls.DarkLabel();
@@ -675,8 +693,14 @@ partial class MainForm
         lblImageTemp = new DarkUI.Controls.DarkLabel();
         txtImageTemp = new DarkUI.Controls.DarkTextBox();
         btnImageTempBrowse = new DarkUI.Controls.DarkButton();
-        chkImageDrmStandard = new DarkUI.Controls.DarkCheckBox();
-        lblImageDrmHint = new DarkUI.Controls.DarkLabel();
+        lblImageDrm = new DarkUI.Controls.DarkLabel();
+        cboImageDrm = new DarkUI.Controls.DarkComboBox();
+        lblImageBackend = new DarkUI.Controls.DarkLabel();
+        cboImageBackend = new DarkUI.Controls.DarkComboBox();
+        chkImageFakeSign = new DarkUI.Controls.DarkCheckBox();
+        chkImageRightSprx = new DarkUI.Controls.DarkCheckBox();
+        chkImageDeterministic = new DarkUI.Controls.DarkCheckBox();
+        chkImageAdvancedOptions = new DarkUI.Controls.DarkCheckBox();
         tabTargetOptions = new DarkUI.Controls.DarkTabPage();
         lblImageOutput = new DarkUI.Controls.DarkLabel();
         txtImageOutput = new DarkUI.Controls.DarkTextBox();
@@ -2939,6 +2963,8 @@ partial class MainForm
         // 
         tabRaw.BackColor = Color.FromArgb(60, 63, 65);
         tabRaw.Controls.Add(txtRawMetadata);
+        tabRaw.Controls.Add(btnRawFormatted);
+        tabRaw.Controls.Add(btnRawOriginal);
         tabRaw.Controls.Add(btnCopyRawJson);
         tabRaw.Location = new Point(4, 32);
         tabRaw.Name = "tabRaw";
@@ -2970,6 +2996,24 @@ partial class MainForm
         btnCopyRawJson.Text = "Copy JSON";
         btnCopyRawJson.Click += btnCopyRawJson_Click;
         // 
+        // btnRawFormatted
+        // 
+        btnRawFormatted.Location = new Point(124, 6);
+        btnRawFormatted.Name = "btnRawFormatted";
+        btnRawFormatted.Size = new Size(110, 26);
+        btnRawFormatted.TabIndex = 1;
+        btnRawFormatted.Text = "Formatted";
+        btnRawFormatted.Click += btnRawFormatted_Click;
+        // 
+        // btnRawOriginal
+        // 
+        btnRawOriginal.Location = new Point(240, 6);
+        btnRawOriginal.Name = "btnRawOriginal";
+        btnRawOriginal.Size = new Size(130, 26);
+        btnRawOriginal.TabIndex = 2;
+        btnRawOriginal.Text = "Original bytes";
+        btnRawOriginal.Click += btnRawOriginal_Click;
+        // 
         // tabPackage
         // 
         tabPackage.BackColor = Color.FromArgb(60, 63, 65);
@@ -2978,7 +3022,7 @@ partial class MainForm
         tabPackage.Name = "tabPackage";
         tabPackage.Size = new Size(1368, 339);
         tabPackage.TabIndex = 8;
-        tabPackage.Text = "Package";
+        tabPackage.Text = "Container";
         // 
         // tabsPackage
         // 
@@ -2986,10 +3030,8 @@ partial class MainForm
         tabsPackage.Controls.Add(tabPkgContainer);
         tabsPackage.Controls.Add(tabPkgSegments);
         tabsPackage.Controls.Add(tabPkgEntries);
-        tabsPackage.Controls.Add(tabPkgSfo);
-        tabsPackage.Controls.Add(tabPkgKeystone);
+        tabsPackage.Controls.Add(tabMetadata);
         tabsPackage.Controls.Add(tabPkgSi);
-        tabsPackage.Controls.Add(tabPkgPlayGo);
         tabsPackage.Dock = DockStyle.Fill;
         tabsPackage.ItemSize = new Size(113, 28);
         tabsPackage.Location = new Point(0, 0);
@@ -2999,6 +3041,30 @@ partial class MainForm
         tabsPackage.Size = new Size(1368, 339);
         tabsPackage.TabIndex = 0;
         // 
+        // tabMetadata
+        // 
+        tabMetadata.BackColor = Color.FromArgb(60, 63, 65);
+        tabMetadata.Controls.Add(tabsMetadata);
+        tabMetadata.Location = new Point(4, 32);
+        tabMetadata.Name = "tabMetadata";
+        tabMetadata.Padding = new Padding(0);
+        tabMetadata.Size = new Size(1360, 303);
+        tabMetadata.TabIndex = 3;
+        tabMetadata.Text = "Metadata";
+        // 
+        // tabsMetadata
+        // 
+        tabsMetadata.Controls.Add(tabPkgSfo);
+        tabsMetadata.Controls.Add(tabPkgKeystone);
+        tabsMetadata.Controls.Add(tabPkgPlayGo);
+        tabsMetadata.Dock = DockStyle.Fill;
+        tabsMetadata.Location = new Point(0, 0);
+        tabsMetadata.Name = "tabsMetadata";
+        tabsMetadata.Padding = new Point(0, 0);
+        tabsMetadata.SelectedIndex = 0;
+        tabsMetadata.Size = new Size(1360, 303);
+        tabsMetadata.TabIndex = 0;
+        // 
         // tabPkgContainer
         // 
         tabPkgContainer.BackColor = Color.FromArgb(60, 63, 65);
@@ -3007,7 +3073,7 @@ partial class MainForm
         tabPkgContainer.Name = "tabPkgContainer";
         tabPkgContainer.Size = new Size(1360, 303);
         tabPkgContainer.TabIndex = 0;
-        tabPkgContainer.Text = "Container";
+        tabPkgContainer.Text = "Source structure";
         // 
         // gridPkgHeader
         // 
@@ -3034,7 +3100,7 @@ partial class MainForm
         tabPkgSegments.Controls.Add(gridPkgSegments);
         tabPkgSegments.Location = new Point(4, 32);
         tabPkgSegments.Name = "tabPkgSegments";
-        tabPkgSegments.Size = new Size(1360, 371);
+        tabPkgSegments.Size = new Size(1360, 303);
         tabPkgSegments.TabIndex = 1;
         tabPkgSegments.Text = "Segments";
         // 
@@ -3054,7 +3120,7 @@ partial class MainForm
         gridPkgSegments.Location = new Point(0, 0);
         gridPkgSegments.Name = "gridPkgSegments";
         gridPkgSegments.ReadOnly = true;
-        gridPkgSegments.Size = new Size(1360, 371);
+        gridPkgSegments.Size = new Size(1360, 303);
         gridPkgSegments.TabIndex = 0;
         // 
         // tabPkgEntries
@@ -3063,7 +3129,7 @@ partial class MainForm
         tabPkgEntries.Controls.Add(gridPkgEntries);
         tabPkgEntries.Location = new Point(4, 32);
         tabPkgEntries.Name = "tabPkgEntries";
-        tabPkgEntries.Size = new Size(1360, 371);
+        tabPkgEntries.Size = new Size(1360, 303);
         tabPkgEntries.TabIndex = 2;
         tabPkgEntries.Text = "CNT entries";
         // 
@@ -3083,7 +3149,7 @@ partial class MainForm
         gridPkgEntries.Location = new Point(0, 0);
         gridPkgEntries.Name = "gridPkgEntries";
         gridPkgEntries.ReadOnly = true;
-        gridPkgEntries.Size = new Size(1360, 371);
+        gridPkgEntries.Size = new Size(1360, 303);
         gridPkgEntries.TabIndex = 0;
         // 
         // tabPkgSfo
@@ -3092,7 +3158,7 @@ partial class MainForm
         tabPkgSfo.Controls.Add(gridParamSfo);
         tabPkgSfo.Location = new Point(4, 32);
         tabPkgSfo.Name = "tabPkgSfo";
-        tabPkgSfo.Size = new Size(1360, 371);
+        tabPkgSfo.Size = new Size(1360, 303);
         tabPkgSfo.TabIndex = 3;
         tabPkgSfo.Text = "param.sfo";
         // 
@@ -3112,7 +3178,7 @@ partial class MainForm
         gridParamSfo.Location = new Point(0, 0);
         gridParamSfo.Name = "gridParamSfo";
         gridParamSfo.ReadOnly = true;
-        gridParamSfo.Size = new Size(1360, 371);
+        gridParamSfo.Size = new Size(1360, 303);
         gridParamSfo.TabIndex = 0;
         // 
         // tabPkgKeystone
@@ -3121,7 +3187,7 @@ partial class MainForm
         tabPkgKeystone.Controls.Add(gridKeystone);
         tabPkgKeystone.Location = new Point(4, 32);
         tabPkgKeystone.Name = "tabPkgKeystone";
-        tabPkgKeystone.Size = new Size(1360, 371);
+        tabPkgKeystone.Size = new Size(1360, 303);
         tabPkgKeystone.TabIndex = 4;
         tabPkgKeystone.Text = "Keystone / NP";
         // 
@@ -3141,7 +3207,7 @@ partial class MainForm
         gridKeystone.Location = new Point(0, 0);
         gridKeystone.Name = "gridKeystone";
         gridKeystone.ReadOnly = true;
-        gridKeystone.Size = new Size(1360, 371);
+        gridKeystone.Size = new Size(1360, 303);
         gridKeystone.TabIndex = 0;
         // 
         // tabPkgSi
@@ -3150,7 +3216,7 @@ partial class MainForm
         tabPkgSi.Controls.Add(gridSi);
         tabPkgSi.Location = new Point(4, 32);
         tabPkgSi.Name = "tabPkgSi";
-        tabPkgSi.Size = new Size(1360, 371);
+        tabPkgSi.Size = new Size(1360, 303);
         tabPkgSi.TabIndex = 5;
         tabPkgSi.Text = "SI contents";
         // 
@@ -3170,7 +3236,7 @@ partial class MainForm
         gridSi.Location = new Point(0, 0);
         gridSi.Name = "gridSi";
         gridSi.ReadOnly = true;
-        gridSi.Size = new Size(1360, 371);
+        gridSi.Size = new Size(1360, 303);
         gridSi.TabIndex = 0;
         // 
         // tabPkgPlayGo
@@ -3180,7 +3246,7 @@ partial class MainForm
         tabPkgPlayGo.Controls.Add(lblPlayGoSummary);
         tabPkgPlayGo.Location = new Point(4, 32);
         tabPkgPlayGo.Name = "tabPkgPlayGo";
-        tabPkgPlayGo.Size = new Size(1360, 371);
+        tabPkgPlayGo.Size = new Size(1360, 303);
         tabPkgPlayGo.TabIndex = 6;
         tabPkgPlayGo.Text = "PlayGo";
         // 
@@ -3196,7 +3262,7 @@ partial class MainForm
         tabsPlayGo.Name = "tabsPlayGo";
         tabsPlayGo.Padding = new Point(0, 0);
         tabsPlayGo.SelectedIndex = 0;
-        tabsPlayGo.Size = new Size(1360, 341);
+        tabsPlayGo.Size = new Size(1360, 273);
         tabsPlayGo.TabIndex = 0;
         // 
         // tabPlayGoChunks
@@ -3205,7 +3271,7 @@ partial class MainForm
         tabPlayGoChunks.Controls.Add(gridPlayGoChunks);
         tabPlayGoChunks.Location = new Point(4, 32);
         tabPlayGoChunks.Name = "tabPlayGoChunks";
-        tabPlayGoChunks.Size = new Size(1352, 305);
+        tabPlayGoChunks.Size = new Size(1352, 237);
         tabPlayGoChunks.TabIndex = 0;
         tabPlayGoChunks.Text = "Chunks";
         // 
@@ -3225,7 +3291,7 @@ partial class MainForm
         gridPlayGoChunks.Location = new Point(0, 0);
         gridPlayGoChunks.Name = "gridPlayGoChunks";
         gridPlayGoChunks.ReadOnly = true;
-        gridPlayGoChunks.Size = new Size(1352, 305);
+        gridPlayGoChunks.Size = new Size(1352, 237);
         gridPlayGoChunks.TabIndex = 0;
         // 
         // tabPlayGoScenarios
@@ -3234,7 +3300,7 @@ partial class MainForm
         tabPlayGoScenarios.Controls.Add(gridPlayGoScenarios);
         tabPlayGoScenarios.Location = new Point(4, 32);
         tabPlayGoScenarios.Name = "tabPlayGoScenarios";
-        tabPlayGoScenarios.Size = new Size(1352, 258);
+        tabPlayGoScenarios.Size = new Size(1352, 237);
         tabPlayGoScenarios.TabIndex = 1;
         tabPlayGoScenarios.Text = "Scenarios";
         // 
@@ -3254,7 +3320,7 @@ partial class MainForm
         gridPlayGoScenarios.Location = new Point(0, 0);
         gridPlayGoScenarios.Name = "gridPlayGoScenarios";
         gridPlayGoScenarios.ReadOnly = true;
-        gridPlayGoScenarios.Size = new Size(1352, 258);
+        gridPlayGoScenarios.Size = new Size(1352, 237);
         gridPlayGoScenarios.TabIndex = 0;
         // 
         // tabPlayGoFiles
@@ -3263,7 +3329,7 @@ partial class MainForm
         tabPlayGoFiles.Controls.Add(gridPlayGoFiles);
         tabPlayGoFiles.Location = new Point(4, 32);
         tabPlayGoFiles.Name = "tabPlayGoFiles";
-        tabPlayGoFiles.Size = new Size(1352, 258);
+        tabPlayGoFiles.Size = new Size(1352, 237);
         tabPlayGoFiles.TabIndex = 2;
         tabPlayGoFiles.Text = "File chunks";
         // 
@@ -3283,7 +3349,7 @@ partial class MainForm
         gridPlayGoFiles.Location = new Point(0, 0);
         gridPlayGoFiles.Name = "gridPlayGoFiles";
         gridPlayGoFiles.ReadOnly = true;
-        gridPlayGoFiles.Size = new Size(1352, 258);
+        gridPlayGoFiles.Size = new Size(1352, 237);
         gridPlayGoFiles.TabIndex = 0;
         // 
         // lblPlayGoSummary
@@ -3339,6 +3405,8 @@ partial class MainForm
         sectionJob.Controls.Add(lblImageAction);
         sectionJob.Controls.Add(cboImageAction);
         sectionJob.Controls.Add(lblImageSource);
+        sectionJob.Controls.Add(lblImageTitle);
+        sectionJob.Controls.Add(txtImageTitle);
         sectionJob.Dock = DockStyle.Fill;
         sectionJob.Location = new Point(10, 8);
         sectionJob.Margin = new Padding(0, 0, 0, 6);
@@ -3360,7 +3428,6 @@ partial class MainForm
         // 
         // lblImageFormat
         // 
-        lblImageFormat.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
         lblImageFormat.AutoEllipsis = true;
         lblImageFormat.Location = new Point(120, 53);
         lblImageFormat.Name = "lblImageFormat";
@@ -3370,7 +3437,6 @@ partial class MainForm
         // 
         // lblImageContentId
         // 
-        lblImageContentId.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         lblImageContentId.Location = new Point(456, 84);
         lblImageContentId.Name = "lblImageContentId";
         lblImageContentId.Size = new Size(90, 15);
@@ -3381,18 +3447,15 @@ partial class MainForm
         // 
         // txtImageContentId
         // 
-        txtImageContentId.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         txtImageContentId.Location = new Point(552, 80);
         txtImageContentId.Name = "txtImageContentId";
-        txtImageContentId.PlaceholderText = "UP0000-PPSA00000_00-CONTENT000000000";
-        txtImageContentId.Size = new Size(220, 23);
+        txtImageContentId.Size = new Size(249, 23);
         txtImageContentId.TabIndex = 33;
         txtImageContentId.Visible = false;
         // 
         // lblImageTitleId
         // 
-        lblImageTitleId.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        lblImageTitleId.Location = new Point(790, 84);
+        lblImageTitleId.Location = new Point(818, 84);
         lblImageTitleId.Name = "lblImageTitleId";
         lblImageTitleId.Size = new Size(56, 15);
         lblImageTitleId.TabIndex = 38;
@@ -3402,18 +3465,16 @@ partial class MainForm
         // 
         // txtImageTitleId
         // 
-        txtImageTitleId.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        txtImageTitleId.Location = new Point(852, 80);
+        txtImageTitleId.Location = new Point(880, 80);
         txtImageTitleId.Name = "txtImageTitleId";
         txtImageTitleId.ReadOnly = true;
-        txtImageTitleId.Size = new Size(140, 23);
+        txtImageTitleId.Size = new Size(105, 23);
         txtImageTitleId.TabIndex = 39;
         txtImageTitleId.Visible = false;
         // 
         // lblImageVersion
         // 
-        lblImageVersion.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        lblImageVersion.Location = new Point(1008, 84);
+        lblImageVersion.Location = new Point(1006, 84);
         lblImageVersion.Name = "lblImageVersion";
         lblImageVersion.Size = new Size(52, 15);
         lblImageVersion.TabIndex = 40;
@@ -3423,11 +3484,10 @@ partial class MainForm
         // 
         // txtImageVersion
         // 
-        txtImageVersion.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        txtImageVersion.Location = new Point(1066, 80);
+        txtImageVersion.Location = new Point(1064, 80);
         txtImageVersion.Name = "txtImageVersion";
         txtImageVersion.ReadOnly = true;
-        txtImageVersion.Size = new Size(150, 23);
+        txtImageVersion.Size = new Size(105, 23);
         txtImageVersion.TabIndex = 41;
         txtImageVersion.Visible = false;
         // 
@@ -3457,6 +3517,25 @@ partial class MainForm
         lblImageSource.Text = "Source:";
         lblImageSource.TextAlign = ContentAlignment.MiddleRight;
         // 
+        // lblImageTitle
+        // 
+        lblImageTitle.Location = new Point(456, 55);
+        lblImageTitle.Name = "lblImageTitle";
+        lblImageTitle.Size = new Size(90, 15);
+        lblImageTitle.TabIndex = 60;
+        lblImageTitle.Text = "Title:";
+        lblImageTitle.TextAlign = ContentAlignment.MiddleRight;
+        lblImageTitle.Visible = false;
+        // 
+        // txtImageTitle
+        // 
+        txtImageTitle.Location = new Point(552, 51);
+        txtImageTitle.Name = "txtImageTitle";
+        txtImageTitle.ReadOnly = true;
+        txtImageTitle.Size = new Size(617, 23);
+        txtImageTitle.TabIndex = 61;
+        txtImageTitle.Visible = false;
+        // 
         // tabsImageTargets
         // 
         tabsImageTargets.AllowDrop = true;
@@ -3466,7 +3545,7 @@ partial class MainForm
         tabsImageTargets.Controls.Add(tabTargetDebug);
         tabsImageTargets.Controls.Add(tabTargetOptions);
         tabsImageTargets.Dock = DockStyle.Fill;
-        tabsImageTargets.ItemSize = new Size(121, 28);
+        tabsImageTargets.ItemSize = new Size(80, 28);
         tabsImageTargets.Location = new Point(13, 126);
         tabsImageTargets.Name = "tabsImageTargets";
         tabsImageTargets.Padding = new Point(0, 0);
@@ -3493,7 +3572,7 @@ partial class MainForm
         // 
         // lblOutExfat
         // 
-        lblOutExfat.Location = new Point(12, 16);
+        lblOutExfat.Location = new Point(229, 16);
         lblOutExfat.Name = "lblOutExfat";
         lblOutExfat.Size = new Size(100, 15);
         lblOutExfat.TabIndex = 9;
@@ -3502,14 +3581,14 @@ partial class MainForm
         // 
         // txtOutExfat
         // 
-        txtOutExfat.Location = new Point(120, 12);
+        txtOutExfat.Location = new Point(337, 12);
         txtOutExfat.Name = "txtOutExfat";
         txtOutExfat.Size = new Size(560, 23);
         txtOutExfat.TabIndex = 10;
         // 
         // btnOutExfat
         // 
-        btnOutExfat.Location = new Point(688, 12);
+        btnOutExfat.Location = new Point(905, 12);
         btnOutExfat.Name = "btnOutExfat";
         btnOutExfat.Size = new Size(80, 24);
         btnOutExfat.TabIndex = 11;
@@ -3519,7 +3598,7 @@ partial class MainForm
         // chkOutExfat
         // 
         chkOutExfat.AutoSize = true;
-        chkOutExfat.Location = new Point(776, 16);
+        chkOutExfat.Location = new Point(993, 16);
         chkOutExfat.Name = "chkOutExfat";
         chkOutExfat.Size = new Size(120, 19);
         chkOutExfat.TabIndex = 12;
@@ -3527,7 +3606,7 @@ partial class MainForm
         // 
         // lblImageCluster
         // 
-        lblImageCluster.Location = new Point(12, 46);
+        lblImageCluster.Location = new Point(229, 46);
         lblImageCluster.Name = "lblImageCluster";
         lblImageCluster.Size = new Size(100, 15);
         lblImageCluster.TabIndex = 13;
@@ -3537,7 +3616,7 @@ partial class MainForm
         // cboImageCluster
         // 
         cboImageCluster.Items.AddRange(new object[] { "Auto", "32 KB", "64 KB" });
-        cboImageCluster.Location = new Point(120, 42);
+        cboImageCluster.Location = new Point(337, 42);
         cboImageCluster.Name = "cboImageCluster";
         cboImageCluster.Size = new Size(140, 24);
         cboImageCluster.TabIndex = 14;
@@ -3545,7 +3624,7 @@ partial class MainForm
         // chkImageAmpr
         // 
         chkImageAmpr.AutoSize = true;
-        chkImageAmpr.Location = new Point(280, 46);
+        chkImageAmpr.Location = new Point(497, 46);
         chkImageAmpr.Name = "chkImageAmpr";
         chkImageAmpr.Size = new Size(140, 19);
         chkImageAmpr.TabIndex = 19;
@@ -3574,7 +3653,7 @@ partial class MainForm
         // 
         // lblOutFfpkg
         // 
-        lblOutFfpkg.Location = new Point(12, 16);
+        lblOutFfpkg.Location = new Point(229, 16);
         lblOutFfpkg.Name = "lblOutFfpkg";
         lblOutFfpkg.Size = new Size(100, 15);
         lblOutFfpkg.TabIndex = 9;
@@ -3583,14 +3662,14 @@ partial class MainForm
         // 
         // txtOutFfpkg
         // 
-        txtOutFfpkg.Location = new Point(120, 12);
+        txtOutFfpkg.Location = new Point(337, 12);
         txtOutFfpkg.Name = "txtOutFfpkg";
         txtOutFfpkg.Size = new Size(560, 23);
         txtOutFfpkg.TabIndex = 10;
         // 
         // btnOutFfpkg
         // 
-        btnOutFfpkg.Location = new Point(688, 12);
+        btnOutFfpkg.Location = new Point(905, 12);
         btnOutFfpkg.Name = "btnOutFfpkg";
         btnOutFfpkg.Size = new Size(80, 24);
         btnOutFfpkg.TabIndex = 11;
@@ -3600,7 +3679,7 @@ partial class MainForm
         // chkOutFfpkg
         // 
         chkOutFfpkg.AutoSize = true;
-        chkOutFfpkg.Location = new Point(776, 16);
+        chkOutFfpkg.Location = new Point(993, 16);
         chkOutFfpkg.Name = "chkOutFfpkg";
         chkOutFfpkg.Size = new Size(120, 19);
         chkOutFfpkg.TabIndex = 12;
@@ -3608,7 +3687,7 @@ partial class MainForm
         // 
         // lblImageBlock
         // 
-        lblImageBlock.Location = new Point(12, 46);
+        lblImageBlock.Location = new Point(229, 46);
         lblImageBlock.Name = "lblImageBlock";
         lblImageBlock.Size = new Size(100, 15);
         lblImageBlock.TabIndex = 24;
@@ -3618,14 +3697,14 @@ partial class MainForm
         // cboImageBlock
         // 
         cboImageBlock.Items.AddRange(new object[] { "32 KB", "64 KB" });
-        cboImageBlock.Location = new Point(120, 42);
+        cboImageBlock.Location = new Point(337, 42);
         cboImageBlock.Name = "cboImageBlock";
         cboImageBlock.Size = new Size(100, 24);
         cboImageBlock.TabIndex = 25;
         // 
         // lblImageFragment
         // 
-        lblImageFragment.Location = new Point(248, 46);
+        lblImageFragment.Location = new Point(439, 46);
         lblImageFragment.Name = "lblImageFragment";
         lblImageFragment.Size = new Size(100, 15);
         lblImageFragment.TabIndex = 26;
@@ -3635,14 +3714,14 @@ partial class MainForm
         // cboImageFragment
         // 
         cboImageFragment.Items.AddRange(new object[] { "4 KB", "64 KB" });
-        cboImageFragment.Location = new Point(356, 42);
+        cboImageFragment.Location = new Point(547, 42);
         cboImageFragment.Name = "cboImageFragment";
         cboImageFragment.Size = new Size(100, 24);
         cboImageFragment.TabIndex = 27;
         // 
         // lblImageDensity
         // 
-        lblImageDensity.Location = new Point(484, 46);
+        lblImageDensity.Location = new Point(649, 46);
         lblImageDensity.Name = "lblImageDensity";
         lblImageDensity.Size = new Size(100, 15);
         lblImageDensity.TabIndex = 28;
@@ -3652,14 +3731,14 @@ partial class MainForm
         // cboImageDensity
         // 
         cboImageDensity.Items.AddRange(new object[] { "256 KiB", "512 KiB", "1 MiB" });
-        cboImageDensity.Location = new Point(592, 42);
+        cboImageDensity.Location = new Point(757, 42);
         cboImageDensity.Name = "cboImageDensity";
         cboImageDensity.Size = new Size(140, 24);
         cboImageDensity.TabIndex = 29;
         // 
         // lblImageMinFree
         // 
-        lblImageMinFree.Location = new Point(760, 46);
+        lblImageMinFree.Location = new Point(899, 46);
         lblImageMinFree.Name = "lblImageMinFree";
         lblImageMinFree.Size = new Size(100, 15);
         lblImageMinFree.TabIndex = 30;
@@ -3668,7 +3747,7 @@ partial class MainForm
         // 
         // nudImageMinFree
         // 
-        nudImageMinFree.Location = new Point(868, 42);
+        nudImageMinFree.Location = new Point(1007, 42);
         nudImageMinFree.Maximum = new decimal(new int[] { 50, 0, 0, 0 });
         nudImageMinFree.Name = "nudImageMinFree";
         nudImageMinFree.Size = new Size(60, 23);
@@ -3693,7 +3772,7 @@ partial class MainForm
         // 
         // lblOutFfpfsc
         // 
-        lblOutFfpfsc.Location = new Point(12, 16);
+        lblOutFfpfsc.Location = new Point(229, 16);
         lblOutFfpfsc.Name = "lblOutFfpfsc";
         lblOutFfpfsc.Size = new Size(100, 15);
         lblOutFfpfsc.TabIndex = 9;
@@ -3702,14 +3781,14 @@ partial class MainForm
         // 
         // txtOutFfpfsc
         // 
-        txtOutFfpfsc.Location = new Point(120, 12);
+        txtOutFfpfsc.Location = new Point(337, 12);
         txtOutFfpfsc.Name = "txtOutFfpfsc";
         txtOutFfpfsc.Size = new Size(560, 23);
         txtOutFfpfsc.TabIndex = 10;
         // 
         // btnOutFfpfsc
         // 
-        btnOutFfpfsc.Location = new Point(688, 12);
+        btnOutFfpfsc.Location = new Point(905, 12);
         btnOutFfpfsc.Name = "btnOutFfpfsc";
         btnOutFfpfsc.Size = new Size(80, 24);
         btnOutFfpfsc.TabIndex = 11;
@@ -3719,7 +3798,7 @@ partial class MainForm
         // chkOutFfpfsc
         // 
         chkOutFfpfsc.AutoSize = true;
-        chkOutFfpfsc.Location = new Point(776, 16);
+        chkOutFfpfsc.Location = new Point(993, 16);
         chkOutFfpfsc.Name = "chkOutFfpfsc";
         chkOutFfpfsc.Size = new Size(120, 19);
         chkOutFfpfsc.TabIndex = 12;
@@ -3727,7 +3806,7 @@ partial class MainForm
         // 
         // lblImageLevel
         // 
-        lblImageLevel.Location = new Point(12, 46);
+        lblImageLevel.Location = new Point(229, 46);
         lblImageLevel.Name = "lblImageLevel";
         lblImageLevel.Size = new Size(100, 15);
         lblImageLevel.TabIndex = 15;
@@ -3736,7 +3815,7 @@ partial class MainForm
         // 
         // nudImageLevel
         // 
-        nudImageLevel.Location = new Point(120, 42);
+        nudImageLevel.Location = new Point(337, 42);
         nudImageLevel.Maximum = new decimal(new int[] { 9, 0, 0, 0 });
         nudImageLevel.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
         nudImageLevel.Name = "nudImageLevel";
@@ -3746,7 +3825,7 @@ partial class MainForm
         // 
         // lblImageGain
         // 
-        lblImageGain.Location = new Point(200, 46);
+        lblImageGain.Location = new Point(417, 46);
         lblImageGain.Name = "lblImageGain";
         lblImageGain.Size = new Size(100, 15);
         lblImageGain.TabIndex = 17;
@@ -3755,7 +3834,7 @@ partial class MainForm
         // 
         // nudImageGain
         // 
-        nudImageGain.Location = new Point(308, 42);
+        nudImageGain.Location = new Point(525, 42);
         nudImageGain.Name = "nudImageGain";
         nudImageGain.Size = new Size(60, 23);
         nudImageGain.TabIndex = 18;
@@ -3785,17 +3864,24 @@ partial class MainForm
         tabTargetDebug.Controls.Add(lblImageTemp);
         tabTargetDebug.Controls.Add(txtImageTemp);
         tabTargetDebug.Controls.Add(btnImageTempBrowse);
-        tabTargetDebug.Controls.Add(chkImageDrmStandard);
-        tabTargetDebug.Controls.Add(lblImageDrmHint);
+        tabTargetDebug.Controls.Add(lblImageDrm);
+        tabTargetDebug.Controls.Add(cboImageDrm);
+        tabTargetDebug.Controls.Add(lblImageBackend);
+        tabTargetDebug.Controls.Add(cboImageBackend);
+        tabTargetDebug.Controls.Add(chkImageFakeSign);
+        tabTargetDebug.Controls.Add(chkImageRightSprx);
+        tabTargetDebug.Controls.Add(chkImageDeterministic);
+        tabTargetDebug.Controls.Add(chkImageAdvancedOptions);
         tabTargetDebug.Location = new Point(4, 32);
         tabTargetDebug.Name = "tabTargetDebug";
         tabTargetDebug.Size = new Size(1342, 152);
         tabTargetDebug.TabIndex = 3;
-        tabTargetDebug.Text = "Debug Package";
+        tabTargetDebug.Text = "PKG";
         // 
         // lblOutDebug
         // 
-        lblOutDebug.Location = new Point(12, 16);
+        lblOutDebug.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblOutDebug.Location = new Point(217, 16);
         lblOutDebug.Name = "lblOutDebug";
         lblOutDebug.Size = new Size(100, 15);
         lblOutDebug.TabIndex = 9;
@@ -3804,14 +3890,16 @@ partial class MainForm
         // 
         // txtOutDebug
         // 
-        txtOutDebug.Location = new Point(120, 12);
+        txtOutDebug.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        txtOutDebug.Location = new Point(325, 12);
         txtOutDebug.Name = "txtOutDebug";
         txtOutDebug.Size = new Size(560, 23);
         txtOutDebug.TabIndex = 10;
         // 
         // btnOutDebug
         // 
-        btnOutDebug.Location = new Point(688, 12);
+        btnOutDebug.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnOutDebug.Location = new Point(893, 12);
         btnOutDebug.Name = "btnOutDebug";
         btnOutDebug.Size = new Size(80, 24);
         btnOutDebug.TabIndex = 11;
@@ -3820,8 +3908,9 @@ partial class MainForm
         // 
         // chkOutDebug
         // 
+        chkOutDebug.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         chkOutDebug.AutoSize = true;
-        chkOutDebug.Location = new Point(776, 16);
+        chkOutDebug.Location = new Point(981, 16);
         chkOutDebug.Name = "chkOutDebug";
         chkOutDebug.Size = new Size(120, 19);
         chkOutDebug.TabIndex = 12;
@@ -3829,7 +3918,8 @@ partial class MainForm
         // 
         // lblDbgPasscode
         // 
-        lblDbgPasscode.Location = new Point(12, 46);
+        lblDbgPasscode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblDbgPasscode.Location = new Point(217, 46);
         lblDbgPasscode.Name = "lblDbgPasscode";
         lblDbgPasscode.Size = new Size(100, 15);
         lblDbgPasscode.TabIndex = 34;
@@ -3838,7 +3928,8 @@ partial class MainForm
         // 
         // txtDbgPasscode
         // 
-        txtDbgPasscode.Location = new Point(120, 42);
+        txtDbgPasscode.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        txtDbgPasscode.Location = new Point(325, 42);
         txtDbgPasscode.Name = "txtDbgPasscode";
         txtDbgPasscode.Size = new Size(288, 23);
         txtDbgPasscode.TabIndex = 35;
@@ -3846,7 +3937,8 @@ partial class MainForm
         // 
         // lblImageSdk
         // 
-        lblImageSdk.Location = new Point(426, 46);
+        lblImageSdk.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageSdk.Location = new Point(631, 46);
         lblImageSdk.Name = "lblImageSdk";
         lblImageSdk.Size = new Size(100, 15);
         lblImageSdk.TabIndex = 36;
@@ -3855,14 +3947,16 @@ partial class MainForm
         // 
         // cboImageSdk
         // 
-        cboImageSdk.Location = new Point(534, 42);
+        cboImageSdk.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        cboImageSdk.Location = new Point(739, 41);
         cboImageSdk.Name = "cboImageSdk";
         cboImageSdk.Size = new Size(234, 24);
         cboImageSdk.TabIndex = 37;
         // 
         // lblImagePkgType
         // 
-        lblImagePkgType.Location = new Point(12, 76);
+        lblImagePkgType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImagePkgType.Location = new Point(217, 76);
         lblImagePkgType.Name = "lblImagePkgType";
         lblImagePkgType.Size = new Size(100, 15);
         lblImagePkgType.TabIndex = 42;
@@ -3871,7 +3965,8 @@ partial class MainForm
         // 
         // cboImagePkgType
         // 
-        cboImagePkgType.Location = new Point(120, 72);
+        cboImagePkgType.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        cboImagePkgType.Location = new Point(325, 72);
         cboImagePkgType.Name = "cboImagePkgType";
         cboImagePkgType.Size = new Size(288, 24);
         cboImagePkgType.TabIndex = 43;
@@ -3879,7 +3974,8 @@ partial class MainForm
         // 
         // lblImageCompression
         // 
-        lblImageCompression.Location = new Point(426, 76);
+        lblImageCompression.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageCompression.Location = new Point(631, 76);
         lblImageCompression.Name = "lblImageCompression";
         lblImageCompression.Size = new Size(100, 15);
         lblImageCompression.TabIndex = 44;
@@ -3888,7 +3984,8 @@ partial class MainForm
         // 
         // cboImageCompression
         // 
-        cboImageCompression.Location = new Point(534, 72);
+        cboImageCompression.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        cboImageCompression.Location = new Point(739, 72);
         cboImageCompression.Name = "cboImageCompression";
         cboImageCompression.Size = new Size(234, 24);
         cboImageCompression.TabIndex = 45;
@@ -3896,7 +3993,8 @@ partial class MainForm
         // 
         // lblImageKrakenLevel
         // 
-        lblImageKrakenLevel.Location = new Point(192, 106);
+        lblImageKrakenLevel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageKrakenLevel.Location = new Point(397, 106);
         lblImageKrakenLevel.Name = "lblImageKrakenLevel";
         lblImageKrakenLevel.Size = new Size(100, 15);
         lblImageKrakenLevel.TabIndex = 46;
@@ -3905,14 +4003,16 @@ partial class MainForm
         // 
         // cboImageKrakenLevel
         // 
-        cboImageKrakenLevel.Location = new Point(300, 102);
+        cboImageKrakenLevel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        cboImageKrakenLevel.Location = new Point(505, 101);
         cboImageKrakenLevel.Name = "cboImageKrakenLevel";
-        cboImageKrakenLevel.Size = new Size(288, 24);
+        cboImageKrakenLevel.Size = new Size(108, 24);
         cboImageKrakenLevel.TabIndex = 47;
         // 
         // lblImagePlayGo
         // 
-        lblImagePlayGo.Location = new Point(12, 106);
+        lblImagePlayGo.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImagePlayGo.Location = new Point(217, 106);
         lblImagePlayGo.Name = "lblImagePlayGo";
         lblImagePlayGo.Size = new Size(100, 15);
         lblImagePlayGo.TabIndex = 50;
@@ -3921,7 +4021,8 @@ partial class MainForm
         // 
         // nudImagePlayGoChunks
         // 
-        nudImagePlayGoChunks.Location = new Point(120, 102);
+        nudImagePlayGoChunks.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        nudImagePlayGoChunks.Location = new Point(325, 102);
         nudImagePlayGoChunks.Maximum = new decimal(new int[] { 1000, 0, 0, 0 });
         nudImagePlayGoChunks.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
         nudImagePlayGoChunks.Name = "nudImagePlayGoChunks";
@@ -3931,7 +4032,8 @@ partial class MainForm
         // 
         // lblImageKrakenThreads
         // 
-        lblImageKrakenThreads.Location = new Point(590, 106);
+        lblImageKrakenThreads.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageKrakenThreads.Location = new Point(631, 106);
         lblImageKrakenThreads.Name = "lblImageKrakenThreads";
         lblImageKrakenThreads.Size = new Size(100, 15);
         lblImageKrakenThreads.TabIndex = 48;
@@ -3940,7 +4042,8 @@ partial class MainForm
         // 
         // nudImageKrakenThreads
         // 
-        nudImageKrakenThreads.Location = new Point(698, 102);
+        nudImageKrakenThreads.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        nudImageKrakenThreads.Location = new Point(739, 102);
         nudImageKrakenThreads.Maximum = new decimal(new int[] { 256, 0, 0, 0 });
         nudImageKrakenThreads.Name = "nudImageKrakenThreads";
         nudImageKrakenThreads.Size = new Size(70, 23);
@@ -3948,7 +4051,8 @@ partial class MainForm
         // 
         // lblImageTemp
         // 
-        lblImageTemp.Location = new Point(12, 136);
+        lblImageTemp.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageTemp.Location = new Point(217, 136);
         lblImageTemp.Name = "lblImageTemp";
         lblImageTemp.Size = new Size(100, 15);
         lblImageTemp.TabIndex = 52;
@@ -3957,36 +4061,104 @@ partial class MainForm
         // 
         // txtImageTemp
         // 
-        txtImageTemp.Location = new Point(120, 132);
+        txtImageTemp.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        txtImageTemp.Location = new Point(325, 132);
         txtImageTemp.Name = "txtImageTemp";
-        txtImageTemp.Size = new Size(560, 23);
+        txtImageTemp.Size = new Size(288, 23);
         txtImageTemp.TabIndex = 53;
         // 
         // btnImageTempBrowse
         // 
-        btnImageTempBrowse.Location = new Point(688, 132);
+        btnImageTempBrowse.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        btnImageTempBrowse.Location = new Point(619, 131);
         btnImageTempBrowse.Name = "btnImageTempBrowse";
         btnImageTempBrowse.Size = new Size(80, 24);
         btnImageTempBrowse.TabIndex = 54;
         btnImageTempBrowse.Text = "Browse...";
         btnImageTempBrowse.Click += btnImageTempBrowse_Click;
         // 
-        // chkImageDrmStandard
+        // lblImageDrm
         // 
-        chkImageDrmStandard.AutoSize = true;
-        chkImageDrmStandard.Location = new Point(790, 44);
-        chkImageDrmStandard.Name = "chkImageDrmStandard";
-        chkImageDrmStandard.Size = new Size(173, 19);
-        chkImageDrmStandard.TabIndex = 55;
-        chkImageDrmStandard.Text = "Force DRM type to standard";
+        lblImageDrm.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageDrm.Location = new Point(701, 136);
+        lblImageDrm.Name = "lblImageDrm";
+        lblImageDrm.Size = new Size(44, 15);
+        lblImageDrm.TabIndex = 55;
+        lblImageDrm.Text = "DRM:";
+        lblImageDrm.TextAlign = ContentAlignment.MiddleRight;
         // 
-        // lblImageDrmHint
+        // cboImageDrm
         // 
-        lblImageDrmHint.Location = new Point(971, 46);
-        lblImageDrmHint.Name = "lblImageDrmHint";
-        lblImageDrmHint.Size = new Size(360, 15);
-        lblImageDrmHint.TabIndex = 56;
-        lblImageDrmHint.Text = "Off preserves the source DRM token (recommended).";
+        cboImageDrm.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        cboImageDrm.Location = new Point(751, 131);
+        cboImageDrm.Name = "cboImageDrm";
+        cboImageDrm.Size = new Size(130, 24);
+        cboImageDrm.TabIndex = 56;
+        cboImageDrm.SelectedIndexChanged += cboImageDrm_SelectedIndexChanged;
+        // 
+        // lblImageBackend
+        // 
+        lblImageBackend.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        lblImageBackend.Location = new Point(893, 136);
+        lblImageBackend.Name = "lblImageBackend";
+        lblImageBackend.Size = new Size(56, 15);
+        lblImageBackend.TabIndex = 57;
+        lblImageBackend.Text = "Builder:";
+        lblImageBackend.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // cboImageBackend
+        // 
+        cboImageBackend.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        cboImageBackend.Location = new Point(951, 131);
+        cboImageBackend.Name = "cboImageBackend";
+        cboImageBackend.Size = new Size(150, 24);
+        cboImageBackend.TabIndex = 58;
+        cboImageBackend.SelectedIndexChanged += cboImageBackend_SelectedIndexChanged;
+        // 
+        // chkImageFakeSign
+        // 
+        chkImageFakeSign.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        chkImageFakeSign.AutoSize = true;
+        chkImageFakeSign.Checked = true;
+        chkImageFakeSign.CheckState = CheckState.Checked;
+        chkImageFakeSign.Location = new Point(981, 75);
+        chkImageFakeSign.Name = "chkImageFakeSign";
+        chkImageFakeSign.Size = new Size(126, 19);
+        chkImageFakeSign.TabIndex = 62;
+        chkImageFakeSign.Text = "Fake-sign modules";
+        // 
+        // chkImageRightSprx
+        // 
+        chkImageRightSprx.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        chkImageRightSprx.AutoSize = true;
+        chkImageRightSprx.Checked = true;
+        chkImageRightSprx.CheckState = CheckState.Checked;
+        chkImageRightSprx.Location = new Point(981, 104);
+        chkImageRightSprx.Name = "chkImageRightSprx";
+        chkImageRightSprx.Size = new Size(144, 19);
+        chkImageRightSprx.TabIndex = 63;
+        chkImageRightSprx.Text = "Inject debug right.sprx";
+        // 
+        // chkImageDeterministic
+        // 
+        chkImageDeterministic.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        chkImageDeterministic.AutoSize = true;
+        chkImageDeterministic.Location = new Point(836, 104);
+        chkImageDeterministic.Name = "chkImageDeterministic";
+        chkImageDeterministic.Size = new Size(126, 19);
+        chkImageDeterministic.TabIndex = 64;
+        chkImageDeterministic.Text = "Deterministic build";
+        // 
+        // chkImageAdvancedOptions
+        // 
+        chkImageAdvancedOptions.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        chkImageAdvancedOptions.AutoSize = true;
+        chkImageAdvancedOptions.Location = new Point(981, 44);
+        chkImageAdvancedOptions.Name = "chkImageAdvancedOptions";
+        chkImageAdvancedOptions.Size = new Size(122, 19);
+        chkImageAdvancedOptions.TabIndex = 59;
+        chkImageAdvancedOptions.Text = "Advanced options";
+        chkImageAdvancedOptions.CheckedChanged += chkImageAdvancedOptions_CheckedChanged;
         // 
         // tabTargetOptions
         // 

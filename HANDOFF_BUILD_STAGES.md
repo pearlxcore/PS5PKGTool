@@ -3,11 +3,8 @@
 The engine is now the single source of truth for build staging. **Do not hardcode a step list in
 PS5PKGTool**; render the stages the engine reports.
 
-Engine build: **655,360 bytes, SHA-256 `3A112B5E3619587A90532AF2885A60BA05396A4FD2EE59D62940B643DB554079`**
-(head `0a84955` + byte-progress fields). **Re-vendored** into `ThirdParty\ProsperoPkgTool\`. The two Core
-builders map `ProsperoBuildProgress.StageId` → `ProsperoBuildStages.Name(stage)` and, when set, the
-byte-accurate `BytesDone`/`BytesTotal` + `CurrentPath` (so the UI bar is byte-smooth for the inner and
-outer stages; coarse stages fall back to `Done`/`Total`).
+Engine build: **655,360 bytes, SHA-256 `EC2396D758C12FD3C8145B024C9600BB3A488AE5FFA4E69E24D5C0B49E26E819`**
+(head `0a84955` + no-copy free-space model + byte progress). **Re-vendored** into `ThirdParty\ProsperoPkgTool\`.
 
 ## Contract
 

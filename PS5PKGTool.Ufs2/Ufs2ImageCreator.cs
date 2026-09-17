@@ -859,7 +859,7 @@ namespace UFS2Tool
         {
             // The recovery block is in the last sector before SBLOCK_UFS2.
             // struct fsrecovery occupies the last 20 bytes of that sector.
-            int recoveryBlockSize = 20; // 5 Ã- int32
+            int recoveryBlockSize = 20; // 5 ï¿½- int32
             long sectorBeforeSb = Ufs2Constants.SuperblockOffset - SectorSize;
             if (sectorBeforeSb < 0) return;
 
@@ -1513,25 +1513,37 @@ namespace UFS2Tool
                 return (8 + namelen + 1 + 3) & ~3;
             }
 
-            // ADDSIZE: compute on-disk allocation for a data extent.
-            // PopulateFromDirectory allocates full blocks per file, so round up
-            // to block size (not fragment size) to match actual allocation.
+            // ADDSIZE: compute on-disk allocation for a data extent. PopulateFromDirectory allocates
+            // full blocks per file, so round up to block size. Indirect (pointer) blocks are counted
+            // exactly: one single-indirect block per nindir data blocks beyond the 12 direct pointers,
+            // then one double-indirect block plus its single-indirect blocks, then the triple level.
+            long pointerSize = filesystemFormat == 1 ? 4 : 8;
+            long nindir = Math.Max(1, blockSize / pointerSize);
+            long IndirectBlocks(long dataBlocksBeyondDirect)
+            {
+                long n = dataBlocksBeyondDirect;
+                if (n <= 0)
+                    return 0;
+                long blocks = 1; // single-indirect
+                if (n > nindir)
+                {
+                    long k2 = n - nindir;
+                    blocks += 1 + (k2 + nindir - 1) / nindir; // double-indirect + its single-indirect blocks
+                    if (k2 > nindir * nindir)
+                    {
+                        long k3 = k2 - nindir * nindir;
+                        blocks += 1 + (k3 + nindir * nindir - 1) / (nindir * nindir) + (k3 + nindir - 1) / nindir;
+                    }
+                }
+                return blocks;
+            }
             void AddSize(long x)
             {
-                long ndirectThreshold = (long)Ufs2Constants.NDirect * blockSize;
-                if (x < ndirectThreshold)
-                {
-                    // roundup(x, bsize) - full-block allocation
-                    diskSize += ((x + blockSize - 1) / blockSize) * blockSize;
-                }
-                else
-                {
-                    // Indirect block overhead: bsize * (howmany(x, NDirect * bsize) - 1)
-                    long howmany = (x + ndirectThreshold - 1) / ndirectThreshold;
-                    diskSize += (long)blockSize * (howmany - 1);
-                    // Data blocks: roundup(x, bsize)
-                    diskSize += ((x + blockSize - 1) / blockSize) * blockSize;
-                }
+                long dataBlocks = (x + blockSize - 1) / blockSize;
+                diskSize += dataBlocks * blockSize;
+                long beyondDirect = dataBlocks - Ufs2Constants.NDirect;
+                if (beyondDirect > 0)
+                    diskSize += IndirectBlocks(beyondDirect) * blockSize;
             }
 
             // FreeBSD ADDDIRENT macro: accumulates curdirsize for a directory
@@ -1621,6 +1633,58 @@ namespace UFS2Tool
         }
 
         /// <summary>
+        /// Accurate auto-size that also covers the metadata each cylinder group reserves before its
+        /// data region (<c>dblkno</c> fragments). <see cref="CalculateImageSize"/> only adds a flat
+        /// percentage, which is smaller than the per-CG overhead on large trees, so the payload would
+        /// not fit and allocation fails mid-copy ("no more cylinder groups available for data").
+        /// This scales the data by <c>fragsPerGroup / dataFragsPerCg</c> and grows the image if the
+        /// inode count needs more groups.
+        /// </summary>
+        public long CalculateImageSizeWithCgOverhead(long blockAlignedDirectorySize, long totalEntries)
+        {
+            int fragsPerBlock = BlockSize / FragmentSize;
+            int inodeSize = InodeSizeForFormat;
+            int inodesPerBlock = Math.Max(1, BlockSize / inodeSize);
+
+            int sblkno = AlignUpInt(
+                (Ufs2Constants.SuperblockOffset + Ufs2Constants.SuperblockSize + FragmentSize - 1) / FragmentSize,
+                fragsPerBlock);
+            int cblkno = sblkno + AlignUpInt(
+                (Ufs2Constants.SuperblockSize + FragmentSize - 1) / FragmentSize, fragsPerBlock);
+            int iblkno = cblkno + fragsPerBlock;
+
+            long totalInodesNeeded = totalEntries + 3;
+            long dataFrags = (blockAlignedDirectorySize + FragmentSize - 1) / FragmentSize;
+
+            long size = Math.Max(CalculateImageSize(blockAlignedDirectorySize), (long)BlockSize * 16);
+            for (int iteration = 0; iteration < 16; iteration++)
+            {
+                int ipg = ComputeInodesPerGroup(size);
+                int fragsPerGroup = ipg * fragsPerBlock;
+                int inodeblks = ((ipg + inodesPerBlock - 1) / inodesPerBlock) * fragsPerBlock;
+                int dblkno = iblkno + inodeblks;
+                int dataFragsPerCg = Math.Max(fragsPerBlock, fragsPerGroup - dblkno);
+
+                long requiredFrags = (dataFrags * fragsPerGroup + dataFragsPerCg - 1) / dataFragsPerCg;
+                long ncg = Math.Max(1, (requiredFrags + fragsPerGroup - 1) / fragsPerGroup);
+                if (ncg * ipg < totalInodesNeeded)
+                {
+                    long requiredCgs = (totalInodesNeeded + ipg - 1) / ipg;
+                    requiredFrags = Math.Max(requiredFrags, requiredCgs * fragsPerGroup);
+                }
+
+                long required = AlignUp(requiredFrags * FragmentSize + BlockSize, FragmentSize);
+                // Add one spare cylinder group so the exact per-group metadata, CG-summary/root-dir
+                // reservation and last-group rounding can never leave the final block unallocatable.
+                required = AlignUp(required + (long)fragsPerGroup * FragmentSize, FragmentSize);
+                if (required <= size)
+                    return size;
+                size = required;
+            }
+            return size;
+        }
+
+        /// <summary>
         /// Create a UFS2 image from a directory in a single integrated operation:
         /// 1. Calculate the required space from the directory contents (block-aligned + overhead)
         /// 2. Create an empty UFS2 filesystem of that size
@@ -1650,7 +1714,8 @@ namespace UFS2Tool
                         CancellationToken, (bytes, entries) => Progress?.Invoke(
                             $"Scanning source dump ({entries:N0} entries, {FormatBytes(bytes)})", bytes, 0, "bytes"));
                     CancellationToken.ThrowIfCancellationRequested();
-                    totalSizeBytes = CalculateImageSize(diskSize);
+                    totalSizeBytes = Math.Max(CalculateImageSize(diskSize),
+                        CalculateImageSizeWithCgOverhead(diskSize, totalEntries));
 
                     // Ensure the image has enough cylinder groups for the required inodes.
                     // Each entry (file or directory) needs one inode, plus 3 reserved inodes
@@ -2208,7 +2273,7 @@ namespace UFS2Tool
                     WriteDirBlocks(fs, writer, dirBlocks, sb.BSize, sb.FSize,
                         dirInode, parentInode, subEntries);
 
-                    // Directory size is total blocks Ã- block size
+                    // Directory size is total blocks ï¿½- block size
                     long dirSize = (long)dirBlocksNeeded * sb.BSize;
 
                     // Write directory inode with correct nlink (2 + immediate subdirectory count)

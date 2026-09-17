@@ -43,6 +43,9 @@ public sealed class AppSettings
     // Build defaults
     public string DebugPasscode { get; set; } = string.Empty;
 
+    /// <summary>Selected package backend id ("lpp" or "ppt"). Empty/unknown falls back to the default.</summary>
+    public string BuildBackend { get; set; } = string.Empty;
+
     // Safety
     public bool ConfirmDelete { get; set; } = true;
     public bool ConfirmMove { get; set; } = true;

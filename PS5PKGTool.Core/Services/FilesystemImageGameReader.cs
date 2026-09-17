@@ -40,7 +40,8 @@ public sealed class FilesystemImageGameReader
         game.VirtualRoot = virtualRoot;
         game.SourceSize = fileInfo.Length;
         game.ContainerInnerFileName = fileInfo.Name;
-        game.ContainerLogicalSize = fileInfo.Length;
+        game.ContainerFileLength = fileInfo.Length;
+        game.ContainerLogicalSize = fileInfo.Length; // exFAT logical length equals the image length
         game.ContainerStoredSize = fileInfo.Length;
         return game;
     }

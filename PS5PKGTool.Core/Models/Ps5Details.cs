@@ -11,6 +11,9 @@ public sealed class Ps5GameDetails
     public Ps5ImageData? Background1 { get; init; }
     public Ps5ImageData? Background2 { get; init; }
     public List<string> Errors { get; init; } = [];
+    /// <summary>Per-section state and origin, so an empty section can be distinguished from a failure.</summary>
+    public IReadOnlyDictionary<string, SectionStatus> Sections { get; init; } =
+        new Dictionary<string, SectionStatus>(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
@@ -27,7 +30,18 @@ public sealed record Ps5Artwork(Ps5ImageData? Icon, Ps5ImageData? Background, Ps
 public sealed record Ps5ImageData(byte[] Bytes, int Width, int Height, bool IsRgba)
 {
     public bool IsEmpty => Bytes.Length == 0;
-    public static Ps5ImageData FromPng(byte[] bytes) => new(bytes, 0, 0, false);
+    public static Ps5ImageData FromPng(byte[] bytes)
+    {
+        // Read the IHDR dimensions from a plain PNG so the UI can show them without decoding pixels
+        // (PNG signature 8 bytes, then a 4-byte length and the "IHDR" tag, then big-endian width/height).
+        int width = 0, height = 0;
+        if (bytes.Length >= 24 && bytes[12] == 'I' && bytes[13] == 'H' && bytes[14] == 'D' && bytes[15] == 'R')
+        {
+            width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+            height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+        }
+        return new Ps5ImageData(bytes, width, height, false);
+    }
     public static Ps5ImageData FromRgba(byte[] bytes, int width, int height) => new(bytes, width, height, true);
 }
 
@@ -169,6 +183,8 @@ public sealed class Ps5PlayGoFileChunk
 
 public sealed class Ps5SelfInfo
 {
+    /// <summary>True when eboot.bin is a SELF/FSELF container; false for a plain ELF file.</summary>
+    public bool IsSelf { get; init; }
     public string SelfMagic { get; init; } = string.Empty;
     public long FileSize { get; init; }
     public long ElfOffset { get; init; }
@@ -247,6 +263,8 @@ public sealed class Ps5FileInfo
 {
     public string RelativePath { get; init; } = string.Empty;
     public string Extension { get; init; } = string.Empty;
+    /// <summary>Where the file came from: PFS, CNT, Host, exFAT, UFS2 or PFSC.</summary>
+    public string Origin { get; init; } = string.Empty;
     public long Size { get; init; }
     public long Offset { get; init; }
     public uint? PackageEntryId { get; init; }

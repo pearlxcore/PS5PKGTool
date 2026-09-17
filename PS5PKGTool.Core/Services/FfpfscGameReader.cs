@@ -34,6 +34,7 @@ public sealed class FfpfscGameReader
         game.VirtualRoot = virtualRoot;
         game.SourceSize = new FileInfo(fullPath).Length;
         game.ContainerInnerFileName = volume.Info.InnerFileName;
+        game.ContainerFileLength = new FileInfo(fullPath).Length;
         game.ContainerLogicalSize = volume.Info.LogicalLength;
         game.ContainerStoredSize = volume.Info.StoredLength;
         game.ContainerBlockCount = volume.Info.Pfsc.BlockCount;

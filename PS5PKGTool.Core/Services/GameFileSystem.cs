@@ -6,7 +6,7 @@ using UFS2Tool;
 
 namespace PS5PKGTool.Core.Services;
 
-public sealed record GameFileRecord(string RelativePath, long Size);
+public sealed record GameFileRecord(string RelativePath, long Size, string Origin = "");
 public sealed record GameFileChunk(byte[] Data, long Offset, long FileSize)
 {
     public bool HasPrevious => Offset > 0;
@@ -130,6 +130,8 @@ public static class GameFileSystem
                 // the inner PFS, so hiding them whenever the inner image decodes would drop metadata,
                 // artwork, and trophies. The inner PFS wins for any path present in both.
                 ProsperoInnerPfsReader.Entry[] innerFiles = engine.Files.ToArray();
+                if (engine.DecodeError is { } decodeError)
+                    throw new InvalidDataException($"Package contents could not be decoded: {decodeError}");
                 bool hasInnerTree = innerFiles.Length > 0;
 
                 _cntEntries = new Dictionary<string, (uint Id, long Size)>(StringComparer.OrdinalIgnoreCase);
@@ -145,17 +147,17 @@ public static class GameFileSystem
                     _cntEntries[relative] = (id, size);
                 }
 
-                var records = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+                var records = new Dictionary<string, (long Size, string Origin)>(StringComparer.OrdinalIgnoreCase);
                 foreach (ProsperoInnerPfsReader.Entry file in innerFiles)
                 {
                     string relative = NormalizePath(engine.ToRelativePath(file));
-                    if (relative.Length > 0) records[relative] = file.Size;
+                    if (relative.Length > 0) records[relative] = (file.Size, "PFS");
                 }
                 foreach (KeyValuePair<string, (uint Id, long Size)> pair in _cntEntries)
-                    records.TryAdd(pair.Key, pair.Value.Size);
+                    records.TryAdd(pair.Key, (pair.Value.Size, "CNT"));
 
                 Files = records
-                    .Select(pair => new GameFileRecord(pair.Key, pair.Value))
+                    .Select(pair => new GameFileRecord(pair.Key, pair.Value.Size, pair.Value.Origin))
                     .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
                 return;
@@ -185,7 +187,7 @@ public static class GameFileSystem
                 }
             }
 
-            Files = _segments.Select(pair => new GameFileRecord(pair.Key, pair.Value.Sum(segment => segment.Length)))
+            Files = _segments.Select(pair => new GameFileRecord(pair.Key, pair.Value.Sum(segment => segment.Length), "CNT"))
                 .OrderBy(file => file.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray();
         }
 
@@ -353,7 +355,7 @@ public static class GameFileSystem
             foreach (string path in Directory.EnumerateFiles(_root, "*", options))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                try { files.Add(new GameFileRecord(NormalizePath(Path.GetRelativePath(_root, path)), new FileInfo(path).Length)); }
+                try { files.Add(new GameFileRecord(NormalizePath(Path.GetRelativePath(_root, path)), new FileInfo(path).Length, "Host")); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
             }
             Files = files;
@@ -393,7 +395,7 @@ public static class GameFileSystem
                     relative = entry.Path[(_prefix.Length + 1)..];
                 else continue;
                 relative = NormalizePath(relative);
-                files.Add(new GameFileRecord(relative, entry.Size));
+                files.Add(new GameFileRecord(relative, entry.Size, "PFSC"));
                 _volumePaths.TryAdd(relative, entry.Path);
             }
             Files = files;
@@ -433,7 +435,7 @@ public static class GameFileSystem
                         relative = entry.Path[(prefix.Length + 1)..];
                     else continue;
                     relative = NormalizePath(relative);
-                    files.Add(new GameFileRecord(relative, entry.Size));
+                    files.Add(new GameFileRecord(relative, entry.Size, "exFAT"));
                     _volumePaths.TryAdd(relative, entry.Path);
                 }
                 Files = files;
@@ -480,7 +482,7 @@ public static class GameFileSystem
                     relative = entry.Path[(prefix.Length + 1)..];
                 else continue;
                 relative = NormalizePath(relative);
-                files.Add(new GameFileRecord(relative, entry.Size));
+                files.Add(new GameFileRecord(relative, entry.Size, "UFS2"));
                 _volumePaths.TryAdd(relative, entry.Path);
             }
             Files = files;

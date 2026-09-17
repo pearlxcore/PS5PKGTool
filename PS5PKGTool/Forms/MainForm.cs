@@ -44,6 +44,7 @@ public partial class MainForm : DarkForm
     private List<Ps5GameInfo> _visibleGames = [];
     private CancellationTokenSource? _scanCancellation;
     private CancellationTokenSource? _detailCancellation;
+    private CancellationTokenSource? _dumpSizeCancellation;
     private CancellationTokenSource? _fileCancellation;
     private CancellationTokenSource? _filePreviewCancellation;
     private Ps5GameInfo? _selectedGame;
@@ -150,6 +151,71 @@ public partial class MainForm : DarkForm
         int missingNow = _games.Count(game => !SourceExists(game));
         if (missingNow > 0)
             BeginInvoke(new Action(() => NotifyMissingSources(missingNow)));
+
+        // Fill in dump folder sizes in the background so the Size column is populated without
+        // opening each dump.
+        _dumpSizeCancellation = new CancellationTokenSource();
+        _ = ComputeMissingDumpSizesAsync(_dumpSizeCancellation.Token);
+    }
+
+    /// <summary>
+    /// Measures loose dump folders that have no cached size yet and updates the library row and the
+    /// manifest for each. Runs on a background thread one folder at a time so a large library does
+    /// not block startup.
+    /// </summary>
+    private async Task ComputeMissingDumpSizesAsync(CancellationToken token)
+    {
+        List<Ps5GameInfo> pending = _games
+            .Where(game => game.SourceKind == Ps5SourceKind.LooseDump && game.SourceSize <= 0 && SourceExists(game))
+            .ToList();
+        if (pending.Count == 0) return;
+
+        Logger.Info($"Measuring {pending.Count:N0} dump folder(s).");
+        bool changed = false;
+        foreach (Ps5GameInfo game in pending)
+        {
+            if (token.IsCancellationRequested) return;
+            long size;
+            try
+            {
+                string root = game.RootPath;
+                size = await Task.Run(() => MeasureDirectory(root, token), token).ConfigureAwait(true);
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Logger.Warn($"Unable to measure '{game.RootPath}': {ex.Message}");
+                continue;
+            }
+            if (size <= 0) continue;
+            game.SourceSize = size;
+            RefreshLibrarySizeCell(game);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            _stateStore.SaveManifest(_games);
+            Logger.Info("Dump folder sizes updated.");
+        }
+    }
+
+    private static long MeasureDirectory(string root, CancellationToken token)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+        long total = 0;
+        foreach (string path in Directory.EnumerateFiles(root, "*", options))
+        {
+            token.ThrowIfCancellationRequested();
+            try { total = checked(total + new FileInfo(path).Length); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
+        return total;
     }
 
     private void NotifyMissingSources(int missing)
@@ -392,6 +458,16 @@ public partial class MainForm : DarkForm
         catch (UnauthorizedAccessException) { }
     }
 
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
 
     private static string FindAvailableDirectory(string preferredPath)
     {
@@ -581,7 +657,9 @@ public partial class MainForm : DarkForm
     private async Task ShowGameAsync(Ps5GameInfo game)
     {
         PopulateOverview(game);
-        txtRawMetadata.Text = PrettyJson(game.RawParamJson);
+        _rawParamOriginal = game.RawParamJson;
+        _rawParamFormatted = PrettyJson(_rawParamOriginal);
+        ShowRawJson(formatted: true);
         ClearDeepDetails();
         statusLabel.Text = $"Loading details for {game.Title}...";
         long sizeBefore = game.SourceSize;
@@ -613,12 +691,14 @@ public partial class MainForm : DarkForm
             if (_currentArtwork is null)
                 _currentArtwork = new Ps5Artwork(details.Icon, details.Background, details.Background1, details.Background2);
             _populatedDetailTabs.Clear();
+            game.GameRootBytes = details.Files.TotalSize;
+            // Refresh Overview now that deep loading has produced access state, provenance and sizes.
+            PopulateOverview(game);
             PopulateActiveDetailTab();
-            // A loose dump's size is filled in during the details walk; refresh the overview, the
-            // library row and persist it so the next start shows it without re-walking.
+            // A loose dump's size is filled in during the details walk; persist it so the next start
+            // shows it without re-walking.
             if (game.SourceSize != sizeBefore)
             {
-                PopulateOverview(game);
                 RefreshLibrarySizeCell(game);
                 _stateStore.SaveManifest(_games);
             }
@@ -632,6 +712,10 @@ public partial class MainForm : DarkForm
             if (version != _detailVersion) return;
             statusLabel.Text = "Unable to load game details.";
             Logger.Warn($"Unable to read '{game.RootPath}': {ex.Message}");
+            // The header/metadata tabs (Overview, Container) can still be populated from the game
+            // record even when deep content loading failed.
+            PopulateOverview(game);
+            PopulateActiveDetailTab();
         }
     }
 
@@ -658,6 +742,27 @@ public partial class MainForm : DarkForm
         }
         CopyText(txtRawMetadata.Text);
     }
+
+    private string _rawParamOriginal = string.Empty;
+    private string _rawParamFormatted = string.Empty;
+
+    /// <summary>
+    /// Shows the param.json as re-indented text or as the bytes actually read. Pretty-printing is not
+    /// byte-original content, so the two views are kept distinct.
+    /// </summary>
+    private void ShowRawJson(bool formatted)
+    {
+        if (_rawParamOriginal.Length == 0)
+        {
+            txtRawMetadata.Text = "No param.json was available for this source.";
+            return;
+        }
+        txtRawMetadata.Text = formatted ? _rawParamFormatted : _rawParamOriginal;
+    }
+
+    private void btnRawFormatted_Click(object? sender, EventArgs e) => ShowRawJson(formatted: true);
+
+    private void btnRawOriginal_Click(object? sender, EventArgs e) => ShowRawJson(formatted: false);
 
     private void PopulateOverview(Ps5GameInfo game)
     {
@@ -697,6 +802,11 @@ public partial class MainForm : DarkForm
         Add("Publishing Tool", game.ToolVersion);
         Add("Version URI", game.VersionFileUri);
         Add("Age Levels", string.Join(", ", game.AgeLevels.Select(pair => $"{pair.Key}: {pair.Value}")));
+        // Diagnostics: each section's state and origin, so a not-present section is distinguishable
+        // from a locked, unsupported or failed one.
+        if (_currentDetails is { Sections.Count: > 0 } loaded && _currentDetailsRoot == game.RootPath)
+            foreach (KeyValuePair<string, SectionStatus> section in loaded.Sections)
+                Add(section.Key + " state", section.Value.Display);
         Add("Location", game.RootPath);
         if (game.SourceKind is Ps5SourceKind.Ffpfsc or Ps5SourceKind.FilesystemImage or Ps5SourceKind.Ffpkg)
         {
@@ -704,11 +814,16 @@ public partial class MainForm : DarkForm
                 game.ContainerInnerFileName);
             bool isUfs2 = game.SourceKind == Ps5SourceKind.Ffpkg ||
                           Path.GetExtension(game.ContainerInnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase);
-            Add(isUfs2 ? "Logical FFPKG Size" : "Logical exFAT Size",
-                FormatBytes(game.ContainerLogicalSize));
+            // Distinct metrics: the host container length, the inner filesystem's logical length, and
+            // the bytes the selected game root actually exposes are not interchangeable.
+            if (game.ContainerFileLength > 0) Add("Container File Length", FormatBytes(game.ContainerFileLength));
+            if (game.ContainerLogicalSize > 0)
+                Add(isUfs2 ? "Inner UFS2 Logical Length" : "Inner exFAT Logical Length",
+                    FormatBytes(game.ContainerLogicalSize));
+            if (game.GameRootBytes > 0) Add("Selected Game Files", FormatBytes(game.GameRootBytes));
             if (game.SourceKind == Ps5SourceKind.Ffpfsc)
             {
-                Add("Stored PFSC Size", FormatBytes(game.ContainerStoredSize));
+                if (game.ContainerStoredSize > 0) Add("Stored PFSC Size", FormatBytes(game.ContainerStoredSize));
                 Add("PFSC Blocks", game.ContainerBlockCount.ToString("N0"));
             }
             if (!string.IsNullOrWhiteSpace(game.VirtualRoot)) Add("Game Root in Image", game.VirtualRoot);
@@ -823,9 +938,24 @@ public partial class MainForm : DarkForm
 
     private void PopulateActiveDetailTab()
     {
-        if (_currentDetails is null || _selectedGame is null) return;
-        Ps5GameDetails details = _currentDetails;
-        string key = _currentDetailsRoot;
+        if (_selectedGame is not { } game) return;
+        string key = game.RootPath;
+
+        // The Container tab is derived from the parsed header/CNT metadata, which stays readable even
+        // when the game content could not be decoded, so it must not require a details result.
+        if (tabsDetails.SelectedTab == tabPackage)
+        {
+            if (!_populatedDetailTabs.Add("package|" + key)) return;
+            Ps5GameDetails? packageDetails = _currentDetailsRoot == key ? _currentDetails : null;
+            _ = RunSilentlyAsync(async () =>
+            {
+                try { await PopulatePackageAsync(game, packageDetails); }
+                catch { _populatedDetailTabs.Remove("package|" + key); throw; } // allow retry
+            });
+            return;
+        }
+
+        if (_currentDetails is not { } details || _currentDetailsRoot != key) return;
 
         if (tabsDetails.SelectedTab == tabArtwork)
         {
@@ -835,36 +965,57 @@ public partial class MainForm : DarkForm
         else if (tabsDetails.SelectedTab == tabTrophies)
         {
             if (!_populatedDetailTabs.Add("trophies|" + key)) return;
-            PopulateTrophies(details.TrophySet);
+            PopulateTrophies(details.TrophySet, SectionErrors(details, "Trophies:"));
         }
         else if (tabsDetails.SelectedTab == tabActivities)
         {
             if (!_populatedDetailTabs.Add("activities|" + key)) return;
-            PopulateActivities(details.Uds);
+            PopulateActivities(details.Uds, SectionErrors(details, "Activities:"));
         }
         else if (tabsDetails.SelectedTab == tabFiles)
         {
             if (_populatedDetailTabs.Add("files|" + key))
-                PopulateFiles(_selectedGame, details.Files);
+                PopulateFiles(game, details.Files);
             else
                 RefreshFileList();
         }
         else if (tabsDetails.SelectedTab == tabExecutable)
         {
             if (!_populatedDetailTabs.Add("executable|" + key)) return;
-            PopulateExecutable(details.Executable);
-            if (details.Errors.Count > 0)
-                lblExecutableSummary.Text += "  Warnings: " + string.Join(" | ", details.Errors);
-        }
-        else if (tabsDetails.SelectedTab == tabPackage)
-        {
-            if (!_populatedDetailTabs.Add("package|" + key)) return;
-            _ = RunSilentlyAsync(() => PopulatePackageAsync(_selectedGame, details));
+            // Only executable-scoped errors belong here; other sections report their own.
+            PopulateExecutable(details.Executable, SectionErrors(details, "Executable:"));
         }
     }
 
-    private async Task PopulatePackageAsync(Ps5GameInfo game, Ps5GameDetails details)
+    /// <summary>Errors recorded for one section, e.g. "Trophies:" or "Executable:".</summary>
+    private static string SectionErrors(Ps5GameDetails? details, string prefix) =>
+        details is null
+            ? string.Empty
+            : string.Join(" | ", details.Errors.Where(error =>
+                error.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
+
+    /// <summary>
+    /// Shows only the Container sub-tabs that apply to the selected source: the PKG-only pages
+    /// (Segments, CNT entries, SI contents) are hidden for dumps and image sources.
+    /// </summary>
+    private void UpdateContainerTabsForSource(Ps5GameInfo game)
     {
+        bool package = game.SourceKind == Ps5SourceKind.SonyPackage;
+        SetContainerPage(tabPkgSegments, package);
+        SetContainerPage(tabPkgEntries, package);
+        SetContainerPage(tabPkgSi, package);
+    }
+
+    private void SetContainerPage(DarkUI.Controls.DarkTabPage page, bool present)
+    {
+        bool attached = tabsPackage.TabPages.Contains(page);
+        if (present && !attached) tabsPackage.TabPages.Add(page);
+        else if (!present && attached) tabsPackage.TabPages.Remove(page);
+    }
+
+    private async Task PopulatePackageAsync(Ps5GameInfo game, Ps5GameDetails? details)
+    {
+        UpdateContainerTabsForSource(game);
         if (!SourceExists(game))
         {
             gridPkgHeader.DataSource = null;
@@ -880,6 +1031,9 @@ public partial class MainForm : DarkForm
             Logger.Warn($"Package tab skipped: source not found '{game.RootPath}'.");
             return;
         }
+
+        // Late async results must not overwrite another selection's grids.
+        bool Current() => ReferenceEquals(_selectedGame, game);
 
         SonyPkgSummary? package = game.Package;
 
@@ -948,6 +1102,7 @@ public partial class MainForm : DarkForm
         gridPkgEntries.DataSource = entries;
 
         byte[] sfoBytes = await ReadParamSfoAsync(game, package);
+        if (!Current()) return;
         var sfo = new DataTable();
         sfo.Columns.Add("Key");
         sfo.Columns.Add("Format");
@@ -964,6 +1119,7 @@ public partial class MainForm : DarkForm
         await AddExtraFileRowAsync(game, keystone, "sce_sys/keystone");
         await AddExtraFileRowAsync(game, keystone, "sce_sys/nptitle.dat");
         await AddExtraFileRowAsync(game, keystone, "sce_sys/about/right.sprx");
+        if (!Current()) return;
         gridKeystone.DataSource = keystone;
 
         var si = new DataTable();
@@ -978,9 +1134,10 @@ public partial class MainForm : DarkForm
         gridSi.DataSource = si;
 
         await PopulatePlayGoAsync(game, details, siSegment);
+        if (!Current()) return;
     }
 
-    private async Task PopulatePlayGoAsync(Ps5GameInfo game, Ps5GameDetails details, SonyPkgSegment? siSegment)
+    private async Task PopulatePlayGoAsync(Ps5GameInfo game, Ps5GameDetails? details, SonyPkgSegment? siSegment)
     {
         var chunks = new DataTable();
         chunks.Columns.Add("Chunk", typeof(int));
@@ -1006,9 +1163,17 @@ public partial class MainForm : DarkForm
         if (siSegment is not null)
             plgx = await Task.Run(() => Ps5SiReader.ReadMember(
                 game.RootPath, siSegment.Offset, siSegment.Size, "playgo-chunk.dat"));
+        if (plgx is null || plgx.Length == 0)
+        {
+            // Dumps, exFAT, UFS2 and FFPFSC expose the chunk blob through the game filesystem rather
+            // than an SI segment.
+            byte[] fromFiles = await ReadGameFileAsync(game, "sce_sys/playgo-chunk.dat");
+            if (fromFiles.Length > 0) plgx = fromFiles;
+        }
+        bool hasPlgx = plgx is { Length: > 0 };
         byte[] hashTable = await ReadGameFileAsync(game, "sce_sys/playgo-hash-table.dat");
         byte[] ficm = await ReadGameFileAsync(game, "sce_sys/playgo-ficm.dat");
-        string[] relativePaths = details.Files.Files.Select(file => file.RelativePath).ToArray();
+        string[] relativePaths = (details?.Files.Files ?? []).Select(file => file.RelativePath).ToArray();
         Ps5PlayGoSummary playGo = await Task.Run(() =>
         {
             IReadOnlyDictionary<ulong, string> pathMap = Ps5PlayGoReader.BuildPathMap(relativePaths);
@@ -1032,14 +1197,22 @@ public partial class MainForm : DarkForm
         if (playGo.Chunks.Count == 0 && playGo.Files.Count == 0)
         {
             lblPlayGoSummary.Text = string.IsNullOrEmpty(playGo.Notice)
-                ? "No PlayGo data found for this package."
-                : "No PlayGo data found for this package.   Note: " + playGo.Notice;
+                ? "No PlayGo metadata was found for this source."
+                : "No PlayGo metadata was found for this source.   Note: " + playGo.Notice;
             return;
         }
 
         StringBuilder summary = new();
-        summary.Append($"PlayGo v{playGo.VersionMajor}.{playGo.VersionMinor}   ");
-        summary.Append($"Header flags: 0x{playGo.HeaderFlags:X8}   ");
+        if (hasPlgx)
+        {
+            // Only report header values when the PLGX blob was actually read.
+            summary.Append($"PlayGo v{playGo.VersionMajor}.{playGo.VersionMinor}   ");
+            summary.Append($"Header flags: 0x{playGo.HeaderFlags:X8}   ");
+        }
+        else
+        {
+            summary.Append("PLGX header: not available (file mapping only)   ");
+        }
         summary.Append($"Chunks: {playGo.Chunks.Count:N0}   Scenarios: {playGo.Scenarios.Count:N0}   ");
         summary.Append($"Default scenario: {playGo.DefaultScenarioId}   Files mapped: {resolved:N0} / {playGo.Files.Count:N0}");
         if (!string.IsNullOrEmpty(playGo.ContentId))
@@ -1051,6 +1224,15 @@ public partial class MainForm : DarkForm
 
     private static string ContentTypeText(uint contentType) =>
         contentType == 0x20 ? "0x00000020  GD (game data)" : $"0x{contentType:X8}";
+
+    /// <summary>ELF e_machine decoded to a readable name; unknown codes stay as hex, not "x86-64".</summary>
+    private static string MachineText(ushort machine) => machine switch
+    {
+        0x3E => "x86-64",
+        0xB7 => "aarch64",
+        0x03 => "x86",
+        _ => $"machine 0x{machine:X4}"
+    };
 
     private static string SegmentName(string name) => name switch
     {
@@ -1109,22 +1291,52 @@ public partial class MainForm : DarkForm
 
     private static async Task AddExtraFileRowAsync(Ps5GameInfo game, DataTable table, string path)
     {
-        byte[] bytes = await ReadGameFileAsync(game, path);
-        if (bytes.Length == 0)
+        if (!SourceExists(game))
         {
-            table.Rows.Add(path, "not present", string.Empty, string.Empty);
+            table.Rows.Add(path, "source not found", string.Empty, string.Empty);
             return;
         }
-        int leading = Math.Min(16, bytes.Length);
-        table.Rows.Add(path, "present", FormatBytes(bytes.Length), Convert.ToHexString(bytes.AsSpan(0, leading)));
+        try
+        {
+            // Read only the leading bytes; the record still reports the file's real length.
+            GameFileChunk chunk = await Task.Run(() => GameFileSystem.ReadFileChunk(game, path, 0, 16));
+            table.Rows.Add(path, "present", FormatBytes(chunk.FileSize), Convert.ToHexString(chunk.Data));
+        }
+        catch (FileNotFoundException)
+        {
+            table.Rows.Add(path, "not present", string.Empty, string.Empty);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
+                                   NotSupportedException or ArgumentException)
+        {
+            table.Rows.Add(path, "read failed: " + ex.Message, string.Empty, string.Empty);
+        }
     }
 
     private void ApplyArtwork(Ps5Artwork artwork)
     {
+        // Each section header states the slot's availability and actual encoding/dimensions, so a
+        // missing or undecodable image is distinguishable from a present one.
+        sectionIcon.SectionHeader = ArtworkSlot("Icon", artwork.Icon);
+        sectionBackground.SectionHeader =
+            $"PIC0: {ArtworkSlotText(artwork.Background)}    " +
+            $"PIC1: {ArtworkSlotText(artwork.Background1)}    " +
+            $"PIC2: {ArtworkSlotText(artwork.Background2)}";
         ReplaceImage(pictureIcon, artwork.Icon);
         ReplaceImage(pictureBackground0, artwork.Background);
         ReplaceImage(pictureBackground1, artwork.Background1);
         ReplaceImage(pictureBackground2, artwork.Background2);
+    }
+
+    private static string ArtworkSlot(string name, Ps5ImageData? image) =>
+        $"{name} - {ArtworkSlotText(image)}";
+
+    /// <summary>Availability plus the source encoding; dimensions are included when known.</summary>
+    private static string ArtworkSlotText(Ps5ImageData? image)
+    {
+        if (image is null || image.IsEmpty) return "not present";
+        string encoding = image.IsRgba ? "DDS (decoded)" : "PNG";
+        return image.Width > 0 && image.Height > 0 ? $"{encoding} {image.Width}×{image.Height}" : encoding;
     }
 
     private void btnArtworkSaveAll_Click(object? sender, EventArgs e)
@@ -1228,7 +1440,7 @@ public partial class MainForm : DarkForm
         image.Save(path, format);
     }
 
-    private void PopulateTrophies(Ps5TrophySet? set)
+    private void PopulateTrophies(Ps5TrophySet? set, string sectionError = "")
     {
         gridTrophies.DataSource = null;
         DisposeTrophyImages();
@@ -1250,10 +1462,14 @@ public partial class MainForm : DarkForm
             }
             string grades = string.Join(", ", set.Trophies.GroupBy(trophy => trophy.Grade)
                 .Select(group => $"{group.Key}: {group.Count()}"));
+            string languages = set.Languages.Count > 0 ? string.Join(", ", set.Languages) : "unknown";
             lblTrophySummary.Text = $"{set.Title} - {set.Trophies.Count} trophies ({grades}) - {set.NpCommunicationId} - " +
-                                    $"Language: {set.SelectedLanguage} - UCP integrity: {(set.IntegrityValid ? "Valid" : "Failed")}";
+                                    $"Set version: {set.TrophySetVersion} - Language: {set.SelectedLanguage} (available: {languages}) - " +
+                                    $"UCP integrity: {(set.IntegrityValid ? "Valid" : "Failed")}";
         }
-        else lblTrophySummary.Text = "No PS5 trophy archive was found.";
+        else lblTrophySummary.Text = sectionError.Length > 0
+            ? "Trophy archive could not be read: " + sectionError
+            : "No PS5 trophy archive was found.";
         _trophyView = table.DefaultView;
         gridTrophies.DataSource = _trophyView;
         ApplyTrophyFilter();
@@ -1389,13 +1605,15 @@ public partial class MainForm : DarkForm
         }
     }
 
-    private void PopulateActivities(Ps5UdsSummary? uds)
+    private void PopulateActivities(Ps5UdsSummary? uds, string sectionError = "")
     {
         _udsSummary = uds;
         searchUds.SearchText = string.Empty;
         if (uds is null)
         {
-            lblActivitiesSummary.Text = "No UDS activity archive was found.";
+            lblActivitiesSummary.Text = sectionError.Length > 0
+                ? "Activity archive could not be read: " + sectionError
+                : "No UDS activity archive was found.";
             gridUdsEvents.DataSource = null;
             gridUdsEventProperties.DataSource = null;
             gridUdsStats.DataSource = null;
@@ -1491,11 +1709,15 @@ public partial class MainForm : DarkForm
         table.Columns.Add("Type");
         table.Columns.Add("Item type");
         table.Columns.Add("Mapped");
+        // Select by group AND name: an event name can repeat across definition groups, and matching on
+        // the name alone can show another group's property list.
         if (_udsSummary is { } uds && gridUdsEvents.SelectedRows.Count > 0 &&
-            gridUdsEvents.SelectedRows[0].DataBoundItem is DataRowView view && view["Event"] is string name)
+            gridUdsEvents.SelectedRows[0].DataBoundItem is DataRowView view &&
+            view["Event"] is string name && view["Group"] is string group)
         {
             Ps5UdsEvent? selected = uds.Events.FirstOrDefault(item =>
-                string.Equals(item.Name, name, StringComparison.Ordinal));
+                string.Equals(item.Name, name, StringComparison.Ordinal) &&
+                string.Equals(item.DefinitionGroup, group, StringComparison.Ordinal));
             if (selected is not null)
                 foreach (Ps5UdsProperty property in selected.Properties)
                     table.Rows.Add(property.Path, property.DataType, property.ItemType, property.MappedProperty);
@@ -1601,8 +1823,8 @@ public partial class MainForm : DarkForm
         {
             Ps5SourceKind.SonyPackage =>
                 game.Package?.NestedPfs?.AccessState == SonyPfsAccessState.PlaintextIndexed
-                    ? $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} content - read directly from nested PFS"
-                    : $"{inventory.FileCount:N0} readable CNT entries - {FormatBytes(inventory.TotalSize)} package",
+                    ? $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} content - inner PFS files with readable CNT metadata merged"
+                    : $"{inventory.FileCount:N0} readable CNT metadata entries - {FormatBytes(inventory.TotalSize)} package (game filesystem not decoded)",
             Ps5SourceKind.Ffpfsc =>
                 $"{inventory.FileCount:N0} files - {FormatBytes(inventory.TotalSize)} logical " +
                 $"{(Path.GetExtension(game.ContainerInnerFileName).Equals(".ffpkg", StringComparison.OrdinalIgnoreCase) ? "FFPKG" : "exFAT")} content - read directly from FFPFSC",
@@ -1615,8 +1837,26 @@ public partial class MainForm : DarkForm
         RefreshFileList();
     }
 
+    /// <summary>
+    /// Attaches the file-list headers once, in the order the rows emit their sub-items
+    /// (Name, Type, Path, Size, Origin). The designer configured column headers but never added them.
+    /// </summary>
+    private void EnsureFileColumns()
+    {
+        if (listFiles.Columns.Count > 0) return;
+        listFiles.Columns.AddRange(new[]
+        {
+            new ColumnHeader { Text = "Name", Width = 280 },
+            new ColumnHeader { Text = "Type", Width = 100 },
+            new ColumnHeader { Text = "Path", Width = 380 },
+            new ColumnHeader { Text = "Size", Width = 90, TextAlign = HorizontalAlignment.Right },
+            new ColumnHeader { Text = "Origin", Width = 80 },
+        });
+    }
+
     private void RefreshFileList()
     {
+        EnsureFileColumns();
         string directory = treeFiles.SelectedNode?.Tag as string ?? string.Empty;
         string filter = searchFileFilter.SearchText.Trim();
         var rows = new List<FileListRow>();
@@ -1665,7 +1905,7 @@ public partial class MainForm : DarkForm
         listFiles.BeginUpdate();
         listFiles.Items.Clear();
         foreach (FileListRow row in rows)
-            AddFileListItem(row.Name, row.Type, row.Path, row.SizeText, row.Entry, row.Icon);
+            AddFileListItem(row.Name, row.Type, row.Path, row.SizeText, row.Origin, row.Entry, row.Icon);
         listFiles.EndUpdate();
         listFiles.RefreshLayout();
     }
@@ -1676,7 +1916,8 @@ public partial class MainForm : DarkForm
         string type = string.IsNullOrWhiteSpace(file.Extension) ? "File" : file.Extension.TrimStart('.').ToUpperInvariant() + " File";
         if (file.IsEncrypted) type += " (Encrypted)";
         return new FileListRow(name, type, file.RelativePath, FormatBytes(file.Size), file.Size,
-            new FileBrowserEntry(file.RelativePath, false, file.Size), FileIconProvider.ForEntry(name, false), false);
+            new FileBrowserEntry(file.RelativePath, false, file.Size), FileIconProvider.ForEntry(name, false), false,
+            file.Origin);
     }
 
     private int CompareFileRows(FileListRow left, FileListRow right)
@@ -1852,12 +2093,14 @@ public partial class MainForm : DarkForm
             listFiles.DoDragDrop(new DataObject(DataFormats.FileDrop, paths.ToArray()), DragDropEffects.Copy);
     }
 
-    private void AddFileListItem(string name, string type, string path, string size, FileBrowserEntry entry, int iconIndex)
+    private void AddFileListItem(string name, string type, string path, string size, string origin,
+        FileBrowserEntry entry, int iconIndex)
     {
         var item = new ListViewItem(name) { Tag = entry, ImageIndex = iconIndex };
         item.SubItems.Add(type);
         item.SubItems.Add(path);
         item.SubItems.Add(size);
+        item.SubItems.Add(origin);
         listFiles.Items.Add(item);
     }
 
@@ -2482,13 +2725,15 @@ public partial class MainForm : DarkForm
         return true;
     }
 
-    private void PopulateExecutable(Ps5SelfInfo? executable)
+    private void PopulateExecutable(Ps5SelfInfo? executable, string sectionError = "")
     {
         _selfInfo = executable;
         searchExecutable.SearchText = string.Empty;
         if (executable is null)
         {
-            lblExecutableSummary.Text = "eboot.bin was not found.";
+            lblExecutableSummary.Text = sectionError.Length > 0
+                ? "Executable could not be read: " + sectionError
+                : "eboot.bin was not found.";
             gridModules.DataSource = null;
             gridElfPrograms.DataSource = null;
             gridElfSections.DataSource = null;
@@ -2498,12 +2743,18 @@ public partial class MainForm : DarkForm
         }
 
         var summary = new StringBuilder();
-        summary.Append($"SELF {executable.SelfMagic} - {FormatBytes(executable.FileSize)} - embedded ELF at 0x{executable.ElfOffset:X} - ");
-        summary.Append($"x86-64 machine 0x{executable.Machine:X4} - entry 0x{executable.EntryPoint:X} - ");
+        // Render from the parsed format, not a fixed assumption: eboot.bin can be a plain ELF too.
+        string container = executable.IsSelf ? $"SELF {executable.SelfMagic}" : "plain ELF (no SELF container)";
+        summary.Append($"{container} - {FormatBytes(executable.FileSize)} - embedded ELF at 0x{executable.ElfOffset:X} - ");
+        summary.Append($"{MachineText(executable.Machine)} - entry 0x{executable.EntryPoint:X} - ");
         summary.Append($"{executable.ProgramHeaderCount} program headers - {executable.SectionHeaderCount} sections - {executable.Modules.Count} modules");
         if (executable.SelfHeaderSize > 0)
             summary.Append($"  |  SELF v{executable.SelfVersion}, type 0x{executable.SelfProgramType:X8}, header 0x{executable.SelfHeaderSize:X}, " +
                            $"meta 0x{executable.SelfMetadataSize:X}, segments {executable.SelfSegmentCount}, flags 0x{executable.SelfFlags:X}");
+        else if (!executable.IsSelf)
+            summary.Append("  |  SELF container: not applicable");
+        if (sectionError.Length > 0)
+            summary.Append("  |  " + sectionError);
         lblExecutableSummary.Text = summary.ToString();
 
         RebuildExecutableTables();
@@ -2546,7 +2797,7 @@ public partial class MainForm : DarkForm
 
         var sections = new DataTable();
         sections.Columns.Add("Idx", typeof(int));
-        sections.Columns.Add("Name");
+        sections.Columns.Add("Name offset"); // sh_name is a string-table offset, not a decoded name
         sections.Columns.Add("Type");
         sections.Columns.Add("Flags");
         sections.Columns.Add("Address");
@@ -2564,17 +2815,24 @@ public partial class MainForm : DarkForm
         {
             if (!string.IsNullOrEmpty(value)) header.Rows.Add(property, value);
         }
-        Add("SELF magic", executable.SelfMagic);
-        Add("SELF version", executable.SelfVersion.ToString());
-        Add("Program type", $"0x{executable.SelfProgramType:X8}");
-        Add("Header size", $"0x{executable.SelfHeaderSize:X}");
-        Add("Metadata size", $"0x{executable.SelfMetadataSize:X}");
-        Add("Declared file size", executable.SelfDeclaredFileSize > 0 ? FormatBytes((long)executable.SelfDeclaredFileSize) : string.Empty);
-        Add("Segment count", executable.SelfSegmentCount.ToString());
-        Add("Flags", $"0x{executable.SelfFlags:X}");
+        Add("Container", executable.IsSelf ? "SELF " + executable.SelfMagic : "Plain ELF (no SELF container)");
+        if (executable.IsSelf)
+        {
+            Add("SELF version", executable.SelfVersion.ToString());
+            Add("Program type", $"0x{executable.SelfProgramType:X8}");
+            Add("Header size", $"0x{executable.SelfHeaderSize:X}");
+            Add("Metadata size", $"0x{executable.SelfMetadataSize:X}");
+            Add("Declared file size", executable.SelfDeclaredFileSize > 0 ? FormatBytes((long)executable.SelfDeclaredFileSize) : string.Empty);
+            Add("Segment count", executable.SelfSegmentCount.ToString());
+            Add("Flags", $"0x{executable.SelfFlags:X}");
+        }
+        else
+        {
+            Add("SELF container", "Not applicable");
+        }
         Add("ELF offset", $"0x{executable.ElfOffset:X}");
         Add("ELF class", executable.ElfClass == 2 ? "ELF64" : executable.ElfClass.ToString());
-        Add("Machine", $"0x{executable.Machine:X4}");
+        Add("Machine", MachineText(executable.Machine));
         Add("Entry point", $"0x{executable.EntryPoint:X}");
         Add("Program headers", executable.ProgramHeaderCount.ToString());
         Add("Sections", executable.SectionHeaderCount.ToString());
@@ -2837,6 +3095,7 @@ public partial class MainForm : DarkForm
         SaveWindowBounds();
         _scanCancellation?.Cancel();
         _detailCancellation?.Cancel();
+        _dumpSizeCancellation?.Cancel();
         _fileCancellation?.Cancel();
         _filePreviewCancellation?.Cancel();
         StopMediaViewer(clearSource: true);
@@ -2847,6 +3106,7 @@ public partial class MainForm : DarkForm
         DisposeTrophyImages();
         _scanCancellation?.Dispose();
         _detailCancellation?.Dispose();
+        _dumpSizeCancellation?.Dispose();
         _fileCancellation?.Dispose();
         _filePreviewCancellation?.Dispose();
         contextFiles.Dispose();
@@ -2864,5 +3124,5 @@ public partial class MainForm : DarkForm
 
     private sealed record FileBrowserEntry(string RelativePath, bool IsDirectory, long Size = 0);
     private sealed record FileListRow(string Name, string Type, string Path, string SizeText, long Size,
-        FileBrowserEntry Entry, int Icon, bool IsDirectory);
+        FileBrowserEntry Entry, int Icon, bool IsDirectory, string Origin = "");
 }

@@ -1,0 +1,21 @@
+LibProsperoPkg 1.2.0 (vendored alongside its dependencies)
+Copyright (c) SvenGDK 2026
+Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
+See LICENSE and NOTICE in this folder.
+
+This is the LibProsperoPkg version the working PPR-PKG builder (LibProsperoPkg.Gui 0.6.4,
+shipped as fpkg-gui-0.6.5) uses. The newer 2.6.0 regressed the NAPS u2c layout (single-byte
+base) and cannot build real titles, so PS5PKGTool loads this 1.2.0 build instead.
+
+Loaded in an isolated AssemblyLoadContext (PS5PKGTool.Core/Backends/LibProsperoPkg12*.cs) so its
+dependencies do not clash with the engine assemblies in the default context.
+
+Files:
+  LibProsperoPkg.dll                     1.2.0 (net9.0)
+  BCnEncoder.dll                         BCnEncoder.Net 2.3.0
+  CommunityToolkit.HighPerformance.dll   8.4.0
+  Magick.NET-Q8-AnyCPU.dll / Magick.NET.Core.dll   Magick.NET 14.15.0
+  libScePubTools.dll                     (publisher-tools backend, loaded on demand)
+  runtimes/win-x64/native/Magick.Native-Q8-x64.dll
+
+SHA-256 (LibProsperoPkg.dll): D04D8660FDB0047386C94F727EEC32413334353329CC9C18CE8FC7DD92D3C271

@@ -78,7 +78,7 @@ internal sealed class SonyEnginePackageAccess : IDisposable
         try
         {
             string? passcode = _passcode.Length == 0 ? null : _passcode;
-            if (fih.PfsSize > int.MaxValue)
+            if (ProsperoPackageContent.RequiresFileBacked(PackagePath, passcode))
             {
                 _usedFileBacked = true;
                 _fileBacked = ProsperoPackageContent.ReadFileBacked(PackagePath, passcode);
@@ -215,6 +215,8 @@ internal sealed class SonyEnginePackageAccess : IDisposable
     private Stream OpenMount()
     {
         EnsureDecoded();
+        if (_decodeError is not null)
+            throw new InvalidDataException($"Package contents could not be decoded: {_decodeError}");
         Stream inner;
         if (_fileBacked is not null)
         {

@@ -1,4 +1,5 @@
 using DarkUI.Forms;
+using PS5PKGTool.Core.Backends;
 using PS5PKGTool.Core.Builders;
 using PS5PKGTool.Core.Models;
 using PS5PKGTool.Core.Parsers;
@@ -35,6 +36,8 @@ public partial class MainForm
     private readonly List<ImageToolTarget> _imageTargets = [];
     private bool _suppressImageEvents;
 
+    private string? _imageContentIdSource;
+
     private ImageToolTarget? CurrentImageTarget =>
         cboImageAction.SelectedItem as string == ImageActionConvert ? TabTarget(tabsImageTargets.SelectedTab) : null;
 
@@ -70,6 +73,7 @@ public partial class MainForm
     private void SetImageSource(string? path)
     {
         _imageSourcePath = path;
+        _imageContentIdSource = null;
         if (path is null)
         {
             _imageSourceFormat = Ps5ImageFormat.Unknown;
@@ -291,6 +295,8 @@ public partial class MainForm
         txtImageTitleId.Visible = showDebug;
         lblImageVersion.Visible = showDebug;
         txtImageVersion.Visible = showDebug;
+        lblImageTitle.Visible = showDebug;
+        txtImageTitle.Visible = showDebug;
 
         lblImageOutput.Visible = extract;
         txtImageOutput.Visible = extract;
@@ -310,6 +316,66 @@ public partial class MainForm
             }
         }
         else if (extract) SuggestImageOutput("-files");
+
+        // Only the Advanced toggle is always shown; every build setting is hidden until it is ticked.
+        void Show(Control? control, bool visible) { if (control is not null) control.Visible = visible; }
+        Show(chkImageAdvancedOptions, showDebug);
+
+        // Progressive disclosure: all build settings stay hidden until "Advanced options" is ticked.
+        bool advanced = showDebug && ShowAdvancedOptions();
+        Show(lblImageBackend, advanced);
+        Show(cboImageBackend, advanced);
+        Show(lblImageDrm, advanced);
+        Show(cboImageDrm, advanced);
+        Show(lblImagePkgType, advanced);
+        Show(cboImagePkgType, advanced);
+        Show(chkImageFakeSign, advanced);
+        Show(lblImageSdk, advanced);
+        Show(cboImageSdk, advanced);
+        Show(lblImageCompression, advanced);
+        Show(cboImageCompression, advanced);
+        Show(lblImagePlayGo, advanced);
+        Show(nudImagePlayGoChunks, advanced);
+        Show(lblImageKrakenLevel, advanced);
+        Show(cboImageKrakenLevel, advanced);
+        Show(lblImageKrakenThreads, advanced);
+        Show(nudImageKrakenThreads, advanced);
+        Show(lblImageTemp, advanced);
+        Show(txtImageTemp, advanced);
+        Show(btnImageTempBrowse, advanced);
+        Show(chkImageDeterministic, advanced);
+        Show(chkImageRightSprx, advanced);
+
+        // Controls a backend does not implement are disabled rather than left editable-but-ignored, so
+        // the UI never implies an option was honoured when the library never receives it.
+        IPackageBackend backend = SelectedBackend();
+        bool lpp = showDebug && backend.Id == BackendRegistry.LppId;
+        cboImageCompression.Enabled = true;
+        cboImageKrakenLevel.Enabled = true;
+        nudImageKrakenThreads.Enabled = true;
+        nudImagePlayGoChunks.Enabled = true;
+        chkImageDeterministic.Enabled = true;
+        // LibProsperoPkg 1.2.0 receives neither a fake-sign nor an inject-right.sprx option.
+        chkImageFakeSign.Enabled = !lpp;
+        chkImageRightSprx.Enabled = !lpp;
+        if (showDebug)
+        {
+            string compression = cboImageCompression.SelectedIndex switch { 1 => "Kraken", 2 => "stored", _ => "auto" };
+            string drm = "DRM " + (cboImageDrm.SelectedItem?.ToString() ?? "Upgradable");
+            string sdk = cboImageSdk.SelectedIndex <= 0 ? "SDK auto" : "SDK " + cboImageSdk.SelectedItem;
+            string summary = $"{backend.DisplayName} · {compression} · {drm} · {sdk}";
+            bool imageSource = !_imageSourceIsPackage && !Directory.Exists(_imageSourcePath ?? string.Empty);
+            if (imageSource)
+            {
+                summary += lpp
+                    ? " · image source: extracted to a workspace, then built"
+                    : " · image source: built directly (no extract)";
+            }
+            if (lpp)
+                summary += " · LibProsperoPkg applies SDK, DRM, compression, Kraken, PlayGo and workspace; it does " +
+                    "not receive fake-sign or right.sprx, and Auto and Kraken (force) give the same result.";
+            lblImageStatus.Text = summary;
+        }
 
         btnImageRun.Enabled = action is not null && !(showDebug && ImagePackageTypeUnsupported());
         btnImageCancel.Enabled = _taskQueue.Tasks.Any(task =>
@@ -786,9 +852,145 @@ public partial class MainForm
         foreach (var (_, name) in KrakenLevelNames) cboImageKrakenLevel.Items.Add(name);
         cboImageKrakenLevel.SelectedIndex = IndexOfKrakenLevel(7);
 
+        // The Builder combo itself lives in the designer; only its runtime items are populated here.
+        foreach (IPackageBackend backend in BackendRegistry.All)
+            cboImageBackend.Items.Add(backend.DisplayName);
+        cboImageBackend.SelectedIndex = IndexOfBackend(_settings.BuildBackend);
+
+        cboImageDrm.Items.Clear();
+        cboImageDrm.Items.AddRange(DrmTypeNames);
+        cboImageDrm.SelectedIndex = 0; // Upgradable
+
+        // Conversion-target defaults (these combos previously opened unselected). Values match the
+        // option-class defaults so the shown default is what actually gets built.
+        cboImageCluster.SelectedIndex = 0;     // exFAT: Auto cluster size
+        chkImageAmpr.Checked = true;           // exFAT: generate the AMPR index (ExfatBuildOptions default)
+        cboImageBlock.SelectedIndex = 0;       // FFPKG: 32 KB block
+        cboImageFragment.SelectedIndex = 0;    // FFPKG: 4 KB fragment
+        cboImageDensity.SelectedIndex = 0;     // FFPKG: 256 KiB per inode
+        nudImageMinFree.Value = 0;             // FFPKG: 0% reserved fragments
+
         txtImageTemp.Text = Path.GetTempPath()
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
+
+    /// <summary>Combo index of the backend id, falling back to the registry default.</summary>
+    private static int IndexOfBackend(string? id)
+    {
+        IReadOnlyList<IPackageBackend> all = BackendRegistry.All;
+        for (int i = 0; i < all.Count; i++)
+            if (string.Equals(all[i].Id, id, StringComparison.OrdinalIgnoreCase)) return i;
+        for (int i = 0; i < all.Count; i++)
+            if (string.Equals(all[i].Id, BackendRegistry.DefaultId, StringComparison.OrdinalIgnoreCase)) return i;
+        return 0;
+    }
+
+    /// <summary>The backend chosen in the Builder selector (defaults to LibProsperoPkg).</summary>
+    private IPackageBackend SelectedBackend()
+    {
+        IReadOnlyList<IPackageBackend> all = BackendRegistry.All;
+        int index = cboImageBackend.SelectedIndex;
+        return index >= 0 && index < all.Count ? all[index] : BackendRegistry.Default;
+    }
+
+    private void cboImageBackend_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        IPackageBackend backend = SelectedBackend();
+        // Remember the settings edited for the previous backend and restore this backend's own, so
+        // switching builders keeps each backend's customised values instead of discarding them.
+        if (_imageOptionsBackend is { } previous &&
+            !string.Equals(previous, backend.Id, StringComparison.OrdinalIgnoreCase))
+            _imageOptionsByBackend[previous] = CaptureImageOptions();
+
+        _settings.BuildBackend = backend.Id;
+        if (_imageOptionsByBackend.TryGetValue(backend.Id, out ImageOptionState saved))
+            ApplyImageOptions(saved);
+        else if (backend.Id == BackendRegistry.LppId)
+            ApplyLppDefaults();
+        else
+            ApplyPptDefaults();
+        _imageOptionsBackend = backend.Id;
+        UpdateImageOptionVisibility();
+    }
+
+    /// <summary>The build-option controls' values, kept per backend so switching does not reset them.</summary>
+    private readonly record struct ImageOptionState(int Compression, int KrakenLevel, decimal KrakenThreads,
+        decimal PlayGo, int Sdk, int Drm, bool Deterministic, bool FakeSign, bool RightSprx);
+
+    private readonly Dictionary<string, ImageOptionState> _imageOptionsByBackend = new(StringComparer.OrdinalIgnoreCase);
+    private string? _imageOptionsBackend;
+
+    private ImageOptionState CaptureImageOptions() => new(
+        cboImageCompression.SelectedIndex, cboImageKrakenLevel.SelectedIndex, nudImageKrakenThreads.Value,
+        nudImagePlayGoChunks.Value, cboImageSdk.SelectedIndex, cboImageDrm.SelectedIndex,
+        chkImageDeterministic.Checked, chkImageFakeSign.Checked, chkImageRightSprx.Checked);
+
+    private void ApplyImageOptions(ImageOptionState state)
+    {
+        SetSelectedIndex(cboImageCompression, state.Compression);
+        SetSelectedIndex(cboImageKrakenLevel, state.KrakenLevel);
+        nudImageKrakenThreads.Value = Math.Clamp(state.KrakenThreads,
+            nudImageKrakenThreads.Minimum, nudImageKrakenThreads.Maximum);
+        nudImagePlayGoChunks.Value = Math.Clamp(state.PlayGo,
+            nudImagePlayGoChunks.Minimum, nudImagePlayGoChunks.Maximum);
+        SetSelectedIndex(cboImageSdk, state.Sdk);
+        SetSelectedIndex(cboImageDrm, state.Drm);
+        chkImageDeterministic.Checked = state.Deterministic;
+        chkImageFakeSign.Checked = state.FakeSign;
+        chkImageRightSprx.Checked = state.RightSprx;
+    }
+
+    private static void SetSelectedIndex(ComboBox combo, int index) =>
+        combo.SelectedIndex = index >= 0 && index < combo.Items.Count ? index : 0;
+
+    /// <summary>Sets the build knobs to the defaults the ProsperoPkgTool engine uses.</summary>
+    private void ApplyPptDefaults()
+    {
+        cboImageCompression.SelectedIndex = 0;                      // Auto (Kraken where it helps)
+        cboImageKrakenLevel.SelectedIndex = IndexOfKrakenLevel(7);  // 7 - Optimal3
+        nudImageKrakenThreads.Value = Math.Clamp(0, nudImageKrakenThreads.Minimum, nudImageKrakenThreads.Maximum);
+        nudImagePlayGoChunks.Value = Math.Clamp(1, nudImagePlayGoChunks.Minimum, nudImagePlayGoChunks.Maximum);
+        if (cboImageSdk.Items.Count > 0)
+            cboImageSdk.SelectedIndex = 0;                          // Auto (from source)
+        chkImageRightSprx.Checked = true;
+        chkImageDeterministic.Checked = false;
+    }
+
+    /// <summary>
+    /// Mirrors the fpkg-gui (LibProsperoPkg.Gui 0.6.4) build defaults: Kraken backend Automatic
+    /// (Auto compression), Kraken level 7 (Optimal3), threads 0 (auto), PlayGo chunks 64,
+    /// Deterministic build on, plus the embedded debug right.sprx. SDK stays Auto (from source).
+    /// </summary>
+    private void ApplyLppDefaults()
+    {
+        cboImageCompression.SelectedIndex = 0;                      // Automatic (Kraken where it helps)
+        cboImageKrakenLevel.SelectedIndex = IndexOfKrakenLevel(7);  // 7 - Optimal3
+        nudImageKrakenThreads.Value = Math.Clamp(0, nudImageKrakenThreads.Minimum, nudImageKrakenThreads.Maximum);
+        nudImagePlayGoChunks.Value = Math.Clamp(64, nudImagePlayGoChunks.Minimum, nudImagePlayGoChunks.Maximum);
+        if (cboImageSdk.Items.Count > 0)
+            cboImageSdk.SelectedIndex = 0;                          // Auto (from source)
+        chkImageRightSprx.Checked = true;
+        chkImageDeterministic.Checked = true;
+    }
+
+    private void chkImageAdvancedOptions_CheckedChanged(object? sender, EventArgs e) => UpdateImageOptionVisibility();
+
+    /// <summary>True when the advanced option knobs should be visible on the build panel.</summary>
+    private bool ShowAdvancedOptions() => chkImageAdvancedOptions.Checked;
+
+    /// <summary>DRM type choices; the index maps to the engine's <c>--drm-type</c> token.</summary>
+    private static readonly string[] DrmTypeNames = ["Upgradable", "Free", "Standard", "Keep source"];
+
+    /// <summary>Selected DRM override token (null keeps the source param.json value). Default: upgradable.</summary>
+    private string? SelectedDrmToken() => cboImageDrm.SelectedIndex switch
+    {
+        0 => "upgradable",
+        1 => "free",
+        2 => "standard",
+        _ => null,
+    };
+
+    private void cboImageDrm_SelectedIndexChanged(object? sender, EventArgs e) => UpdateImageOptionVisibility();
 
     private static int IndexOfKrakenLevel(int value)
     {
@@ -851,7 +1053,10 @@ public partial class MainForm
         }
         var settings = new ImageBuildSettings(SelectedCompression(), SelectedKrakenLevel(),
             (int)nudImageKrakenThreads.Value, (int)nudImagePlayGoChunks.Value,
-            chkImageDrmStandard.Checked ? "standard" : null);
+            SelectedDrmToken(),
+            chkImageDeterministic.Checked,
+            chkImageFakeSign.Checked,
+            chkImageRightSprx.Checked);
 
         // Best-effort free-space preflight before a long build; the engine re-checks exactly and
         // throws ProsperoInsufficientSpaceException, which the task failure path surfaces as a dialog.
@@ -865,19 +1070,27 @@ public partial class MainForm
         if (space.Status == Ps5DiskSpaceStatus.NearLimit)
             AppDialog.ShowWarning("Low free disk space for this build.\n\n" + space.Message, "Build package");
 
+        // Capture the backend now, not when the queued delegate runs: the worker must not read the
+        // Builder combo (a UI control), and changing it after queueing must not change this job.
+        IPackageBackend backend = SelectedBackend();
         lblImageStatus.Text = "Queued: package build. See the Tasks tab.";
         EnqueueTask(PackageTaskTypes.ImageBuildPackage, $"Build package from {Path.GetFileName(source)}",
             (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-                sdkVersionOverride, tempDirectory, settings, progress, token),
+                sdkVersionOverride, tempDirectory, settings, backend, progress, token),
             sourcePath: source, outputPath: output,
             operation: "Build package", sourceFormat: ImageFormatLabel(source), targetFormat: "FPKG",
-            stagePlan: PackageTaskPlans.BuildPackageFor(source),
+            stagePlan: PackageTaskPlans.BuildPackageFor(source,
+                backend.Id == BackendRegistry.LppId && !Directory.Exists(source)),
             payload: Payload(("source", source), ("output", output), ("contentId", contentId),
+                ("backend", backend.Id),
                 ("passcode", passcode), ("overwrite", overwrite.ToString()),
                 ("sdk", sdkVersionOverride?.ToString("X16")), ("temp", tempDirectory),
                 ("compression", settings.Compression.ToString()), ("krakenLevel", settings.KrakenLevel.ToString()),
                 ("krakenThreads", settings.KrakenThreads.ToString()), ("playgo", settings.PlayGoChunks.ToString()),
-                ("drm", settings.DrmType)),
+                ("drm", settings.DrmType),
+                ("deterministic", settings.Deterministic.ToString()),
+                ("fakeSign", settings.FakeSignModules.ToString()),
+                ("rightSprx", settings.InjectRightSprx.ToString())),
             onFinished: task => lblImageStatus.Text = task.Status == PackageTaskStatus.Completed
                 ? $"Built package {Path.GetFileName(output)}."
                 : $"Package build {StatusText(task.Status).ToLowerInvariant()}.");
@@ -903,17 +1116,29 @@ public partial class MainForm
     }
 
     private readonly record struct ImageBuildSettings(Ps5InnerCompression Compression, int KrakenLevel,
-        int KrakenThreads, int PlayGoChunks, string? DrmType);
+        int KrakenThreads, int PlayGoChunks, string? DrmType, bool Deterministic, bool FakeSignModules,
+        bool InjectRightSprx);
+
+    /// <summary>A fixed 16-byte seed derived from the content id + passcode for reproducible builds.</summary>
+    private static byte[] DeterministicSeed(string contentId, string passcode) =>
+        System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(contentId + "\0" + passcode))[..16];
 
     private static async Task BuildPackageFromSourceAsync(string source, string output, string contentId,
         string passcode, bool overwrite, ulong? sdkVersionOverride, string? tempDirectory,
-        ImageBuildSettings settings, IProgress<PackageTaskProgress> progress, CancellationToken token)
+        ImageBuildSettings settings, IPackageBackend backend, IProgress<PackageTaskProgress> progress,
+        CancellationToken token)
     {
         if (!overwrite && File.Exists(output))
             throw new IOException($"The output file already exists: {output}");
-        // Build to a sibling partial file and move it into place on success, so a failed build
-        // cannot leave a half-written .pkg that looks valid.
-        string partial = output + ".partial-" + Guid.NewGuid().ToString("N");
+        // Build inside a private per-job directory, then move the finished package into place, so a
+        // failed build cannot leave a half-written .pkg and neither builder's generated output name
+        // can collide with the user's files.
+        string outputDirectory = Path.GetDirectoryName(Path.GetFullPath(output)) ?? Directory.GetCurrentDirectory();
+        Directory.CreateDirectory(outputDirectory);
+        string jobDirectory = Path.Combine(outputDirectory, ".ps5pkgtool-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(jobDirectory);
+        string partial = Path.Combine(jobDirectory, Path.GetFileName(output) + ".partial");
         var options = new SonyDebugPackageBuildOptions
         {
             ContentId = contentId,
@@ -925,49 +1150,153 @@ public partial class MainForm
             KrakenLevel = settings.KrakenLevel,
             KrakenThreads = settings.KrakenThreads,
             PlayGoChunkCount = settings.PlayGoChunks,
-            DrmTypeOverride = settings.DrmType
+            DrmTypeOverride = settings.DrmType,
+            Seed = settings.Deterministic ? DeterministicSeed(contentId, passcode) : null,
+            FakeSignModules = settings.FakeSignModules,
+            InjectRightSprx = settings.InjectRightSprx
         };
         var bridge = new Progress<SonyDebugPackageProgress>(value =>
             progress.Report(new PackageTaskProgress(value.Stage, 0, 0, value.CompletedBytes, value.TotalBytes,
                 0, 0, value.CurrentPath)));
+        bool isDirectory = Directory.Exists(source);
+        // LibProsperoPkg builds only from a folder, so an image source is extracted to a staging tree
+        // first when that backend is selected. ProsperoPkgTool reads the image directly (no extract).
+        bool stageFromImage = !isDirectory && backend.Id == BackendRegistry.LppId;
+        IPackageBackend effective = isDirectory || stageFromImage ? backend : BackendRegistry.Get(BackendRegistry.PptId);
+        if (effective.Id == BackendRegistry.LppId && !settings.InjectRightSprx)
+        {
+            Logger.Info("LibProsperoPkg 1.2.0 has no inject-right.sprx toggle; the source right.sprx is kept as-is.");
+        }
+
+        string? staging = null;
         try
         {
-            if (Directory.Exists(source))
-                await SonyDebugPackageBuilder.CreateFromDirectoryAsync(source, partial, options, bridge, token)
+            string buildSource = source;
+            if (stageFromImage)
+            {
+                long rawBytes = VolumeDebugPackageBuilder.EstimatePayloadBytes(source);
+                Ps5DiskSpaceCheck space = Ps5DiskSpace.CheckStagedImage(rawBytes, rawBytes, output, tempDirectory);
+                if (space.Status == Ps5DiskSpaceStatus.Insufficient)
+                    throw new IOException(
+                        "Not enough free disk space to extract and build this image package.\n\n" + space.Message);
+                if (space.Status == Ps5DiskSpaceStatus.NearLimit)
+                    Logger.Info("Low free disk space for this image build. " + space.Message);
+
+                staging = Path.Combine(
+                    string.IsNullOrWhiteSpace(tempDirectory) ? Path.GetTempPath() : tempDirectory,
+                    "PS5PKGTool-image-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(staging);
+                Logger.Info("LibProsperoPkg: extracting " + Path.GetFileName(source) +
+                    " to a staging workspace before the build...");
+                progress.Report(new PackageTaskProgress("Extract image", 0, 0, 0, rawBytes, 0, 0, Path.GetFileName(source)));
+                await ExtractImageToAsync(source, Ps5ImageFormatProbe.Detect(source), staging, progress, token)
                     .ConfigureAwait(false);
-            else
-                await VolumeDebugPackageBuilder.CreateFromImageAsync(source, partial, options, bridge, token)
-                    .ConfigureAwait(false);
-            File.Move(partial, output, overwrite: true);
+                buildSource = staging;
+            }
+
+            async Task BuildAsync()
+            {
+                if (isDirectory || staging is not null)
+                    await effective.BuildFromDirectoryAsync(buildSource, partial, options, bridge, token)
+                        .ConfigureAwait(false);
+                else
+                    await effective.BuildFromImageAsync(source, partial, options, bridge, token)
+                        .ConfigureAwait(false);
+            }
+
+            try
+            {
+                await BuildAsync().ConfigureAwait(false);
+            }
+            catch (BackendNotSupportedException ex) when (effective.Id == BackendRegistry.LppId)
+            {
+                // LibProsperoPkg can still fail to lay out an input; fall back to ProsperoPkgTool
+                // automatically instead of making the user switch builders by hand.
+                Logger.Info($"Builder {effective.DisplayName} could not lay out this title ({ex.Message}) " +
+                    "— retrying with ProsperoPkgTool.");
+                effective = BackendRegistry.Get(BackendRegistry.PptId);
+                TryDeleteFile(partial);
+                await BuildAsync().ConfigureAwait(false);
+            }
+            // Verify the finished package with the one canonical reader before publishing, so a
+            // package the application cannot read back is never presented as a successful build.
+            VerifyBuiltPackage(partial, passcode, effective);
+            // Honor the requested overwrite policy at publication time too: a file that appeared
+            // while the build ran must not be replaced unless the user asked to overwrite.
+            token.ThrowIfCancellationRequested();
+            File.Move(partial, output, overwrite);
         }
         catch
         {
             TryDeleteFile(partial);
             throw;
         }
+        finally
+        {
+            TryDeleteDirectory(jobDirectory);
+            if (staging is not null)
+            {
+                try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Opens the freshly built package with the canonical engine reader using the job passcode and
+    /// requires a non-empty inner filesystem containing <c>eboot.bin</c>. This is the same reader
+    /// used to browse packages, so it enforces one acceptance criterion for both builders.
+    /// </summary>
+    private static void VerifyBuiltPackage(string packagePath, string passcode, IPackageBackend backend)
+    {
+        try
+        {
+            PackageReaderVerificationResult result = PackageReaderVerification.Inspect(packagePath, passcode);
+            Logger.Info($"Verified with the canonical reader (built by {backend.DisplayName}): " +
+                $"{result.FileCount:N0} file(s), eboot.bin {(result.HasEboot ? "present" : "missing")}.");
+            if (result.FileCount == 0)
+                throw new InvalidDataException("the reconstructed filesystem is empty");
+            if (!result.HasEboot)
+                throw new InvalidDataException("the expected /uroot/eboot.bin is missing");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new InvalidDataException(
+                "The built package failed canonical-reader verification: " + ex.Message, ex);
+        }
     }
 
     private void SuggestImageContentId()
     {
-        if (!string.IsNullOrWhiteSpace(txtImageContentId.Text) || _imageSourcePath is null) return;
+        if (_imageSourcePath is null) return;
+        // Fill once per source so a manual edit is not clobbered when the target tab changes.
+        if (string.Equals(_imageContentIdSource, _imageSourcePath, StringComparison.Ordinal)) return;
         ImageParamFields fields = TryReadParamFields(_imageSourcePath, _imageSourceFormat);
-        if (fields.ContentId.Length > 0) txtImageContentId.Text = fields.ContentId;
+        if (fields.ContentId.Length > 0)
+        {
+            txtImageContentId.Text = fields.ContentId;
+            _imageContentIdSource = _imageSourcePath;
+        }
     }
 
     private void RefreshImageBuildInfo()
     {
         if (_imageSourcePath is null)
         {
+            txtImageTitle.Clear();
             txtImageTitleId.Clear();
             txtImageVersion.Clear();
             return;
         }
         ImageParamFields fields = TryReadParamFields(_imageSourcePath, _imageSourceFormat);
+        txtImageTitle.Text = fields.TitleName;
         txtImageTitleId.Text = fields.TitleId;
         txtImageVersion.Text = fields.ContentVersion;
     }
 
-    private readonly record struct ImageParamFields(string ContentId, string TitleId, string ContentVersion);
+    private readonly record struct ImageParamFields(string ContentId, string TitleId, string ContentVersion,
+        string TitleName);
 
     private static ImageParamFields TryReadParamFields(string source, Ps5ImageFormat format)
     {
@@ -979,7 +1308,7 @@ public partial class MainForm
             System.Text.Json.JsonElement root = document.RootElement;
             if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return default;
             return new ImageParamFields(ReadString(root, "contentId"), ReadString(root, "titleId"),
-                ReadString(root, "contentVersion"));
+                ReadString(root, "contentVersion"), ReadString(root, "titleName"));
         }
         catch (System.Text.Json.JsonException)
         {

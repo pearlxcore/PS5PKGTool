@@ -37,6 +37,12 @@ public sealed class SonyDebugPackageBuildOptions
     /// <summary>Optional DRM token to force in param.json. Null preserves the source token;
     /// "standard" is the opt-in override surfaced by the Advanced build setting.</summary>
     public string? DrmTypeOverride { get; init; }
+
+    /// <summary>Convert raw ELF modules to debug fake-SELF containers. Default true.</summary>
+    public bool FakeSignModules { get; init; } = true;
+
+    /// <summary>Inject the built-in debug sce_sys/about/right.sprx when the source lacks one. Default true.</summary>
+    public bool InjectRightSprx { get; init; } = true;
 }
 
 public readonly record struct SonyDebugPackageProgress(string Stage, long CompletedBytes,
@@ -83,7 +89,9 @@ public static class SonyDebugPackageBuilder
                 KrakenLevel = options.KrakenLevel,
                 KrakenThreads = options.KrakenThreads,
                 PlayGoChunkCount = options.PlayGoChunkCount,
-                DrmTypeOverride = options.DrmTypeOverride
+                DrmTypeOverride = options.DrmTypeOverride,
+                FakeSignModules = options.FakeSignModules,
+                InjectRightSprx = options.InjectRightSprx
             },
             progress, cancellationToken).ConfigureAwait(false);
     }

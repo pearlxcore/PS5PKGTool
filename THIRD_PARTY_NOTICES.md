@@ -12,6 +12,22 @@ managed library at `PS5PKGTool/ThirdParty/ProsperoPkgTool/ProsperoPkgTool.dll`.
 MIT License. Copyright (c) 2026 pearlxcore. No GPL, SDK, or decompiled code is included; the
 engine is a clean-room reimplementation validated against independent oracles.
 
+## LibProsperoPkg
+
+The alternative package build/validate/extract backend is provided by LibProsperoPkg, loaded from a
+vendored payload at `PS5PKGTool/ThirdParty/LibProsperoPkg12/` (version **1.2.0** — the version the
+PPR-PKG / fpkg-gui builder ships; the newer 2.6.0 regressed the NAPS layout). It is loaded in an
+isolated assembly-load context together with its bundled dependencies: `BCnEncoder.Net 2.3.0`,
+`CommunityToolkit.HighPerformance 8.4.0`, `Magick.NET 14.15.0` (managed + its
+`runtimes/win-x64/native/Magick.Native-Q8-x64.dll`), and `libScePubTools.dll`.
+
+GNU General Public License v3.0 or later (GPL-3.0-or-later).
+Copyright (c) SvenGDK 2026. https://github.com/SvenGDK/LibProsperoPkg
+
+Because LibProsperoPkg is GPL-3.0-or-later and PS5 PKG Tool links it, the combined work is
+distributed under the GPL-3.0 (see `LICENSE`). The full license text ships at
+`PS5PKGTool/ThirdParty/LibProsperoPkg12/LICENSE`.
+
 ## UFS2Tool
 
 The `PS5PKGTool.Ufs2` filesystem implementation is based on

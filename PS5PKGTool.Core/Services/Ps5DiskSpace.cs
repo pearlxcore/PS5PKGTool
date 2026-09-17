@@ -36,6 +36,43 @@ public static class Ps5DiskSpace
         return new Ps5DiskSpaceCheck(status, DiskSpaceGuard.Describe(report));
     }
 
+    /// <summary>
+    /// Free-space preflight for an extract-then-build: the extracted staging tree plus the build's
+    /// temp workspace and output, measured against the affected volumes.
+    /// </summary>
+    public static Ps5DiskSpaceCheck CheckStagedImage(long rawPayloadBytes, long stagingBytes,
+        string outputPath, string? tempDirectory)
+    {
+        var requirements = DiskSpaceGuard.Estimate(rawPayloadBytes, outputPath, tempDirectory).ToList();
+        if (stagingBytes > 0)
+        {
+            string tempRoot = Path.GetPathRoot(Path.GetFullPath(tempDirectory ?? Path.GetTempPath())) ?? string.Empty;
+            int index = requirements.FindIndex(requirement =>
+                string.Equals(requirement.Root, tempRoot, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0)
+            {
+                requirements[index] = requirements[index] with
+                {
+                    Bytes = requirements[index].Bytes + stagingBytes,
+                    What = requirements[index].What + " + staging tree",
+                };
+            }
+            else
+            {
+                requirements.Add(new SpaceRequirement(tempRoot, stagingBytes, "staging tree"));
+            }
+        }
+
+        DiskSpaceReport report = DiskSpaceGuard.Check(requirements);
+        Ps5DiskSpaceStatus status = report.Status switch
+        {
+            DiskSpaceStatus.Insufficient => Ps5DiskSpaceStatus.Insufficient,
+            DiskSpaceStatus.NearLimit => Ps5DiskSpaceStatus.NearLimit,
+            _ => Ps5DiskSpaceStatus.Ok,
+        };
+        return new Ps5DiskSpaceCheck(status, DiskSpaceGuard.Describe(report));
+    }
+
     /// <summary>True when the exception is the engine's insufficient-free-space failure.</summary>
     public static bool IsInsufficient(Exception exception) => exception is ProsperoInsufficientSpaceException;
 

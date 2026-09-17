@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using DarkUI.Controls;
 using DarkUI.Forms;
+using PS5PKGTool.Core.Backends;
 using PS5PKGTool.Core.Builders;
 using PS5PKGTool.Core.Services;
 using PS5PKGTool.Core.Tasks;
@@ -694,8 +695,9 @@ public partial class MainForm
         string tempText = Get(fields, "temp");
         string? tempDirectory = tempText.Length > 0 ? tempText : null;
         ImageBuildSettings settings = GetImageBuildSettings(fields);
+        IPackageBackend backend = BackendRegistry.Get(Get(fields, "backend"));
         return (progress, token) => BuildPackageFromSourceAsync(source, output, contentId, passcode, overwrite,
-            sdkVersionOverride, tempDirectory, settings, progress, token);
+            sdkVersionOverride, tempDirectory, settings, backend, progress, token);
     }
 
     private static ImageBuildSettings GetImageBuildSettings(Dictionary<string, string> fields)
@@ -707,8 +709,11 @@ public partial class MainForm
         int krakenThreads = int.TryParse(Get(fields, "krakenThreads"), out int threads) ? threads : 0;
         int playgo = int.TryParse(Get(fields, "playgo"), out int chunks) ? chunks : 1;
         string drm = Get(fields, "drm");
+        bool deterministic = GetBool(fields, "deterministic");
+        bool fakeSign = !fields.ContainsKey("fakeSign") || GetBool(fields, "fakeSign");
+        bool rightSprx = !fields.ContainsKey("rightSprx") || GetBool(fields, "rightSprx");
         return new ImageBuildSettings(compression, krakenLevel, krakenThreads, playgo,
-            drm.Length > 0 ? drm : null);
+            drm.Length > 0 ? drm : null, deterministic, fakeSign, rightSprx);
     }
 
     private static ulong? GetSdkOverride(Dictionary<string, string> fields)

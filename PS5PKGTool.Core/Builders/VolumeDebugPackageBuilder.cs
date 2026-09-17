@@ -133,8 +133,10 @@ public static class VolumeDebugPackageBuilder
             SdkVersionOverride = options.SdkVersionOverride,
             TempDirectory = options.TempDirectory,
             SceSysFiles = sceSys,
+            FakeSignModules = options.FakeSignModules,
+            InjectRightSprx = options.InjectRightSprx,
             Log = log
-        });
+        }, cancellationToken);
 
         return new SonyDebugPackageBuildResult
         {
@@ -146,6 +148,26 @@ public static class VolumeDebugPackageBuilder
             SourceFiles = sourceFiles,
             UsesDefaultPasscode = credentials.UsesDefaultPasscode
         };
+    }
+
+    /// <summary>
+    /// Sums the uncompressed payload bytes of an image (exFAT / UFS2-FFPKG / FFPFSC) without
+    /// extracting or building it. Used to preflight the disk space an extract-then-build needs.
+    /// </summary>
+    public static long EstimatePayloadBytes(string imagePath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
+        string source = Path.GetFullPath(imagePath);
+        if (!File.Exists(source)) throw new FileNotFoundException("The source image was not found.", source);
+
+        using IDisposable volume = OpenVolume(source, out IReadOnlyList<VolumeFile> entries, out _, out _);
+        long total = 0;
+        foreach (VolumeFile entry in entries)
+        {
+            if (!entry.IsDirectory && !entry.IsSymlink)
+                total += entry.Size;
+        }
+        return total;
     }
 
     private static IDisposable OpenVolume(string imagePath, out IReadOnlyList<VolumeFile> entries,

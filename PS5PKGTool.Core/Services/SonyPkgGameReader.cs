@@ -30,6 +30,13 @@ public sealed partial class SonyPkgGameReader
             string raw = Encoding.UTF8.GetString(data).TrimStart('\uFEFF').TrimEnd('\0');
             game = _paramReader.ReadJson(raw, fullPath + "::sce_sys/param.json", fullPath, lastWrite);
         }
+        else if (TryReadInnerParamJson(package, out string innerJson, out string innerOrigin))
+        {
+            // The outer CNT entry is absent (or too large), but the inner PFS may still expose
+            // sce_sys/param.json when the game filesystem is readable. Record the inner origin so the
+            // Raw tab can state where the JSON came from.
+            game = _paramReader.ReadJson(innerJson, innerOrigin, fullPath, lastWrite);
+        }
         else
         {
             string fallbackTitle = Path.GetFileNameWithoutExtension(fullPath);
@@ -66,6 +73,35 @@ public sealed partial class SonyPkgGameReader
         if (package.EncryptedEntryCount > 0)
             game.DataWarnings.Add($"{package.EncryptedEntryCount:N0} CNT entr{(package.EncryptedEntryCount == 1 ? "y is" : "ies are")} encrypted.");
         return game;
+    }
+
+    /// <summary>
+    /// Fallback for packages whose outer CNT has no readable param.json entry: read the copy inside
+    /// the inner PFS when the game filesystem decodes. Returns false when it is unavailable.
+    /// </summary>
+    private static bool TryReadInnerParamJson(SonyPkgSummary package, out string raw, out string origin)
+    {
+        raw = string.Empty;
+        origin = string.Empty;
+        if (package.NestedPfs?.EngineAccess is not { } access)
+            return false;
+        try
+        {
+            if (!access.TryFindFile("sce_sys/param.json",
+                    out ProsperoPkgTool.Containers.ProsperoInnerPfsReader.Entry entry) ||
+                entry.Size <= 0 || entry.Size > MaximumParamJsonSize)
+                return false;
+            byte[] data = access.ReadFile(entry);
+            raw = Encoding.UTF8.GetString(data).TrimStart('\uFEFF').TrimEnd('\0');
+            if (raw.Length == 0) return false;
+            origin = "inner PFS sce_sys/param.json";
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or
+                                   NotSupportedException or ArgumentException)
+        {
+            return false;
+        }
     }
 
     // Reads param.json through the already-parsed engine access when available, so the package is

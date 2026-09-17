@@ -163,6 +163,7 @@ public sealed class Ps5SelfReader
 
         return new Ps5SelfInfo
         {
+            IsSelf = isSelf,
             SelfMagic = Convert.ToHexString(buffer.AsSpan(0, 4)),
             FileSize = stream.Length,
             ElfOffset = elfOffset,

@@ -117,9 +117,25 @@ public static class PackageTaskPlans
         new("Finalize", "finaliz")
     ];
 
+    /// <summary>
+    /// Build package from an image with LibProsperoPkg: the image is extracted to a staging folder
+    /// first, then built. Adds an "Extract image" step before the shared build stages.
+    /// </summary>
+    public static readonly PackageTaskStage[] BuildPackageImageLpp =
+    [
+        new("Extract image", "extract", "reading exfat", "reading ufs2", "reading ffpkg", "reading ffpfsc"),
+        new("Inner image", "inner image"),
+        new("NAPS", "naps"),
+        new("Outer PFS", "outer pfs"),
+        new("CNT", "cnt"),
+        new("Finalize", "finaliz")
+    ];
+
     /// <summary>Selects the build-package step plan for a dump folder or an image file.</summary>
-    public static PackageTaskStage[] BuildPackageFor(string sourcePath) =>
-        Directory.Exists(sourcePath) ? BuildPackageDump : BuildPackageImage;
+    /// <param name="extractImageFirst">True when an image source is extracted to a staging folder first.</param>
+    public static PackageTaskStage[] BuildPackageFor(string sourcePath, bool extractImageFirst = false) =>
+        extractImageFirst ? BuildPackageImageLpp
+        : Directory.Exists(sourcePath) ? BuildPackageDump : BuildPackageImage;
 
     public static readonly PackageTaskStage[] Ampr =
     [
