@@ -474,10 +474,7 @@ public partial class MainForm
     {
         if (!_settings.ShowThumbnails) return;
         if (_settings.ThumbnailCacheCount > 0 && _libraryThumbnails.Count >= _settings.ThumbnailCacheCount)
-        {
-            _libraryThumbnails.Clear();
-            _libraryThumbnailAttempts.Clear();
-        }
+            ClearLibraryThumbnails();
 
         int version = ++_libraryThumbnailVersion;
         var pending = new List<Ps5GameInfo>();
@@ -498,6 +495,8 @@ public partial class MainForm
                 if (version != _libraryThumbnailVersion) return;
                 Image? thumbnail = LoadLibraryThumbnail(game);
                 if (thumbnail is null) continue;
+                // A newer rebuild may have started while this image decoded; drop the stale result.
+                if (version != _libraryThumbnailVersion) { thumbnail.Dispose(); return; }
                 _libraryThumbnails[game.RootPath] = thumbnail;
                 try
                 {
@@ -509,6 +508,31 @@ public partial class MainForm
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// Drops every cached thumbnail. Images still shown by a grid cell are left for the GC rather than
+    /// disposed, so a rebuild can never paint a disposed image; the rest are released immediately.
+    /// </summary>
+    private void ClearLibraryThumbnails()
+    {
+        var referenced = new HashSet<Image>();
+        foreach (DataGridViewRow row in gridLibrary.Rows)
+            if (row.Cells["Icon"].Value is Image image) referenced.Add(image);
+        foreach (Image image in _libraryThumbnails.Values)
+            if (image is not null && !referenced.Contains(image)) image.Dispose();
+        _libraryThumbnails.Clear();
+        _libraryThumbnailAttempts.Clear();
+    }
+
+    /// <summary>
+    /// Drops the cached thumbnail for a single (moved or removed) source. The image is not disposed
+    /// here because the grid may still be painting its row until the next rebuild.
+    /// </summary>
+    private void ForgetLibraryThumbnail(string rootPath)
+    {
+        _libraryThumbnails.TryRemove(rootPath, out _);
+        _libraryThumbnailAttempts.TryRemove(rootPath, out _);
     }
 
     private void ApplyLibraryThumbnail(Ps5GameInfo game, Image thumbnail)

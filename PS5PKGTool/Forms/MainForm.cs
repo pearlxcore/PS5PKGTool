@@ -542,8 +542,7 @@ public partial class MainForm : DarkForm
     private void ClearRuntimeCaches()
     {
         _detailsCache.Clear();
-        _libraryThumbnails.Clear();
-        _libraryThumbnailAttempts.Clear();
+        ClearLibraryThumbnails();
         statusLabel.Text = "Caches cleared.";
     }
 

@@ -436,8 +436,7 @@ public partial class MainForm
         ReplaceSettingPath(_settings.ManualSources, source, target);
         ReplaceSettingPath(_settings.RecentFolders, source, target);
         _detailsCache.Remove(source);
-        _libraryThumbnails.TryRemove(source, out _);
-        _libraryThumbnailAttempts.TryRemove(source, out _);
+        ForgetLibraryThumbnail(source);
     }
 
     private static string ReplacePathPrefix(string value, string source, string target)
