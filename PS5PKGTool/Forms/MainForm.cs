@@ -352,6 +352,12 @@ public partial class MainForm : DarkForm
             _fileCancellation?.Cancel();
             statusLabel.Text = "Cancelling extraction...";
         }
+        else if (e.KeyCode == Keys.Escape && _isScanning)
+        {
+            e.Handled = true;
+            _scanCancellation?.Cancel();
+            statusLabel.Text = "Cancelling library refresh...";
+        }
     }
 
     private async Task ScanAsync(IEnumerable<string> folders, bool merge)
@@ -394,7 +400,9 @@ public partial class MainForm : DarkForm
                 ? $"Library refresh complete: {_games.Count:N0} game(s)."
                 : $"Refresh complete with {result.Errors.Count:N0} warning(s).";
             if (result.Errors.Count > 0)
-                AppDialog.ShowWarning(string.Join(Environment.NewLine, result.Errors.Take(12)), "PS5 scan warnings");
+                ShowTextReport("PS5 scan warnings",
+                    $"The scan finished with {result.Errors.Count:N0} warning(s):" + Environment.NewLine +
+                    Environment.NewLine + string.Join(Environment.NewLine, result.Errors));
         }
         catch (OperationCanceledException)
         {
