@@ -86,6 +86,8 @@ public partial class MainForm
             cboFilterFormat.SetAllItemsChecked(false);
             switch (preset)
             {
+                // All means all: clear the query too, not just the checkbox filters.
+                case 1: searchLibrary.SearchText = string.Empty; break;
                 case 2: SetComboItem(cboFilterCategory, "Game"); break;
                 case 3: SetComboItem(cboFilterCategory, "Patch"); break;
                 case 4: SetComboItem(cboFilterCategory, "DLC"); break;
@@ -149,10 +151,10 @@ public partial class MainForm
         UpdateFilterCaption(lblFilterCategory, "Category", cboFilterCategory);
         UpdateFilterCaption(lblFilterRegion, "Region", cboFilterRegion);
         UpdateFilterCaption(lblFilterFormat, "Format", cboFilterFormat);
+        // Grouping is a view setting, not a filter, so it does not keep the reset button active.
         bool active = cboFilterCategory.CheckedItems.Count > 0 || cboFilterRegion.CheckedItems.Count > 0 ||
-                      cboFilterFormat.CheckedItems.Count > 0 || searchLibrary.SearchText.Length > 0 ||
-                      _libraryGroupBy.Length > 0;
-        btnFilterClear.Text = active ? "Clear all" : "Clear";
+                      cboFilterFormat.CheckedItems.Count > 0 || searchLibrary.SearchText.Length > 0;
+        btnFilterClear.Text = "Reset filters";
         btnFilterClear.Visible = active;
     }
 
@@ -372,7 +374,10 @@ public partial class MainForm
             int digits = 0;
             while (digits < piece.Length && char.IsDigit(piece[digits])) digits++;
             if (digits == 0) break;
-            parts.Add(long.Parse(piece[..digits], CultureInfo.InvariantCulture));
+            // Guard against numeric overflow from user input instead of throwing out of the search.
+            if (!long.TryParse(piece[..digits], NumberStyles.None, CultureInfo.InvariantCulture, out long number))
+                return null;
+            parts.Add(number);
         }
         return parts.Count > 0 ? parts.ToArray() : null;
     }

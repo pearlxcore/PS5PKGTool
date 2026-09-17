@@ -26,18 +26,20 @@ are design/robustness work.
   numerically (2 GiB before 10 GiB) instead of as text.
 - **High — multi-selection preserved:** rebuilds restore the full selected set and the focused row by
   root path; selections that are no longer visible are dropped instead of retained invisibly.
-- **High (partial) — focused row:** `SelectedGame()` now prefers the focused/current row; single-only
-  actions are not yet disabled for a multi-selection.
+- **High (partial) — focused row / single-only actions:** `SelectedGame()` prefers the focused row and
+  single-only actions (Reveal, Copy*, Save Artwork) are now disabled for a multi-selection.
+- **Medium — reset/preset semantics:** the clear button is "Reset filters", grouping no longer keeps it
+  active, and the `All` preset clears the query. Version-comparison overflow is guarded.
 
 ## Remaining
 
 | Priority | Item |
 |---|---|
-| High | Disable single-only actions (Copy/Reveal) when multiple rows are selected, or route them to the focused row explicitly. |
+| High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
 | High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
 | High | Extend the busy-path gate to rename/move (delete is done) and account for an active scan. |
-| Medium | `Clear all`/preset semantics: separate Reset filters vs Reset view; `All` should clear the query too. |
-| Medium | Safe query parser: unknown prefixes, unmatched quotes, numeric overflow must not throw and should give inline feedback. |
+| Medium | Reset semantics: the button is now "Reset filters" and grouping no longer keeps it active; the `All` preset clears the query. A separate **Reset view** (default sort/group/columns) is still to do. |
+| Medium | Query parser: numeric overflow in version comparison is guarded (no throw). Still to do: inline feedback for unknown prefixes, unmatched quotes and malformed comparisons. |
 | Medium | Exact ID match (`id:=PPSA...`); clarify OR syntax. |
 | Medium | Columns: apply declared default widths, persist widths, default compact layout, keep Format and Status separate. |
 | Medium | Rename/move previews enumerate all affected items and conflicts; remove `Rename All` from row context; export scope selector. |

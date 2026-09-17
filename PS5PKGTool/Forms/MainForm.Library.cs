@@ -59,19 +59,22 @@ public partial class MainForm
     {
         bool groupContext = _contextRowIndex >= 0 && gridLibrary.IsGroupRow(_contextRowIndex);
         bool hasGame = !groupContext && SelectedGame() is not null;
+        // Single-row actions target one entry; disable them for a multi-selection rather than acting
+        // on an arbitrary row.
+        bool single = !groupContext && SelectedGames().Count() == 1;
 
-        menuLibraryReveal.Enabled = hasGame;
-        menuLibraryCopy.Enabled = hasGame;
-        menuLibraryCopyTitle.Enabled = hasGame;
-        menuLibraryCopyTitleId.Enabled = hasGame;
-        menuLibraryCopyContentId.Enabled = hasGame;
-        menuLibraryCopyPath.Enabled = hasGame;
-        menuLibraryCopyFileName.Enabled = hasGame;
+        menuLibraryReveal.Enabled = single;
+        menuLibraryCopy.Enabled = single;
+        menuLibraryCopyTitle.Enabled = single;
+        menuLibraryCopyTitleId.Enabled = single;
+        menuLibraryCopyContentId.Enabled = single;
+        menuLibraryCopyPath.Enabled = single;
+        menuLibraryCopyFileName.Enabled = single;
         // Move and Find Duplicates are disabled for v1.0.0.
         menuLibraryRename.Enabled = hasGame;
         menuLibraryRenameAll.Enabled = _games.Count > 0;
         menuLibraryRenameByPriority.Enabled = hasGame;
-        menuLibrarySaveArtwork.Enabled = hasGame;
+        menuLibrarySaveArtwork.Enabled = single;
         menuLibraryMove.Enabled = hasGame;
         menuLibraryDelete.Enabled = hasGame;
         menuLibraryDuplicates.Enabled = false;
