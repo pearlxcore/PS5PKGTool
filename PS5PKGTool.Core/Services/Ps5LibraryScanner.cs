@@ -105,7 +105,7 @@ public sealed class Ps5LibraryScanner
             {
                 // A source the strict readers reject (no readable param.json, or several game roots)
                 // is still listed as a structure-only record so it can be inspected rather than dropped.
-                Ps5GameInfo? structure = TryReadStructure(kind, path);
+                Ps5GameInfo? structure = TryReadStructure(kind, path, ex.Message);
                 if (structure is not null)
                 {
                     structure.DataWarnings.Add("Structure-only view: " + ex.Message);
@@ -123,23 +123,30 @@ public sealed class Ps5LibraryScanner
         return result;
     }
 
-    /// <summary>Structure-only fallback for a source the strict readers rejected; null when it cannot open.</summary>
-    private Ps5GameInfo? TryReadStructure(Ps5SourceKind kind, string path)
+    /// <summary>
+    /// Structure-only fallback for a source the strict readers rejected. A filesystem image still
+    /// opens its volume; a package (or an image whose volume will not open) is retained as an
+    /// unreadable record so it stays inspectable instead of disappearing.
+    /// </summary>
+    private Ps5GameInfo? TryReadStructure(Ps5SourceKind kind, string path, string error)
     {
+        if (kind == Ps5SourceKind.LooseDump) return null;
         try
         {
-            return kind switch
+            Ps5GameInfo? structure = kind switch
             {
                 Ps5SourceKind.Ffpfsc => _ffpfscReader.ReadStructure(path),
                 Ps5SourceKind.FilesystemImage => _filesystemImageReader.ReadStructure(path),
                 Ps5SourceKind.Ffpkg => _ffpkgReader.ReadStructure(path),
                 _ => null
             };
+            if (structure is not null) return structure;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or NotSupportedException)
         {
-            return null;
         }
+        string label = kind == Ps5SourceKind.SonyPackage ? "package" : "image";
+        return SourceStructure.Unreadable(kind, path, label, error);
     }
 
     private static string ResolveRootPath(string path, Ps5SourceKind kind)

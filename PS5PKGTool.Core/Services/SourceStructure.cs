@@ -35,4 +35,24 @@ internal static class SourceStructure
         });
         return game;
     }
+
+    /// <summary>
+    /// A record for a source that could not be read at all (for example a malformed package), so it
+    /// stays visible in the library with its path and error instead of being dropped.
+    /// </summary>
+    public static Ps5GameInfo Unreadable(Ps5SourceKind kind, string fullPath, string label, string error)
+    {
+        var file = new FileInfo(fullPath);
+        var game = new Ps5GameInfo
+        {
+            SourceKind = kind,
+            RootPath = fullPath,
+            Title = Path.GetFileNameWithoutExtension(fullPath),
+            SourceSize = file.Exists ? file.Length : 0,
+            ContainerFileLength = file.Exists ? file.Length : 0,
+            LastWriteTimeUtc = file.Exists ? file.LastWriteTimeUtc : DateTime.MinValue
+        };
+        game.DataWarnings.Add($"The {label} could not be read: {error}");
+        return game;
+    }
 }

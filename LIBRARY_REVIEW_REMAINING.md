@@ -16,6 +16,10 @@ are design/robustness work.
   `DLC` for numeric 1 but `Add-on` for content type 0x21/0x22; the filter combo had `Add-on`/`Other`
   while rows could be `DLC`/`Unknown`). Normalized everywhere to `Game / Patch / DLC / App / Unknown`;
   content type 0x21/0x22 now classify as `DLC`, and the DLC preset selects `DLC`.
+- **High — rejected rows retained:** the scanner now keeps an **unreadable record** (path + error) for a
+  package, or an image whose volume will not open, instead of dropping it to a scan-error string.
+- **High — mutation gating:** delete refuses sources that a queued/running task is using (same-path or
+  parent/child overlap). Rename/delete wiring still to extend to rename/move.
 
 ## Remaining
 
@@ -26,8 +30,7 @@ are design/robustness work.
 | High | Preserve the **full multi-selection** (and focus/scroll anchor) across filter/sort rebuilds; `PopulateLibraryGrid` restores only one root. |
 | High | Single active row: single-row actions currently use the first selected row; disable single-only actions for multi-selection or define a focused row. |
 | High | Context targeting: resolve row/group/background at invocation; separate row/group/background menus; handle Shift+F10/Menu key without stale `_contextRowIndex`. |
-| High | Retain rejected **PKG** rows: the scanner's structure fallback returns null for `SonyPackage`, so unreadable PKGs become scan-error strings and can vanish on refresh. |
-| High | Gate filesystem mutations (rename/move/delete) against running operations on the same path or an active scan. |
+| High | Extend the busy-path gate to rename/move (delete is done) and account for an active scan. |
 | Medium | `Clear all`/preset semantics: separate Reset filters vs Reset view; `All` should clear the query too. |
 | Medium | Safe query parser: unknown prefixes, unmatched quotes, numeric overflow must not throw and should give inline feedback. |
 | Medium | Exact ID match (`id:=PPSA...`); clarify OR syntax. |

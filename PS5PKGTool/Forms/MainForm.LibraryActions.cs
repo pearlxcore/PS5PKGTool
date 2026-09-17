@@ -454,6 +454,17 @@ public partial class MainForm
     {
         List<Ps5GameInfo> games = SelectedGames().ToList();
         if (games.Count == 0) return;
+        // Do not modify sources a queued/running task is using.
+        List<Ps5GameInfo> busy = games.Where(game => IsPathBusy(game.RootPath)).ToList();
+        if (busy.Count > 0)
+        {
+            AppDialog.ShowWarning(
+                "These sources are in use by a queued or running task and were not changed:\n\n" +
+                string.Join(Environment.NewLine, busy.Select(game => "  " + game.RootPath)),
+                "Source in use");
+            return;
+        }
+
         bool permanent = _settings.PermanentDelete;
         if (_settings.ConfirmDelete && !ConfirmDelete(games, permanent)) return;
 
@@ -504,6 +515,31 @@ public partial class MainForm
     /// Confirms a destructive action with a cancellable Yes/No dialog (previously OK-only) and an
     /// accurate verb: a permanent delete is never presented as a Recycle Bin move.
     /// </summary>
+    /// <summary>True when a queued/running task reads from or writes to the given path (or under it).</summary>
+    private bool IsPathBusy(string path)
+    {
+        foreach (PS5PKGTool.Core.Tasks.QueuedPackageTask task in _taskQueue.Tasks)
+        {
+            if (task.Status is not (PS5PKGTool.Core.Tasks.PackageTaskStatus.Queued
+                or PS5PKGTool.Core.Tasks.PackageTaskStatus.Running
+                or PS5PKGTool.Core.Tasks.PackageTaskStatus.Cancelling))
+                continue;
+            if (PathTouches(path, task.SourcePath) || PathTouches(path, task.OutputPath) ||
+                PathTouches(task.SourcePath, path))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool PathTouches(string left, string right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        string a = Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar);
+        string b = Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar);
+        return a.StartsWith(b, StringComparison.OrdinalIgnoreCase) ||
+               b.StartsWith(a, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool ConfirmDelete(IReadOnlyList<Ps5GameInfo> games, bool permanent)
     {
         const int maximumListed = 15;
