@@ -233,6 +233,8 @@ public sealed class QueuedPackageTask
     /// <summary>The exception that failed the task, when there was one, for diagnostics.</summary>
     public Exception? Failure { get; internal set; }
     public DateTime CreatedUtc { get; init; } = DateTime.UtcNow;
+    /// <summary>Number of execution attempts (a retry starts a new attempt).</summary>
+    public int Attempts { get; internal set; }
     public DateTime? StartedUtc { get; internal set; }
     public DateTime? CompletedUtc { get; internal set; }
 
@@ -262,8 +264,9 @@ public sealed class QueuedPackageTask
     /// past attempt is shown truthfully rather than as a bare status.
     /// </summary>
     internal void RestoreHistory(DateTime? startedUtc, DateTime? completedUtc, string message, string stage,
-        string failureText)
+        string failureText, int attempts)
     {
+        if (attempts > 0) Attempts = attempts;
         if (startedUtc is { } started) StartedUtc = started;
         if (completedUtc is { } completed) CompletedUtc = completed;
         if (!string.IsNullOrEmpty(message)) Message = message;

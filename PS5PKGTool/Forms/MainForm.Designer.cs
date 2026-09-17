@@ -128,6 +128,8 @@ partial class MainForm
     private ToolStripMenuItem menuTaskRemove = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuTaskSeparator1 = null!;
     private ToolStripMenuItem menuTaskOpen = null!;
+    private ToolStripMenuItem menuTaskShowSource = null!;
+    private ToolStripMenuItem menuTaskReport = null!;
     private ToolStripMenuItem menuTaskClear = null!;
     private DarkUI.Controls.DarkTabControl tabsDetails = null!;
     private DarkUI.Controls.DarkTabPage tabOverview = null!;
@@ -744,6 +746,8 @@ partial class MainForm
         menuTaskRemove = new ToolStripMenuItem();
         menuTaskSeparator1 = new DarkUI.Controls.DarkToolStripSeparator();
         menuTaskOpen = new ToolStripMenuItem();
+        menuTaskShowSource = new ToolStripMenuItem();
+        menuTaskReport = new ToolStripMenuItem();
         menuTaskClear = new ToolStripMenuItem();
         splitTasksPane2 = new DarkUI.Controls.DarkSplitPane();
         sectionTaskDetails = new DarkUI.Controls.DarkSectionPanel();
@@ -4536,7 +4540,7 @@ partial class MainForm
         // 
         // contextTasks
         // 
-        contextTasks.Items.AddRange(new ToolStripItem[] { menuTaskStart, menuTaskCancel, menuTaskRetry, menuTaskRemove, menuTaskSeparator1, menuTaskOpen, menuTaskClear });
+        contextTasks.Items.AddRange(new ToolStripItem[] { menuTaskStart, menuTaskCancel, menuTaskRetry, menuTaskRemove, menuTaskSeparator1, menuTaskOpen, menuTaskShowSource, menuTaskReport, menuTaskClear });
         contextTasks.Name = "contextTasks";
         contextTasks.Size = new Size(164, 143);
         contextTasks.Opening += contextTasks_Opening;
@@ -4593,6 +4597,24 @@ partial class MainForm
         menuTaskOpen.Size = new Size(163, 22);
         menuTaskOpen.Text = "Open Output";
         menuTaskOpen.Click += btnTaskOpen_Click;
+        // 
+        // menuTaskShowSource
+        // 
+        menuTaskShowSource.BackColor = Color.FromArgb(60, 63, 65);
+        menuTaskShowSource.ForeColor = Color.FromArgb(220, 220, 220);
+        menuTaskShowSource.Name = "menuTaskShowSource";
+        menuTaskShowSource.Size = new Size(163, 22);
+        menuTaskShowSource.Text = "Show Source";
+        menuTaskShowSource.Click += btnTaskShowSource_Click;
+        // 
+        // menuTaskReport
+        // 
+        menuTaskReport.BackColor = Color.FromArgb(60, 63, 65);
+        menuTaskReport.ForeColor = Color.FromArgb(220, 220, 220);
+        menuTaskReport.Name = "menuTaskReport";
+        menuTaskReport.Size = new Size(163, 22);
+        menuTaskReport.Text = "Export Report...";
+        menuTaskReport.Click += btnTaskReport_Click;
         // 
         // menuTaskClear
         // 

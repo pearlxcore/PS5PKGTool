@@ -318,6 +318,7 @@ public partial class MainForm
         if (task.SourcePath.Length > 0) parts.Add("From " + Path.GetFileName(task.SourcePath));
         if (task.OutputPath.Length > 0) parts.Add("To " + Path.GetFileName(task.OutputPath));
         parts.Add("Elapsed " + ElapsedText(task));
+        if (task.Attempts > 0) parts.Add($"Attempt {task.Attempts}");
         if (task.StartedUtc is { } startedAt) parts.Add("Started " + startedAt.ToLocalTime().ToString("HH:mm:ss"));
         if (task.CompletedUtc is { } endedAt) parts.Add("Ended " + endedAt.ToLocalTime().ToString("HH:mm:ss"));
         if (EtaText(task) is { } eta) parts.Add(eta);
@@ -426,6 +427,99 @@ public partial class MainForm
         }
     }
 
+    /// <summary>Reveals the task's source (separate from Show output).</summary>
+    private void btnTaskShowSource_Click(object? sender, EventArgs e)
+    {
+        if (SelectedTask() is not { } task) return;
+        RevealPath(task.SourcePath, "Show source");
+    }
+
+    private void btnTaskReport_Click(object? sender, EventArgs e)
+    {
+        if (SelectedTask() is not { } task) return;
+        using var dialog = new SaveFileDialog
+        {
+            Filter = "Text report (*.txt)|*.txt|All files (*.*)|*.*",
+            FileName = "task-report-" + task.Id[..Math.Min(8, task.Id.Length)] + ".txt"
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        try
+        {
+            File.WriteAllText(dialog.FileName, BuildTaskReport(task));
+            statusLabel.Text = "Exported " + Path.GetFileName(dialog.FileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AppDialog.ShowError(ex.Message, "Export task report");
+        }
+    }
+
+    private static void RevealPath(string path, string title)
+    {
+        try
+        {
+            if (File.Exists(path))
+                Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true });
+            else if (Directory.Exists(path))
+                Process.Start(new ProcessStartInfo("explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+            else
+                AppDialog.ShowInformation("The path does not exist: " + path, title);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or ArgumentException)
+        {
+            AppDialog.ShowError(ex.Message, title);
+        }
+    }
+
+    /// <summary>
+    /// A self-contained text report for one task: identity, state, timings, stage, failure and the
+    /// captured configuration with secrets masked. Secrets are never exported verbatim.
+    /// </summary>
+    private static string BuildTaskReport(QueuedPackageTask task)
+    {
+        var report = new System.Text.StringBuilder();
+        report.AppendLine("PS5 PKG Tool - task report");
+        report.AppendLine("Generated (local): " + DateTime.Now.ToString("u"));
+        report.AppendLine();
+        report.AppendLine("Task: " + task.DisplayName);
+        report.AppendLine("Task id: " + task.Id);
+        report.AppendLine("Operation: " + (task.Operation.Length > 0 ? task.Operation : task.Type));
+        report.AppendLine("State: " + StatusText(task.Status));
+        if (task.Message.Length > 0) report.AppendLine("Message: " + task.Message);
+        if (!string.IsNullOrWhiteSpace(task.Progress.Stage)) report.AppendLine("Last stage: " + task.Progress.Stage);
+        if (task.Attempts > 0) report.AppendLine("Attempts: " + task.Attempts);
+        report.AppendLine("Created: " + task.CreatedUtc.ToLocalTime().ToString("u"));
+        if (task.StartedUtc is { } started) report.AppendLine("Started: " + started.ToLocalTime().ToString("u"));
+        if (task.CompletedUtc is { } completed) report.AppendLine("Ended: " + completed.ToLocalTime().ToString("u"));
+        if (task.FormatRoute.Length > 0) report.AppendLine("Route: " + task.FormatRoute);
+        report.AppendLine("Source: " + task.SourcePath);
+        if (task.OutputPath.Length > 0) report.AppendLine("Output: " + task.OutputPath);
+
+        Dictionary<string, string> fields = ReadPayload(task.PersistencePayload);
+        if (fields.Count > 0)
+        {
+            report.AppendLine();
+            report.AppendLine("Configuration (secrets masked):");
+            foreach (KeyValuePair<string, string> pair in
+                     fields.OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase))
+                report.AppendLine($"  {pair.Key} = {MaskSecret(pair.Key, pair.Value)}");
+        }
+
+        if (task.Failure is { } failure)
+        {
+            report.AppendLine();
+            report.AppendLine("Failure:");
+            report.AppendLine(failure.ToString());
+        }
+        return report.ToString();
+    }
+
+    private static string MaskSecret(string key, string value) =>
+        key.Contains("passcode", StringComparison.OrdinalIgnoreCase) ||
+        key.Contains("key", StringComparison.OrdinalIgnoreCase)
+            ? new string('*', Math.Min(value.Length, 8))
+            : value;
+
     private void UpdateTaskControls()
     {
         IReadOnlyList<QueuedPackageTask> tasks = _taskQueue.Tasks;
@@ -447,6 +541,8 @@ public partial class MainForm
         menuTaskRetry.Enabled = btnTaskRetry.Enabled;
         menuTaskRemove.Enabled = btnTaskRemove.Enabled;
         menuTaskOpen.Enabled = btnTaskOpen.Enabled;
+        menuTaskShowSource.Enabled = task is not null && task.SourcePath.Length > 0;
+        menuTaskReport.Enabled = task is not null;
         menuTaskClear.Enabled = btnTaskClear.Enabled;
     }
 

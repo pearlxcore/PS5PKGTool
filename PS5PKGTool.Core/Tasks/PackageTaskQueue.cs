@@ -20,7 +20,8 @@ namespace PS5PKGTool.Core.Tasks;
     DateTime? CompletedUtc = null,
     string Message = "",
     string Stage = "",
-    string FailureText = "");
+    string FailureText = "",
+    int Attempts = 0);
 
 /// <summary>
 /// Sequential, resumable task queue modelled after a desktop download manager: long package
@@ -224,7 +225,7 @@ public sealed class PackageTaskQueue : IAsyncDisposable
                 task.Id, task.Type, task.DisplayName, task.SourcePath, task.OutputPath,
                 task.PersistencePayload, task.Status, task.Operation, task.SourceFormat, task.TargetFormat,
                 task.CreatedUtc, task.StartedUtc, task.CompletedUtc, task.Message, task.Progress.Stage,
-                task.Failure?.ToString() ?? string.Empty)).ToArray();
+                task.Failure?.ToString() ?? string.Empty, task.Attempts)).ToArray();
             string directory = Path.GetDirectoryName(path) ?? ".";
             Directory.CreateDirectory(directory);
             string temporary = path + ".tmp";
@@ -268,8 +269,9 @@ public sealed class PackageTaskQueue : IAsyncDisposable
                 task.Apply(PackageTaskStatus.Interrupted, "Interrupted during a previous session; retry to resume.");
             else
                 task.Apply(entry.Status, string.IsNullOrEmpty(entry.Message) ? task.Message : entry.Message);
-            // Restore the recorded timing, last stage and failure text so history stays truthful.
-            task.RestoreHistory(entry.StartedUtc, entry.CompletedUtc, entry.Message, entry.Stage, entry.FailureText);
+            // Restore the recorded timing, last stage, attempt count and failure text so history stays truthful.
+            task.RestoreHistory(entry.StartedUtc, entry.CompletedUtc, entry.Message, entry.Stage, entry.FailureText,
+                entry.Attempts);
             lock (_gate) _tasks.Add(task);
             restored++;
         }
@@ -318,6 +320,7 @@ public sealed class PackageTaskQueue : IAsyncDisposable
     {
         task.Cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
         CancellationToken token = task.Cancellation.Token;
+        task.Attempts++;
         task.Apply(PackageTaskStatus.Running, "Starting…");
 
         var progress = new PackageTaskProgressTracker(new RelayProgress<PackageTaskProgress>(value =>

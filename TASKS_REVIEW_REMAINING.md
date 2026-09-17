@@ -25,11 +25,11 @@ history-depth improvements.
 | Area | Item |
 |---|---|
 | Layout | Queue strip + search/filter row; collapsible Details/Result/Diagnostic sections; remembered splitter; expand lower workspace; wide-window side panel. |
-| Controls | Place selected-task actions next to details/context menu; explicit "Follow running" toggle naming; "Restart" as a new attempt. |
+| Controls | "Show source" and "Export report…" now in the task context menu; attempt count is tracked and shown. Still to do: explicit "Follow running" toggle naming; full separate attempt history records. |
 | Columns | Operation-aware Task/source title; builder label; queue position for waiting jobs; in-place row updates preserving selection/scroll/group/column widths; stop scrolling to selection when follow is off. |
 | Details | Captured configuration, masked passcode, timestamps, attempt number; per-operation live/result fields (builder/version, route, staging cleanup, counts, verification scope). |
 | State/result | "Completed with warnings" badge; verification failure as a domain result distinct from an exception; truthful Cancelling. |
 | Progress/time | Stage checklist with measured counters (`Files x/y`, `Bytes a/b`) instead of equal-stage weighting; validity-checked ETA; running clock independent of progress notifications; visible adapter fallback and plan reset. |
 | History | Timing (created/started/completed), last stage and failure text are now persisted and restored. Still to do: separate attempt records, revalidate waiting inputs before running, do not auto-restart interrupted tasks. |
-| Error/logs | Concise cause + expandable diagnostic with Copy/Export report (task-filtered); task/attempt IDs in the global log; fallback visible in the final result. |
+| Error/logs | An Export report (context menu) now writes a task report with masked configuration, timings, stage and failure. Still to do: task-filtered diagnostic log lines, task/attempt IDs in the global log, fallback visible in the final result. |
 | Interaction | Empty-queue/empty-filter messages with actions; Ctrl+F scoping; queued notification without leaving Tools; accessible status text surviving row updates; selectable long paths/errors. |
