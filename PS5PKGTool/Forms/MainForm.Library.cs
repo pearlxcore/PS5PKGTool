@@ -173,7 +173,16 @@ public partial class MainForm
 
     private void SaveSettingsQuietly()
     {
-        try { _stateStore.SaveSettings(_settings); }
+        try
+        {
+            // Remember the task list/details split (only while the details panel is shown).
+            if (!_settings.TaskDetailsCollapsed && splitTasks.PanelCount > 0)
+            {
+                int[] sizes = splitTasks.PanelSizes;
+                if (sizes.Length > 0 && sizes[0] > 0) _settings.TaskSplitterDistance = sizes[0];
+            }
+            _stateStore.SaveSettings(_settings);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 

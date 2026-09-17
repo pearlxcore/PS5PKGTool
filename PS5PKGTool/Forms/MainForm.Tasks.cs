@@ -193,7 +193,7 @@ public partial class MainForm
                 task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling)?.Id
             : null;
         string? targetId = followId ?? selectedId;
-        IReadOnlyList<QueuedPackageTask> tasks = _taskQueue.Tasks;
+        IReadOnlyList<QueuedPackageTask> tasks = _taskQueue.Tasks.Where(MatchesTaskFilter).ToArray();
 
         gridTasks.SuspendLayout();
         try
@@ -265,6 +265,60 @@ public partial class MainForm
         }
     }
 
+    private void searchTasks_SearchTextChanged(object? sender, EventArgs e) => RefreshTaskGrid();
+
+    private bool MatchesTaskFilter(QueuedPackageTask task)
+    {
+        string filter = searchTasks.SearchText.Trim();
+        if (filter.Length == 0) return true;
+        return task.DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+               task.Operation.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+               task.Type.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+               !string.IsNullOrEmpty(task.SourcePath) &&
+                   task.SourcePath.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
+               !string.IsNullOrEmpty(task.OutputPath) &&
+                   task.OutputPath.Contains(filter, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private void btnTaskToggleDetails_Click(object? sender, EventArgs e)
+    {
+        _settings.TaskDetailsCollapsed = !_settings.TaskDetailsCollapsed;
+        ApplyTaskPanelSizes();
+        UpdateDetailsToggleText();
+        SaveSettingsQuietly();
+    }
+
+    private void UpdateDetailsToggleText() =>
+        btnTaskToggleDetails.Text = _settings.TaskDetailsCollapsed ? "List \u25B4" : "Details \u25BE";
+
+    /// <summary>Restores the remembered task list/details split and applies it when the tab is shown.</summary>
+    private void InitializeTasksLayout()
+    {
+        UpdateDetailsToggleText();
+        ApplyTaskPanelSizes();
+        // The splitter has no resize event here, so re-apply when the tab is entered and capture the
+        // current size on save (see SaveSettingsQuietly).
+        tabTasks.Enter += (_, _) => ApplyTaskPanelSizes();
+    }
+
+    /// <summary>
+    /// Applies the remembered split: collapsed gives the list nearly all the height (a compact
+    /// details strip remains), otherwise the remembered list size is restored.
+    /// </summary>
+    private void ApplyTaskPanelSizes()
+    {
+        int height = splitTasks.Height;
+        if (height <= 0) return;
+        if (_settings.TaskDetailsCollapsed)
+        {
+            splitTasks.SetPanelSize(0, Math.Max(60, height - 64));
+        }
+        else if (_settings.TaskSplitterDistance > 0)
+        {
+            splitTasks.SetPanelSize(0, Math.Clamp(_settings.TaskSplitterDistance, 60, Math.Max(60, height - 64)));
+        }
+    }
+
     /// <summary>1-based position among the waiting tasks, so a held queue is understandable.</summary>
     private string QueuePositionText(QueuedPackageTask task)
     {
@@ -281,18 +335,23 @@ public partial class MainForm
 
     private void UpdateTaskSummary()
     {
-        IReadOnlyList<QueuedPackageTask> tasks = _taskQueue.Tasks;
-        if (tasks.Count == 0)
+        IReadOnlyList<QueuedPackageTask> all = _taskQueue.Tasks;
+        if (all.Count == 0)
         {
             lblTaskSummary.Text = "No tasks yet. Start an operation from Image Tools or the Library.";
             return;
         }
+        IReadOnlyList<QueuedPackageTask> tasks = all.Where(MatchesTaskFilter).ToArray();
+        if (tasks.Count == 0)
+        {
+            lblTaskSummary.Text = "No tasks match this filter.";
+            return;
+        }
         int running = tasks.Count(task => task.Status is PackageTaskStatus.Running or PackageTaskStatus.Cancelling);
-        int queued = tasks.Count(task => task.Status == PackageTaskStatus.Queued);
-        int completed = tasks.Count(task => task.Status == PackageTaskStatus.Completed);
-        int failed = tasks.Count(task => task.Status is PackageTaskStatus.Failed or PackageTaskStatus.Interrupted);
-        lblTaskSummary.Text =
-            $"{tasks.Count:N0} task(s)   |   {running} running   |   {queued} queued   |   {completed} done   |   {failed} failed";
+        int waiting = tasks.Count(task => task.Status == PackageTaskStatus.Queued);
+        int attention = tasks.Count(task => task.Status is PackageTaskStatus.Failed or PackageTaskStatus.Interrupted);
+        string held = !_taskQueue.AutoStart && waiting > 0 ? "   \u00B7   queue held" : string.Empty;
+        lblTaskSummary.Text = $"{running} running   \u00B7   {waiting} waiting   \u00B7   {attention} needs attention{held}";
     }
 
     private void UpdateTaskDetails()

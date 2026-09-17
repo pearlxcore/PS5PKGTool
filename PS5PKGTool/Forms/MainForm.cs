@@ -83,6 +83,7 @@ public partial class MainForm : DarkForm
         mediaFileViewer.UnloadedBehavior = System.Windows.Controls.MediaState.Close;
         FileIconProvider.Populate(imageListFiles);
         InitializeTaskQueue();
+        InitializeTasksLayout();
         InitializeLibraryTools();
         InitializeLog();
         RefreshImageTools();

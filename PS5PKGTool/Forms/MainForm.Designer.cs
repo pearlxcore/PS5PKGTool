@@ -98,6 +98,8 @@ partial class MainForm
     private DarkUI.Controls.DarkButton btnTaskOpen = null!;
     private DarkUI.Controls.DarkButton btnTaskClear = null!;
     private DarkUI.Controls.DarkLabel lblTaskSummary = null!;
+    private DarkUI.Controls.DarkSearchBox searchTasks = null!;
+    private DarkUI.Controls.DarkButton btnTaskToggleDetails = null!;
     private DarkUI.Controls.DarkLabel lblTaskGroup = null!;
     private DarkUI.Controls.DarkComboBox cboTaskGroup = null!;
     private DarkUI.Controls.DarkSplitContainer splitTasks = null!;
@@ -728,6 +730,8 @@ partial class MainForm
         lblTaskGroup = new DarkUI.Controls.DarkLabel();
         cboTaskGroup = new DarkUI.Controls.DarkComboBox();
         lblTaskSummary = new DarkUI.Controls.DarkLabel();
+        searchTasks = new DarkUI.Controls.DarkSearchBox();
+        btnTaskToggleDetails = new DarkUI.Controls.DarkButton();
         splitTasks = new DarkUI.Controls.DarkSplitContainer();
         splitTasksPane1 = new DarkUI.Controls.DarkSplitPane();
         sectionTasksList = new DarkUI.Controls.DarkSectionPanel();
@@ -4302,7 +4306,7 @@ partial class MainForm
         // 
         // tasksLayout
         // 
-        tasksLayout.ColumnCount = 10;
+        tasksLayout.ColumnCount = 12;
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86F));
@@ -4312,6 +4316,8 @@ partial class MainForm
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100F));
+        tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170F));
+        tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96F));
         tasksLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         tasksLayout.Controls.Add(chkTaskAutoStart, 0, 0);
         tasksLayout.Controls.Add(btnTaskStart, 1, 0);
@@ -4322,7 +4328,9 @@ partial class MainForm
         tasksLayout.Controls.Add(btnTaskClear, 6, 0);
         tasksLayout.Controls.Add(lblTaskGroup, 7, 0);
         tasksLayout.Controls.Add(cboTaskGroup, 8, 0);
-        tasksLayout.Controls.Add(lblTaskSummary, 9, 0);
+        tasksLayout.Controls.Add(searchTasks, 9, 0);
+        tasksLayout.Controls.Add(btnTaskToggleDetails, 10, 0);
+        tasksLayout.Controls.Add(lblTaskSummary, 11, 0);
         tasksLayout.Controls.Add(splitTasks, 0, 1);
         tasksLayout.Dock = DockStyle.Fill;
         tasksLayout.Location = new Point(0, 0);
@@ -4432,6 +4440,27 @@ partial class MainForm
         lblTaskSummary.TabIndex = 9;
         lblTaskSummary.Text = "Queue is empty.";
         lblTaskSummary.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // searchTasks
+        // 
+        searchTasks.Dock = DockStyle.Fill;
+        searchTasks.Location = new Point(613, 3);
+        searchTasks.Margin = new Padding(3, 3, 3, 3);
+        searchTasks.Name = "searchTasks";
+        searchTasks.Size = new Size(164, 32);
+        searchTasks.TabIndex = 10;
+        searchTasks.SearchTextChanged += searchTasks_SearchTextChanged;
+        // 
+        // btnTaskToggleDetails
+        // 
+        btnTaskToggleDetails.Dock = DockStyle.Fill;
+        btnTaskToggleDetails.Location = new Point(783, 3);
+        btnTaskToggleDetails.Margin = new Padding(3, 3, 3, 3);
+        btnTaskToggleDetails.Name = "btnTaskToggleDetails";
+        btnTaskToggleDetails.Size = new Size(90, 32);
+        btnTaskToggleDetails.TabIndex = 11;
+        btnTaskToggleDetails.Text = "Details";
+        btnTaskToggleDetails.Click += btnTaskToggleDetails_Click;
         // 
         // splitTasks
         // 

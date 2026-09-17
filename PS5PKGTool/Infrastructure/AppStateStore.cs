@@ -40,6 +40,12 @@ public sealed class AppSettings
     public string OutputDirectory { get; set; } = string.Empty;
     public bool OpenOutputAfterTask { get; set; }
 
+    // Tasks workspace
+    /// <summary>Remembered vertical split between the task list and the details panel.</summary>
+    public int TaskSplitterDistance { get; set; }
+    /// <summary>True when the details panel is collapsed to give the list more height.</summary>
+    public bool TaskDetailsCollapsed { get; set; }
+
     // Build defaults
     public string DebugPasscode { get; set; } = string.Empty;
 
