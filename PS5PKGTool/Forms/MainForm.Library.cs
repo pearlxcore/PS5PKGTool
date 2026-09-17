@@ -1,10 +1,12 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using DarkUI.Controls;
 using DarkUI.Forms;
 using PS5PKGTool.Core.Models;
+using PS5PKGTool.Core.Services;
 using PS5PKGTool.Infrastructure;
 
 namespace PS5PKGTool.Forms;
@@ -17,6 +19,7 @@ public partial class MainForm
     private void InitializeLibraryTools()
     {
         _groupItems.Add((menuLibraryGroupNone, string.Empty));
+        _groupItems.Add((menuLibraryGroupFamily, "family"));
         _groupItems.Add((menuLibraryGroupTitleId, "titleid"));
         _groupItems.Add((menuLibraryGroupCategory, "category"));
         _groupItems.Add((menuLibraryGroupRegion, "region"));
@@ -47,6 +50,8 @@ public partial class MainForm
     private void menuLibraryCopyPath_Click(object? sender, EventArgs e) => CopyText(SelectedGame()?.RootPath);
 
     private void menuLibraryGroupNone_Click(object? sender, EventArgs e) => SetGroupBy(string.Empty);
+
+    private void menuLibraryGroupFamily_Click(object? sender, EventArgs e) => SetGroupBy("family");
 
     private void menuLibraryGroupTitleId_Click(object? sender, EventArgs e) => SetGroupBy("titleid");
 
@@ -93,7 +98,7 @@ public partial class MainForm
         menuLibrarySaveArtwork.Enabled = single;
         menuLibraryMove.Enabled = hasGame;
         menuLibraryDelete.Enabled = hasGame;
-        menuLibraryDuplicates.Enabled = false;
+        menuLibraryDuplicates.Enabled = _games.Count > 1;
 
         menuLibraryGroupExport.Visible = groupContext;
         menuLibraryGroupArtwork.Visible = groupContext;
@@ -266,6 +271,7 @@ public partial class MainForm
 
     private static string GroupLabel(string key) => key switch
     {
+        "family" => "Family",
         "titleid" => "Title ID",
         "category" => "Category",
         "region" => "Region",
@@ -276,6 +282,10 @@ public partial class MainForm
 
     internal string GroupKey(Ps5GameInfo game) => _libraryGroupBy switch
     {
+        // A family is everything sharing a title: base, updates and DLC.
+        "family" => !string.IsNullOrWhiteSpace(game.TitleId) ? game.TitleId
+            : !string.IsNullOrWhiteSpace(game.ContentId) ? game.ContentId
+            : LibraryFileName(game),
         "titleid" => game.TitleId,
         "category" => CategoryOf(game),
         "region" => RegionOf(game),
@@ -332,6 +342,47 @@ public partial class MainForm
         };
     }
 
+    /// <summary>The item's role in its title family: Base, Update, DLC or App.</summary>
+    private string RelationshipLabel(Ps5GameInfo game)
+    {
+        string role = CategoryOf(game) switch
+        {
+            "Game" => "Base",
+            "Patch" => "Update",
+            "DLC" or "Add-on" => "DLC",
+            "App" => "App",
+            _ => "Unknown"
+        };
+        if (role == "Update" && IsSupersededUpdate(game)) role = "Update (older)";
+        return role;
+    }
+
+    /// <summary>True when another installed patch for the same title has a higher version.</summary>
+    private bool IsSupersededUpdate(Ps5GameInfo game)
+    {
+        if (string.IsNullOrWhiteSpace(game.TitleId)) return false;
+        VersionKey best = default;
+        bool found = false;
+        foreach (Ps5GameInfo other in _games)
+        {
+            if (!string.Equals(other.TitleId, game.TitleId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.Equals(CategoryOf(other), "Patch", StringComparison.OrdinalIgnoreCase)) continue;
+            VersionKey key = VersionKey.Parse(other.DisplayVersion);
+            if (!found || key.CompareTo(best) > 0) { best = key; found = true; }
+        }
+        return found && VersionKey.Parse(game.DisplayVersion).CompareTo(best) < 0;
+    }
+
+    /// <summary>Base first, then updates, then DLC, then apps; used to order a family view.</summary>
+    internal static int RolePriority(Ps5GameInfo game) => CategoryOf(game) switch
+    {
+        "Game" => 0,
+        "Patch" => 1,
+        "DLC" or "Add-on" => 2,
+        "App" => 3,
+        _ => 4
+    };
+
     private Ps5GameInfo? SelectedGame()
     {
         // Prefer the focused row so single-row actions target what the user is looking at, not an
@@ -371,7 +422,7 @@ public partial class MainForm
         catch (ExternalException) { }
     }
 
-    private void FindDuplicates()
+    private async void FindDuplicates()
     {
         List<IGrouping<string, Ps5GameInfo>> groups = _games
             .GroupBy(DuplicateKey, StringComparer.OrdinalIgnoreCase)
@@ -384,15 +435,68 @@ public partial class MainForm
             return;
         }
 
+        // Confirming byte-identical copies needs a content hash; read each candidate's param.json off the
+        // UI thread. Cheap (param.json is small) but real: equal hash + equal size means the same build.
+        List<Ps5GameInfo> candidates = groups.SelectMany(group => group).ToList();
+        statusLabel.Text = $"Comparing {candidates.Count:N0} duplicate candidate(s)...";
+        UseWaitCursor = true;
+        var fingerprints = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            await Task.Run(() =>
+            {
+                foreach (Ps5GameInfo game in candidates)
+                    fingerprints[game.RootPath] = ComputeDuplicateFingerprint(game);
+            });
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+
+        int identical = 0;
         var lines = new List<string> { $"{groups.Count:N0} duplicate group(s):", string.Empty };
         foreach (IGrouping<string, Ps5GameInfo> group in groups)
         {
-            lines.Add($"{group.Key}  ({group.Count()} copies)");
+            bool allHashed = group.All(game =>
+                fingerprints.TryGetValue(game.RootPath, out string? hash) && hash.Length > 0);
+            bool sameHash = allHashed &&
+                group.Select(game => fingerprints[game.RootPath]).Distinct(StringComparer.Ordinal).Count() == 1;
+            if (sameHash) identical++;
+
+            string verdict = sameHash ? "identical" : "possible";
+            lines.Add($"[{verdict}] {group.Key}  ({group.Count()} copies)");
             foreach (Ps5GameInfo game in group)
-                lines.Add("    " + game.RootPath);
+            {
+                string hash = fingerprints.TryGetValue(game.RootPath, out string? value) && value.Length > 0
+                    ? "sha256:" + value[..Math.Min(16, value.Length)]
+                    : "(hash unavailable)";
+                lines.Add($"    {hash}  {game.RootPath}");
+            }
             lines.Add(string.Empty);
         }
+        lines.Insert(1,
+            $"{identical:N0} byte-identical (matching param.json hash), " +
+            $"{groups.Count - identical:N0} possible (same metadata only).");
         ShowTextReport("Duplicate PS5 sources", string.Join(Environment.NewLine, lines));
+    }
+
+    /// <summary>
+    /// SHA-256 of <c>sce_sys/param.json</c> as a cheap content fingerprint, or an empty string when it
+    /// cannot be read. Two sources with the same size and fingerprint are the same build.
+    /// </summary>
+    private static string ComputeDuplicateFingerprint(Ps5GameInfo game)
+    {
+        try
+        {
+            byte[] param = GameFileSystem.ReadFileChunk(game, "sce_sys/param.json", 0, 4 * 1024 * 1024).Data;
+            return param.Length == 0 ? string.Empty : Convert.ToHexString(SHA256.HashData(param));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or
+                                   InvalidDataException or NotSupportedException or InvalidOperationException)
+        {
+            return string.Empty;
+        }
     }
 
     private static string DuplicateKey(Ps5GameInfo game)
