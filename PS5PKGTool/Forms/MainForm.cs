@@ -1363,6 +1363,8 @@ public partial class MainForm : DarkForm
         folderBrowserDialog.Description = "Select a folder for the artwork images";
         if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
         string folder = folderBrowserDialog.SelectedPath;
+        // Names like icon0.png are shared across games; keep an existing file from another game intact.
+        string? titleId = SelectedGame()?.TitleId;
         int saved = 0;
         foreach ((PictureBox control, string name) in ArtworkSlots())
         {
@@ -1370,7 +1372,7 @@ public partial class MainForm : DarkForm
             if (data is null || data.IsEmpty) continue;
             try
             {
-                SaveArtworkImage(data, Path.Combine(folder, name));
+                SaveArtworkImage(data, UniqueArtworkPath(folder, name, titleId));
                 saved++;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ExternalException)
@@ -1428,6 +1430,31 @@ public partial class MainForm : DarkForm
         : control == pictureBackground1 ? "pic1.png"
         : control == pictureBackground2 ? "pic2.png"
         : "artwork.png";
+
+    /// <summary>
+    /// Returns a path that will not overwrite an existing file. Falls back to a title-ID prefix and then
+    /// a numbered suffix, so saving artwork from several games into one folder keeps every image.
+    /// </summary>
+    private static string UniqueArtworkPath(string folder, string name, string? titleId)
+    {
+        string path = Path.Combine(folder, name);
+        if (!File.Exists(path)) return path;
+
+        string stem = Path.GetFileNameWithoutExtension(name);
+        string extension = Path.GetExtension(name);
+        if (!string.IsNullOrWhiteSpace(titleId))
+        {
+            path = Path.Combine(folder, $"{titleId}_{name}");
+            if (!File.Exists(path)) return path;
+            stem = $"{titleId}_{stem}";
+        }
+
+        for (int index = 2; ; index++)
+        {
+            string candidate = Path.Combine(folder, $"{stem} ({index}){extension}");
+            if (!File.Exists(candidate)) return candidate;
+        }
+    }
 
     private static void SaveArtworkImage(Ps5ImageData data, string path)
     {
