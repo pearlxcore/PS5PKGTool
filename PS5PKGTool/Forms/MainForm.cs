@@ -55,6 +55,7 @@ public partial class MainForm : DarkForm
     private readonly string? _pendingExternalPath;
     private bool _currentSourceIsContainer;
     private bool _isScanning;
+    private int _scanGeneration;
     private bool _isFileBusy;
     private int _detailVersion;
     private int _filePreviewVersion;
@@ -331,7 +332,7 @@ public partial class MainForm : DarkForm
         if (e.KeyCode == Keys.F5)
         {
             e.Handled = true;
-            Refresh_Click(this, EventArgs.Empty);
+            if (menuRefresh.Enabled) Refresh_Click(this, EventArgs.Empty);
         }
         else if (e.Control && e.KeyCode == Keys.F)
         {
@@ -358,6 +359,9 @@ public partial class MainForm : DarkForm
         _scanCancellation?.Cancel();
         _scanCancellation?.Dispose();
         _scanCancellation = new CancellationTokenSource();
+        // Own this scan; a newer scan supersedes an older one, which must not apply results or clear
+        // the newer scan's busy state when it finishes.
+        int generation = ++_scanGeneration;
         SetScanning(true);
         var progress = new Progress<Ps5ScanProgress>(value =>
         {
@@ -369,6 +373,7 @@ public partial class MainForm : DarkForm
         try
         {
             Ps5ScanResult result = await _scanner.ScanAsync(folders, _settings.RecursiveScan, _games, progress, _scanCancellation.Token);
+            if (generation != _scanGeneration) return; // a newer scan owns the library now
             Logger.Info($"Scan finished: {result.Games.Count} game(s), {result.Errors.Count} warning(s).");
             if (merge)
             {
@@ -393,16 +398,19 @@ public partial class MainForm : DarkForm
         }
         catch (OperationCanceledException)
         {
-            statusLabel.Text = "Library refresh cancelled.";
+            if (generation == _scanGeneration) statusLabel.Text = "Library refresh cancelled.";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            statusLabel.Text = "Library refresh failed.";
-            AppDialog.ShowError(ex.Message, "PS5 library refresh");
+            if (generation == _scanGeneration)
+            {
+                statusLabel.Text = "Library refresh failed.";
+                AppDialog.ShowError(ex.Message, "PS5 library refresh");
+            }
         }
         finally
         {
-            SetScanning(false);
+            if (generation == _scanGeneration) SetScanning(false);
         }
     }
 

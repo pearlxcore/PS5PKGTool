@@ -276,9 +276,9 @@ public partial class MainForm
 
     private bool MatchField(Ps5GameInfo game, string field, string value) => field switch
     {
-        "title" => MatchAny(value, part => ContainsText(game.Title, part)),
-        "id" or "titleid" or "title-id" => MatchAny(value, part => ContainsText(game.TitleId, part)),
-        "content" or "contentid" or "content-id" => MatchAny(value, part => ContainsText(game.ContentId, part)),
+        "title" => MatchText(game.Title, value),
+        "id" or "titleid" or "title-id" => MatchText(game.TitleId, value),
+        "content" or "contentid" or "content-id" => MatchText(game.ContentId, value),
         "category" => MatchAny(value, part => ContainsText(CategoryOf(game), part)),
         "region" => MatchAny(value, part => ContainsText(RegionOf(game), part)),
         "source" or "format" => MatchAny(value, part =>
@@ -291,6 +291,17 @@ public partial class MainForm
         "fw" or "firmware" => MatchVersion(value, game.RequiredSystemSoftware),
         _ => MatchFreeText(game, value)
     };
+
+    /// <summary>
+    /// Text field match: a leading <c>=</c> means exact identity (<c>id:=PPSA12345</c>), otherwise a
+    /// value-level <c>|</c> contains match.
+    /// </summary>
+    private static bool MatchText(string? source, string value)
+    {
+        if (value.StartsWith('='))
+            return string.Equals(source, value[1..].Trim(), StringComparison.OrdinalIgnoreCase);
+        return MatchAny(value, part => ContainsText(source, part));
+    }
 
     private static bool MatchAny(string value, Func<string, bool> predicate)
     {

@@ -99,6 +99,7 @@ public partial class MainForm
 
     private void RenameGames(IReadOnlyList<Ps5GameInfo> games, string question, string format)
     {
+        if (RefuseIfBusy(games)) return;
         string example = BuildBaseName(games[0], format) + Path.GetExtension(games[0].RootPath);
         if (AppDialog.ShowWarning($"{question}\n\nExample: {example}", "Rename",
                 DarkDialogButton.YesNo) != DialogResult.Yes)

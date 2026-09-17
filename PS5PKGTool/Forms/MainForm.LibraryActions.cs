@@ -275,6 +275,7 @@ public partial class MainForm
             AppDialog.ShowInformation("Select one or more items to move.", "Move to folder");
             return;
         }
+        if (RefuseIfBusy(games)) return;
 
         folderBrowserDialog.Description = "Select the destination folder";
         if (!string.IsNullOrEmpty(_settings.OutputDirectory) && Directory.Exists(_settings.OutputDirectory))
@@ -455,15 +456,7 @@ public partial class MainForm
         List<Ps5GameInfo> games = SelectedGames().ToList();
         if (games.Count == 0) return;
         // Do not modify sources a queued/running task is using.
-        List<Ps5GameInfo> busy = games.Where(game => IsPathBusy(game.RootPath)).ToList();
-        if (busy.Count > 0)
-        {
-            AppDialog.ShowWarning(
-                "These sources are in use by a queued or running task and were not changed:\n\n" +
-                string.Join(Environment.NewLine, busy.Select(game => "  " + game.RootPath)),
-                "Source in use");
-            return;
-        }
+        if (RefuseIfBusy(games)) return;
 
         bool permanent = _settings.PermanentDelete;
         if (_settings.ConfirmDelete && !ConfirmDelete(games, permanent)) return;
@@ -515,6 +508,21 @@ public partial class MainForm
     /// Confirms a destructive action with a cancellable Yes/No dialog (previously OK-only) and an
     /// accurate verb: a permanent delete is never presented as a Recycle Bin move.
     /// </summary>
+    /// <summary>
+    /// Warns and returns true when any of the given sources is in use by a queued/running task, so a
+    /// rename/move/delete cannot invalidate a running operation's source.
+    /// </summary>
+    private bool RefuseIfBusy(IReadOnlyList<Ps5GameInfo> games)
+    {
+        List<Ps5GameInfo> busy = games.Where(game => IsPathBusy(game.RootPath)).ToList();
+        if (busy.Count == 0) return false;
+        AppDialog.ShowWarning(
+            "These sources are in use by a queued or running task and were not changed:\n\n" +
+            string.Join(Environment.NewLine, busy.Select(game => "  " + game.RootPath)),
+            "Source in use");
+        return true;
+    }
+
     /// <summary>True when a queued/running task reads from or writes to the given path (or under it).</summary>
     private bool IsPathBusy(string path)
     {
