@@ -15,7 +15,7 @@ engine is a clean-room reimplementation validated against independent oracles.
 ## LibProsperoPkg
 
 The alternative package build/validate/extract backend is provided by LibProsperoPkg, loaded from a
-vendored payload at `PS5PKGTool/ThirdParty/LibProsperoPkg12/` (version **1.2.0** — the version the
+vendored payload at `PS5PKGTool/ThirdParty/LibProsperoPkg12/` (version **1.2.0** - the version the
 PPR-PKG / fpkg-gui builder ships; the newer 2.6.0 regressed the NAPS layout). It is loaded in an
 isolated assembly-load context together with its bundled dependencies: `BCnEncoder.Net 2.3.0`,
 `CommunityToolkit.HighPerformance 8.4.0`, `Magick.NET 14.15.0` (managed + its

@@ -92,12 +92,12 @@ your folders, sources, recent folders and saved views.
 2. Choose the `Debug Package (FPKG)` target.
 3. Optionally set the passcode (blank uses the default all-zero passcode). The Content ID is read from the source's `param.json` automatically, so there is no field to fill in.
 4. Pick a **builder**:
-   - `LibProsperoPkg` — the default third-party builder.
-   - `ProsperoPkgTool` — the app's own internal FPKG builder, offered as an alternative to LibProsperoPkg. It is **still experimental**; see the note below.
+   - `LibProsperoPkg` - the default third-party builder.
+   - `ProsperoPkgTool` - the app's own internal FPKG builder, offered as an alternative to LibProsperoPkg. It is **still experimental**; see the note below.
 5. Optionally tick **Advanced options** to set compression (Auto / Kraken / Uncompressed), Kraken level and thread count, PlayGo chunks, package type, an SDK version override, a workspace folder, DRM handling, and fake-sign / right.sprx injection.
 6. Run. Free disk space is checked before the build starts, the package is written to the output path, and progress is shown stage by stage on the Tasks tab.
 
-> **Note:** ProsperoPkgTool is the app's own internal package builder, provided alongside LibProsperoPkg. It is still experimental — output has been validated on PC but not on jailbroken PS5 hardware. Keep originals and verify any produced package before relying on it.
+> **Note:** ProsperoPkgTool is the app's own internal package builder, provided alongside LibProsperoPkg. It is still experimental - output has been validated on PC but not on jailbroken PS5 hardware. Keep originals and verify any produced package before relying on it.
 
 # Build
 
