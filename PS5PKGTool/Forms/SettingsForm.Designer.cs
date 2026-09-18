@@ -599,7 +599,7 @@ partial class SettingsForm
         tabFiles.Name = "tabFiles";
         tabFiles.Size = new Size(688, 362);
         tabFiles.TabIndex = 3;
-        tabFiles.Text = "Viewing && Cache";
+        tabFiles.Text = "Viewing & Cache";
         // 
         // lblViewingInfo
         // 
@@ -698,7 +698,7 @@ partial class SettingsForm
         tabPaths.Name = "tabPaths";
         tabPaths.Size = new Size(688, 362);
         tabPaths.TabIndex = 4;
-        tabPaths.Text = "Output && Defaults";
+        tabPaths.Text = "Output & Defaults";
         // 
         // lblPathsInfo
         // 

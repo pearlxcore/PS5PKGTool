@@ -2614,7 +2614,7 @@ partial class MainForm
         btnMediaLoad.Name = "btnMediaLoad";
         btnMediaLoad.Size = new Size(100, 27);
         btnMediaLoad.TabIndex = 0;
-        btnMediaLoad.Text = "Load && Play";
+        btnMediaLoad.Text = "Load & Play";
         btnMediaLoad.Visible = false;
         btnMediaLoad.Click += btnMediaLoad_Click;
         // 
