@@ -1,5 +1,7 @@
 # PS5 PKG Tool
 
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/6cbde828-ca19-423c-9a4d-bffad7ef7654" />
+
 A Windows app for managing your PS5 dump and image collection, reading PS5 packages, and building or converting images.
 
 Suggestions are welcome. Report bugs [here](https://github.com/pearlxcore/PS5PkgTool/issues).
