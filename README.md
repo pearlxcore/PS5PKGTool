@@ -1,6 +1,6 @@
 # PS5 PKG Tool
 
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/6cbde828-ca19-423c-9a4d-bffad7ef7654" />
+<img width="2560" height="1392" alt="image" src="https://github.com/pearlxcore/PS5PKGTool/blob/main/screenshot4.png" />
 
 A Windows app for managing your PS5 dump and image collection, reading PS5 packages, and building or converting images.
 
@@ -111,11 +111,10 @@ The app is written to `PS5PKGTool\bin\Release\net10.0-windows\PS5 PKG Tool.exe`.
 
 # Screenshot
 
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/061924e0-3919-444e-830b-30ca4166c151" />
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/8291f48a-bd15-485f-b4c3-b5559715275a" />
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/3e1d1c94-787b-449a-b864-0e285d952ddf" />
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/4cd458a9-3591-430b-a41e-923cb6b8fe5e" />
-
+<img width="2560" height="1392" alt="image" src="https://github.com/pearlxcore/PS5PKGTool/blob/main/screenshot4.png" />
+<img width="2560" height="1392" alt="image" src="https://github.com/pearlxcore/PS5PKGTool/blob/main/screenshot1.png" />
+<img width="2560" height="1392" alt="image" src="https://github.com/pearlxcore/PS5PKGTool/blob/main/screenshot2.png" />
+<img width="2560" height="1392" alt="image" src="https://github.com/pearlxcore/PS5PKGTool/blob/main/screenshot3.png" />
 
 # Download
 
