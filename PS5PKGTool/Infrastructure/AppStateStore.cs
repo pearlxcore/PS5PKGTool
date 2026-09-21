@@ -141,9 +141,31 @@ public sealed class AppStateStore
 
     public LibraryManifest LoadManifest()
     {
-        LibraryManifest manifest = Load<LibraryManifest>(ManifestPath) ?? new LibraryManifest();
-        manifest.Games ??= [];
-        return manifest;
+        if (!File.Exists(ManifestPath)) return new LibraryManifest();
+        try
+        {
+            LibraryManifest manifest = JsonSerializer.Deserialize<LibraryManifest>(
+                File.ReadAllText(ManifestPath), JsonOptions) ?? new LibraryManifest();
+            manifest.Games ??= [];
+            return manifest;
+        }
+        catch (JsonException ex)
+        {
+            // Quarantine rather than silently presenting an empty library (which looks like data
+            // loss) and then overwriting the file on the next save.
+            string quarantine = ManifestPath + ".invalid-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+            try { File.Move(ManifestPath, quarantine, overwrite: true); }
+            catch (Exception moveEx) when (moveEx is IOException or UnauthorizedAccessException) { }
+            Logger.Warn($"The library manifest could not be read and was moved to " +
+                $"{Path.GetFileName(quarantine)}. The library will be rebuilt on the next refresh. ({ex.Message})");
+            return new LibraryManifest();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Logger.Warn($"The library manifest could not be read: {ex.Message}. " +
+                "The library may appear empty until a refresh.");
+            return new LibraryManifest();
+        }
     }
 
     public void SaveSettings(AppSettings settings) => Save(SettingsPath, AppSettingsNormalizer.Normalize(settings));
@@ -152,18 +174,6 @@ public sealed class AppStateStore
         CreatedUtc = DateTime.UtcNow,
         Games = games.ToList()
     });
-
-    private static T? Load<T>(string path)
-    {
-        try
-        {
-            return File.Exists(path) ? JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions) : default;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return default;
-        }
-    }
 
     private static void Save<T>(string path, T value)
     {

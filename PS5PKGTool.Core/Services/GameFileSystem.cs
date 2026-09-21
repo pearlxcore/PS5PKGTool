@@ -131,7 +131,9 @@ public static class GameFileSystem
                 // artwork, and trophies. The inner PFS wins for any path present in both.
                 ProsperoInnerPfsReader.Entry[] innerFiles = engine.Files.ToArray();
                 if (engine.DecodeError is { } decodeError)
-                    throw new InvalidDataException($"Package contents could not be decoded: {decodeError}");
+                    throw new InvalidDataException(engine.DecodeUnsupported
+                        ? $"This package uses a format this build does not support yet: {decodeError}"
+                        : $"Package contents could not be decoded: {decodeError}");
                 bool hasInnerTree = innerFiles.Length > 0;
 
                 _cntEntries = new Dictionary<string, (uint Id, long Size)>(StringComparer.OrdinalIgnoreCase);

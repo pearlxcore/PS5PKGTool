@@ -1,4 +1,7 @@
+using System.Buffers.Binary;
+using PS5PKGTool.Core.Builders;
 using ProsperoPkgTool.Containers;
+using ProsperoPkgTool.Crypto;
 
 namespace PS5PKGTool.Core.Parsers;
 
@@ -10,10 +13,12 @@ namespace PS5PKGTool.Core.Parsers;
 internal sealed class SonyEnginePackageAccess : IDisposable
 {
     private readonly string _passcode;
+    private readonly string _contentId;
     private IReadOnlyList<ProsperoInnerPfsReader.Entry>? _entries;
     private ProsperoDecodedPackage? _decoded;
     private ProsperoFileBackedPackage? _fileBacked;
     private string? _decodeError;
+    private bool _decodeUnsupported;
     private bool _decodeAttempted;
     private bool _disposed;
     private bool _usedFileBacked;
@@ -21,11 +26,13 @@ internal sealed class SonyEnginePackageAccess : IDisposable
     private bool _releasePending;
     private readonly object _mountGate = new();
 
-    private SonyEnginePackageAccess(string packagePath, ProsperoPackageInspection inspection, string? passcode)
+    private SonyEnginePackageAccess(string packagePath, ProsperoPackageInspection inspection, string? passcode,
+        string? contentId)
     {
         PackagePath = packagePath;
         Inspection = inspection;
         _passcode = passcode ?? string.Empty;
+        _contentId = contentId ?? string.Empty;
     }
 
     public string PackagePath { get; }
@@ -45,6 +52,15 @@ internal sealed class SonyEnginePackageAccess : IDisposable
         get { EnsureDecoded(); return _decodeError; }
     }
 
+    /// <summary>
+    /// True when <see cref="DecodeError"/> is an unsupported format/layout rather than a wrong key or
+    /// corruption, so the UI can report the real cause instead of blaming the passcode.
+    /// </summary>
+    public bool DecodeUnsupported
+    {
+        get { EnsureDecoded(); return _decodeUnsupported; }
+    }
+
     public IEnumerable<ProsperoInnerPfsReader.Entry> Files => Entries.Where(entry => !entry.IsDirectory);
 
     /// <summary>Parses the CNT/FIH metadata only. The inner image is decoded lazily on first use.</summary>
@@ -60,7 +76,7 @@ internal sealed class SonyEnginePackageAccess : IDisposable
     /// header/CNT is not parsed a second time during a scan.
     /// </summary>
     internal static SonyEnginePackageAccess FromInspection(string packagePath, ProsperoPackageInspection inspection,
-        string? passcode) => new(Path.GetFullPath(packagePath), inspection, passcode);
+        string? passcode) => new(Path.GetFullPath(packagePath), inspection, passcode, inspection.Cnt.ContentId);
 
     private void EnsureDecoded()
     {
@@ -94,6 +110,7 @@ internal sealed class SonyEnginePackageAccess : IDisposable
         {
             _entries = [];
             _decodeError = ex.Message;
+            _decodeUnsupported = ProsperoErrorInfo.IsUnsupported(ex);
         }
     }
 
@@ -101,8 +118,76 @@ internal sealed class SonyEnginePackageAccess : IDisposable
     {
         ProsperoCntEntry entry = Inspection.Entries.FirstOrDefault(candidate => candidate.Id == id)
             ?? throw new InvalidDataException($"CNT entry 0x{id:X4} is not present.");
-        return ProsperoPackageContent.ReadCntEntry(PackagePath, Inspection, entry, length);
+        return entry.IsEncrypted
+            ? ReadProtectedCntEntry(entry)
+            : ProsperoPackageContent.ReadCntEntry(PackagePath, Inspection, entry, length);
     }
+
+    /// <summary>
+    /// Decrypts a protected CNT entry (the <c>0x80000000</c> flag). The stored body is AES-128-CBC
+    /// over the payload zero-padded to a 16-byte boundary; the key/IV seed binds the finalized entry
+    /// meta row, the package content id and the passcode. Requires the 32-character passcode and the
+    /// package content id (both known for debug packages). The PS5 publisher profile (SHA3) is tried
+    /// first, then the legacy SHA-256 profile; a known-magic check guards against a wrong passcode.
+    /// </summary>
+    private byte[] ReadProtectedCntEntry(ProsperoCntEntry entry)
+    {
+        string passcode = _passcode.Length == 0 ? SonyDebugPackageCredentials.DefaultPasscode : _passcode;
+        if (passcode.Length != 32)
+            throw new InvalidDataException(
+                $"CNT entry 0x{entry.Id:X8} is encrypted and needs the 32-character passcode.");
+        if (string.IsNullOrWhiteSpace(_contentId))
+            throw new InvalidDataException(
+                $"CNT entry 0x{entry.Id:X8} is encrypted but the package content id is unavailable.");
+
+        long padded = ProsperoEntryCipher.PaddedLength(checked((int)entry.DataSize));
+        byte[] ciphertext = ProsperoPackageContent.ReadCntEntry(PackagePath, Inspection, entry, padded);
+        byte[] metaRow = BuildMetaRow(entry);
+        uint keyIndex = (entry.Flags2 >> 12) & 0xF;
+
+        foreach (bool ps5Profile in new[] { true, false })
+        {
+            byte[] plain;
+            try
+            {
+                plain = ProsperoEntryCipher.Decrypt(ciphertext, metaRow, _contentId, passcode, keyIndex, ps5Profile);
+            }
+            catch (Exception ex) when (ex is ArgumentException or System.Security.Cryptography.CryptographicException)
+            {
+                continue;
+            }
+            if (plain.Length >= entry.DataSize && IsRecognizedProtectedEntry(entry.Id, plain))
+                return plain[..(int)entry.DataSize];
+        }
+
+        throw new InvalidDataException(
+            $"CNT entry 0x{entry.Id:X8} is encrypted and could not be decrypted with the supplied " +
+            "passcode, or it uses an encryption profile this build does not support yet.");
+    }
+
+    /// <summary>The 32-byte finalized entry meta row the key seed is bound to (six big-endian fields, then 8 zero bytes).</summary>
+    private static byte[] BuildMetaRow(ProsperoCntEntry entry)
+    {
+        byte[] row = new byte[ProsperoEntryCipher.MetaRowSize];
+        BinaryPrimitives.WriteUInt32BigEndian(row.AsSpan(0), entry.Id);
+        BinaryPrimitives.WriteUInt32BigEndian(row.AsSpan(4), entry.NameOffset);
+        BinaryPrimitives.WriteUInt32BigEndian(row.AsSpan(8), entry.Flags1);
+        BinaryPrimitives.WriteUInt32BigEndian(row.AsSpan(12), entry.Flags2);
+        BinaryPrimitives.WriteUInt32BigEndian(row.AsSpan(16), entry.DataOffset);
+        BinaryPrimitives.WriteUInt32BigEndian(row.AsSpan(20), entry.DataSize);
+        return row;
+    }
+
+    /// <summary>Known plaintext magics for protected entries, so a wrong passcode is rejected rather
+    /// than returning garbage. Unknown ids are accepted as-is.</summary>
+    private static bool IsRecognizedProtectedEntry(uint id, byte[] plain) => id switch
+    {
+        0x0402 => plain.Length >= 4 && plain[0] == (byte)'N' && plain[1] == (byte)'P' &&
+                  plain[2] == (byte)'T' && plain[3] == (byte)'D',
+        0x2020 or 0x2021 or 0x0403 => plain.Length >= 4 && plain[0] == 0xD2 && plain[1] == 0x94 &&
+                                      plain[2] == 0xA0 && plain[3] == 0x18,
+        _ => true
+    };
 
     /// <summary>
     /// Plaintext CNT content entries exposed under the same relative paths used inside the inner
@@ -110,7 +195,11 @@ internal sealed class SonyEnginePackageAccess : IDisposable
     /// </summary>
     private static readonly (uint Id, string Path)[] ContentEntries =
     [
+        (0x0402, "sce_sys/nptitle.dat"),
+        (0x0403, "sce_sys/npbind.dat"),
+        (0x040A, "sce_sys/imagedigs.dat"),
         (0x1000, "sce_sys/param.sfo"),
+        (0x1001, "sce_sys/playgo-chunk.dat"),
         (0x1200, "sce_sys/icon0.png"),
         (0x1220, "sce_sys/pic0.png"),
         (0x1240, "sce_sys/snd0.at9"),
@@ -122,6 +211,8 @@ internal sealed class SonyEnginePackageAccess : IDisposable
         (0x2000, "sce_sys/param.json"),
         (0x2010, "sce_sys/playgo-hash-table.dat"),
         (0x2011, "sce_sys/playgo-ficm.dat"),
+        (0x2020, "sce_sys/uds/npbind.dat"),
+        (0x2021, "sce_sys/trophy2/npbind.dat"),
         (0x2060, "sce_sys/pic2.dds")
     ];
 
@@ -130,22 +221,22 @@ internal sealed class SonyEnginePackageAccess : IDisposable
         foreach ((uint id, string path) in ContentEntries)
         {
             ProsperoCntEntry? entry = Inspection.Entries.FirstOrDefault(candidate => candidate.Id == id);
-            if (entry is null || entry.IsEncrypted) continue;
+            if (entry is null) continue;
             yield return (id, path, entry.DataSize);
         }
     }
 
     /// <summary>
-    /// Every readable (non-encrypted) CNT entry, mirroring the engine's structural file listing.
-    /// Known content IDs are mapped to their inner-image paths; the rest keep the engine name. This
-    /// is used when the inner PFS cannot be decoded (for example a package that needs a custom
-    /// passcode) so the file browser still shows what the package exposes.
+    /// Every CNT entry, mirroring the engine's structural file listing. Known content IDs are mapped
+    /// to their inner-image paths; the rest keep the engine name. Protected entries are listed too
+    /// and decrypted on read when a passcode is available. This is used when the inner PFS cannot be
+    /// decoded (for example a package that needs a custom passcode) so the file browser still shows
+    /// what the package exposes.
     /// </summary>
     public IEnumerable<(uint Id, string Path, long Size)> ListReadableEntries()
     {
         foreach (ProsperoCntEntry entry in Inspection.Entries)
         {
-            if (entry.IsEncrypted) continue;
             string? mapped = null;
             foreach ((uint id, string path) in ContentEntries)
                 if (id == entry.Id) { mapped = path; break; }

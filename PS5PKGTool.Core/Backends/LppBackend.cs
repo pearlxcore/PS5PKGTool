@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using PS5PKGTool.Core.Builders;
 using PS5PKGTool.Core.Services;
+using ProsperoPkgTool.Containers;
 
 namespace PS5PKGTool.Core.Backends;
 
@@ -300,6 +301,10 @@ public sealed class LppBackend : IPackageBackend
     {
         while (ex is System.Reflection.TargetInvocationException { InnerException: { } inner })
             ex = inner;
+        // Prefer the engine's own classification; keep the legacy message checks only as a fallback
+        // for older vendored builds that predate ProsperoErrorInfo.
+        if (ProsperoErrorInfo.IsUnsupported(ex))
+            return true;
         return ex is NotSupportedException or OverflowException ||
             ex.Message.Contains("single-byte field", StringComparison.OrdinalIgnoreCase) ||
             ex.Message.Contains("this layout size is not supported", StringComparison.OrdinalIgnoreCase);

@@ -10,8 +10,8 @@
     <AssemblyName>PS5 PKG Tool</AssemblyName>
     <RootNamespace>PS5PKGTool</RootNamespace>
     <ApplicationIcon>icon.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
-    <FileVersion>1.1.0.0</FileVersion>
+    <Version>1.2.0</Version>
+    <FileVersion>1.2.0.0</FileVersion>
     <Product>PS5 PKG Tool</Product>
     <Company>pearlxcore</Company>
     <Copyright>Copyright (c) pearlxcore</Copyright>

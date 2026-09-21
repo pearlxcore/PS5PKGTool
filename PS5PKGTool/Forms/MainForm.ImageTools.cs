@@ -95,9 +95,14 @@ public partial class MainForm
         if (entry.Items is null || entry.Items.Length == 0) return;
         int minX = entry.Items.Min(item => item.Base.X);
         int maxX = entry.Items.Max(item => item.Base.X + item.Control.Width);
-        int offset = ((page.ClientSize.Width - (maxX - minX)) / 2) - minX;
+        Size area = page.ClientSize;
+        int offsetX = ((area.Width - (maxX - minX)) / 2) - minX;
+        int minY = entry.Items.Min(item => item.Base.Y);
+        int maxY = entry.Items.Max(item => item.Base.Y + item.Control.Height);
+        int offsetY = ((area.Height - (maxY - minY)) / 2) - minY;
         foreach ((Control control, Point baseLocation) in entry.Items)
-            control.Location = new Point(Math.Max(0, baseLocation.X + offset), baseLocation.Y);
+            control.Location = new Point(Math.Max(0, baseLocation.X + offsetX),
+                Math.Max(0, baseLocation.Y + offsetY));
     }
 
     private void RefreshImageTools() => SyncImageSourceFromLibrary();

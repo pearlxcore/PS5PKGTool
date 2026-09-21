@@ -113,7 +113,11 @@ public static class SonyDebugPackageBuilder
                 : string.Join("; ", report.Checks.Where(check => check.State == VerificationState.Fail)
                     .Select(check => check.Name + ": " + check.Detail));
             if (!decodes && string.IsNullOrWhiteSpace(message))
-                message = access.DecodeError ?? "The package could not be decoded with the supplied passcode.";
+                message = access.DecodeError is { } decodeError
+                    ? (access.DecodeUnsupported
+                        ? $"This package uses a format this build does not support yet: {decodeError}"
+                        : decodeError)
+                    : "The package could not be decoded with the supplied passcode.";
             if (string.IsNullOrWhiteSpace(message)) message = "The package structure is incomplete.";
             return new SonyDebugPackageValidationResult
             {
