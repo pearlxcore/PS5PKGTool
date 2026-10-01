@@ -90,6 +90,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
             nudThumbnailCache.Value = Clamp(Settings.ThumbnailCacheCount, nudThumbnailCache);
 
             txtOutputDirectory.Text = Settings.OutputDirectory;
+            txtTempDirectory.Text = Settings.TempDirectory;
             SelectBackend(Settings.BuildBackend);
             txtDebugPasscode.Text = Settings.DebugPasscode;
             chkOpenOutputAfterTask.Checked = Settings.OpenOutputAfterTask;
@@ -127,6 +128,8 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
 
         string output = txtOutputDirectory.Text.Trim();
         Settings.OutputDirectory = output.Length == 0 ? string.Empty : AppSettingsNormalizer.NormalizePath(output);
+        string temp = txtTempDirectory.Text.Trim();
+        Settings.TempDirectory = temp.Length == 0 ? string.Empty : AppSettingsNormalizer.NormalizePath(temp);
         Settings.BuildBackend = SelectedBackendId();
         Settings.DebugPasscode = txtDebugPasscode.Text;
         Settings.OpenOutputAfterTask = chkOpenOutputAfterTask.Checked;
@@ -144,6 +147,15 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
             error = "The debug passcode must be blank or exactly 32 printable ASCII characters.";
             tabsSettings.SelectedTab = tabPaths;
             txtDebugPasscode.Focus();
+            return false;
+        }
+
+        string? tempError = TempFolder.Validate(txtTempDirectory.Text.Trim());
+        if (tempError is not null)
+        {
+            error = $"The temp folder cannot be used:\n\n{tempError}";
+            tabsSettings.SelectedTab = tabPaths;
+            txtTempDirectory.Focus();
             return false;
         }
 
@@ -358,6 +370,14 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
             txtOutputDirectory.Text = folderBrowserDialog.SelectedPath;
     }
 
+    private void btnBrowseTemp_Click(object? sender, EventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(txtTempDirectory.Text) && Directory.Exists(txtTempDirectory.Text))
+            folderBrowserDialog.SelectedPath = txtTempDirectory.Text;
+        if (folderBrowserDialog.ShowDialog(this) == DialogResult.OK)
+            txtTempDirectory.Text = folderBrowserDialog.SelectedPath;
+    }
+
     private void txtDebugPasscode_TextChanged(object? sender, EventArgs e)
     {
         if (_loading) return;
@@ -531,6 +551,7 @@ public partial class SettingsForm : DarkUI.Forms.DarkForm
         AppendChange(changes, "Hex page (KiB)", before.HexPageKb, after.HexPageKb);
         AppendChange(changes, "Thumbnail cache entries", before.ThumbnailCacheCount, after.ThumbnailCacheCount);
         AppendChange(changes, "Default output folder", before.OutputDirectory, after.OutputDirectory);
+        AppendChange(changes, "Temp folder", before.TempDirectory, after.TempDirectory);
         AppendChange(changes, "Default builder", before.BuildBackend, after.BuildBackend);
         AppendChange(changes, "Debug passcode", Mask(before.DebugPasscode), Mask(after.DebugPasscode));
         AppendChange(changes, "Open output after success", before.OpenOutputAfterTask, after.OpenOutputAfterTask);

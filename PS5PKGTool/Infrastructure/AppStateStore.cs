@@ -60,6 +60,8 @@ public sealed class AppSettings
 
     // Paths & outputs
     public string OutputDirectory { get; set; } = string.Empty;
+    /// <summary>Temp folder for extract/build/convert workspaces and previews. Empty uses the system temp folder.</summary>
+    public string TempDirectory { get; set; } = string.Empty;
     public bool OpenOutputAfterTask { get; set; }
 
     // Tasks workspace

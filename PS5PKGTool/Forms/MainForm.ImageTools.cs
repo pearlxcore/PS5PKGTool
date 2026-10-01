@@ -920,8 +920,19 @@ public partial class MainForm
         cboImageDensity.SelectedIndex = 0;     // FFPKG: 256 KiB per inode
         nudImageMinFree.Value = 0;             // FFPKG: 0% reserved fragments
 
-        txtImageTemp.Text = Path.GetTempPath()
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        txtImageTemp.Text = DefaultWorkspace();
+    }
+
+    private static string DefaultWorkspace() =>
+        Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+    /// <summary>Applies the temp folder preference; the Workspace box follows it unless the user typed their own.</summary>
+    private void ApplyTempFolder()
+    {
+        string previous = DefaultWorkspace();
+        TempFolder.Apply(_settings.TempDirectory);
+        if (string.Equals(txtImageTemp.Text.Trim(), previous, StringComparison.OrdinalIgnoreCase))
+            txtImageTemp.Text = DefaultWorkspace();
     }
 
     /// <summary>Combo index of the backend id, falling back to the registry default.</summary>

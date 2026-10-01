@@ -51,8 +51,7 @@ public partial class MainForm : DarkForm
     private CancellationTokenSource? _filePreviewCancellation;
     private Ps5GameInfo? _selectedGame;
     private string _currentGameRoot = string.Empty;
-    private readonly string _previewDirectory = Path.Combine(Path.GetTempPath(), "PS5PKGTool", "Preview",
-        Environment.ProcessId.ToString());
+    private readonly string _previewDirectory;
     private readonly string? _pendingExternalPath;
     private bool _currentSourceIsContainer;
     private bool _isScanning;
@@ -90,6 +89,11 @@ public partial class MainForm : DarkForm
         SettingsLoadResult load = _stateStore.LoadSettingsWithDiagnostics();
         _settings = load.Settings;
         _settingsWarning = load.Warning;
+        // Before anything resolves Path.GetTempPath, so previews and workspaces land in the chosen folder.
+        string? tempError = TempFolder.Apply(_settings.TempDirectory);
+        if (tempError is not null)
+            _settingsWarning ??= $"The temp folder {_settings.TempDirectory} could not be used, so the system temp folder is in use. ({tempError})";
+        _previewDirectory = Path.Combine(Path.GetTempPath(), "PS5PKGTool", "Preview", Environment.ProcessId.ToString());
         InitializeTaskQueue();
         InitializeTasksLayout();
         InitializeLibraryTools();
@@ -581,6 +585,7 @@ public partial class MainForm : DarkForm
                              || !previous.LibraryHiddenColumns.SequenceEqual(form.Settings.LibraryHiddenColumns)
                              || !previous.LibrarySortKeys.SequenceEqual(form.Settings.LibrarySortKeys);
         _settings = form.Settings;
+        ApplyTempFolder();
         ApplyRuntimeSettings();
         ApplyDefaultGrouping();
         SyncFilterControls();

@@ -88,6 +88,9 @@ a save failure keeps your edits and offers Retry. Import validates the file and 
 export leaves the debug passcode out unless you ask for it; Reset restores preference defaults but keeps
 your folders, sources, recent folders and saved views.
 
+Set **Temp folder** in Output & Defaults to keep extract, build, convert and preview workspaces off the
+system drive (blank uses the Windows temp folder). Large builds and image conversions can need many GiB there.
+
 # How To Build A Debug Package
 
 1. Select an unpacked dump (or an image of one) in Image Tools.

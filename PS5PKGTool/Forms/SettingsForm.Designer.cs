@@ -72,6 +72,10 @@ partial class SettingsForm
     private DarkUI.Controls.DarkLabel lblPasscodeHint = null!;
     private DarkUI.Controls.DarkCheckBox chkOpenOutputAfterTask = null!;
     private DarkUI.Controls.DarkLabel lblOutputNotice = null!;
+    private DarkUI.Controls.DarkLabel lblTempDir = null!;
+    private DarkUI.Controls.DarkTextBox txtTempDirectory = null!;
+    private DarkUI.Controls.DarkButton btnBrowseTemp = null!;
+    private DarkUI.Controls.DarkLabel lblTempHint = null!;
 
     private DarkUI.Controls.DarkTabPage tabSafety = null!;
     private DarkUI.Controls.DarkLabel lblSafetyInfo = null!;
@@ -168,6 +172,10 @@ partial class SettingsForm
         lblPasscodeHint = new DarkUI.Controls.DarkLabel();
         chkOpenOutputAfterTask = new DarkUI.Controls.DarkCheckBox();
         lblOutputNotice = new DarkUI.Controls.DarkLabel();
+        lblTempDir = new DarkUI.Controls.DarkLabel();
+        txtTempDirectory = new DarkUI.Controls.DarkTextBox();
+        btnBrowseTemp = new DarkUI.Controls.DarkButton();
+        lblTempHint = new DarkUI.Controls.DarkLabel();
         tabSafety = new DarkUI.Controls.DarkTabPage();
         lblSafetyInfo = new DarkUI.Controls.DarkLabel();
         chkConfirmMove = new DarkUI.Controls.DarkCheckBox();
@@ -693,6 +701,10 @@ partial class SettingsForm
         tabPaths.Controls.Add(chkShowPasscode);
         tabPaths.Controls.Add(lblPasscodeHint);
         tabPaths.Controls.Add(chkOpenOutputAfterTask);
+        tabPaths.Controls.Add(lblTempDir);
+        tabPaths.Controls.Add(txtTempDirectory);
+        tabPaths.Controls.Add(btnBrowseTemp);
+        tabPaths.Controls.Add(lblTempHint);
         tabPaths.Controls.Add(lblOutputNotice);
         tabPaths.Location = new Point(4, 26);
         tabPaths.Name = "tabPaths";
@@ -791,6 +803,38 @@ partial class SettingsForm
         chkOpenOutputAfterTask.Size = new Size(400, 19);
         chkOpenOutputAfterTask.TabIndex = 10;
         chkOpenOutputAfterTask.Text = "Open the output folder after a task succeeds";
+        // 
+        // lblTempDir
+        // 
+        lblTempDir.Location = new Point(16, 234);
+        lblTempDir.Name = "lblTempDir";
+        lblTempDir.Size = new Size(170, 15);
+        lblTempDir.TabIndex = 12;
+        lblTempDir.Text = "Temp folder";
+        // 
+        // txtTempDirectory
+        // 
+        txtTempDirectory.Location = new Point(196, 230);
+        txtTempDirectory.Name = "txtTempDirectory";
+        txtTempDirectory.Size = new Size(380, 23);
+        txtTempDirectory.TabIndex = 13;
+        // 
+        // btnBrowseTemp
+        // 
+        btnBrowseTemp.Location = new Point(584, 229);
+        btnBrowseTemp.Name = "btnBrowseTemp";
+        btnBrowseTemp.Size = new Size(80, 26);
+        btnBrowseTemp.TabIndex = 14;
+        btnBrowseTemp.Text = "Browse...";
+        btnBrowseTemp.Click += btnBrowseTemp_Click;
+        // 
+        // lblTempHint
+        // 
+        lblTempHint.Location = new Point(196, 259);
+        lblTempHint.Name = "lblTempHint";
+        lblTempHint.Size = new Size(470, 30);
+        lblTempHint.TabIndex = 15;
+        lblTempHint.Text = "Extract, build, convert and preview workspaces. Blank uses the system temp folder (usually on C:).";
         // 
         // lblOutputNotice
         // 
