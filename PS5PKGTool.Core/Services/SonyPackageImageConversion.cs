@@ -13,12 +13,13 @@ public static class SonyPackageImageConversion
 {
     // Inner-PFS system tables synthesized by the assembler, plus the debug markers the builder
     // injects, are not part of a normal dump and must not be re-emitted as regular files.
+    // sce_sys/keystone is kept: a real dump has it, and without it libSceSaveData fails to
+    // initialise (0x80020002), so the converted game cannot save (CE-107099-6).
     private static readonly HashSet<string> ExcludedPaths = new(StringComparer.OrdinalIgnoreCase)
     {
         "inode_flat_path_table",
         "apr_flat_path_table",
         "afid_to_ino_table",
-        "sce_sys/keystone",
         "sce_sys/about/right.sprx",
         "sce_sys/pfs-version.dat"
     };
