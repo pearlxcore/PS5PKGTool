@@ -27,22 +27,26 @@ public static class SonyPackageImageConversion
         Ps5ImageConversionTarget target, bool overwrite = false,
         IProgress<Ps5ImageConversionProgress>? progress = null, CancellationToken cancellationToken = default,
         ExfatBuildOptions? exfatOptions = null, FfpfscBuildOptions? ffpfscOptions = null,
-        FfpkgBuildOptions? ffpkgOptions = null)
+        FfpkgBuildOptions? ffpkgOptions = null, string? temporaryDirectory = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        cancellationToken.ThrowIfCancellationRequested();
 
         Ps5GameInfo game = new SonyPkgGameReader().Read(packagePath);
-        if (game.SourceKind != Ps5SourceKind.SonyPackage)
-            throw new InvalidDataException("The source is not a PS5 package.");
+        if (game.SourceKind != Ps5SourceKind.SonyPackage ||
+            game.Package is not { Kind: SonyPkgKind.FinalizedDebug or SonyPkgKind.FinalizedPatch, PfsImageSize: > 0 })
+            throw new InvalidDataException("The source must be a finalized debug or patch package with a PFS payload.");
 
         string packageFull = Path.GetFullPath(packagePath);
         string outputFull = Path.GetFullPath(outputPath);
         if (string.Equals(packageFull, outputFull, StringComparison.OrdinalIgnoreCase))
             throw new IOException("The output path must be different from the source package.");
 
-        string tempRoot = Path.Combine(Path.GetTempPath(), "PS5PKGTool", "pkg-image",
-            Guid.NewGuid().ToString("N"));
+        string id = Guid.NewGuid().ToString("N");
+        string tempRoot = temporaryDirectory is null
+            ? Path.Combine(Path.GetTempPath(), "PS5PKGTool", "pkg-image", id)
+            : Path.Combine(Path.GetFullPath(temporaryDirectory), ".ps5pkgtool-" + id);
         string tree = Path.Combine(tempRoot, "tree");
         try
         {

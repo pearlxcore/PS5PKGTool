@@ -1,0 +1,77 @@
+name: macOS build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      # This project references all six cross-platform projects; the solution
+      # also contains the Windows UI and cannot be built wholesale on macOS.
+      - name: Restore
+        run: dotnet restore PS5PKGTool.Tests/PS5PKGTool.Tests.csproj
+
+      - name: Build
+        run: dotnet build PS5PKGTool.Tests/PS5PKGTool.Tests.csproj -c Release --no-restore --disable-build-servers -p:UseSharedCompilation=false
+
+      # Tests is an executable runner, so dotnet test would not run its checks.
+      - name: Test generated folder and PKG fixtures
+        run: dotnet run --project PS5PKGTool.Tests -c Release --no-build --no-restore
+
+      - name: Check failed-publish cleanup
+        run: bash scripts/check-publish.sh
+
+      - name: Publish Apple Silicon app
+        run: bash scripts/publish-macos.sh
+
+      - name: Create installation DMG
+        run: bash scripts/create-dmg.sh
+
+      - name: Package app and corresponding source
+        run: |
+          file "artifacts/PS5 PKG Tool.app/Contents/MacOS/PS5PKGTool.Mac"
+          plutil -lint "artifacts/PS5 PKG Tool.app/Contents/Info.plist"
+          git rev-parse HEAD > artifacts/SOURCE-REVISION.txt
+          tar -czf artifacts/PS5PKGTool-Mac-osx-arm64.tar.gz -C artifacts "PS5 PKG Tool.app" SOURCE-REVISION.txt
+          # Include the macOS build inputs, preserving the engine's existing
+          # managed DLL/license without distributing Windows-native payloads.
+          git archive --format=tar.gz --prefix=PS5PKGTool-Mac-source/ \
+            -o artifacts/PS5PKGTool-Mac-source.tar.gz HEAD \
+            LICENSE THIRD_PARTY_NOTICES.md README.md MACOS.md PKG-CONVERSION.md MACOS-GUI.md \
+            PS5PKGTool.slnx PS5PKGTool.Cli PS5PKGTool.Core PS5PKGTool.Ffpfsc \
+            PS5PKGTool.Ufs2 PS5PKGTool.Tests PS5PKGTool.Mac scripts .github \
+            PS5PKGTool/ThirdParty/ProsperoPkgTool
+
+      - name: Upload development build
+        uses: actions/upload-artifact@v7
+        with:
+          name: PS5PKGTool-Mac-osx-arm64
+          path: |
+            artifacts/PS5PKGTool-Mac-osx-arm64.dmg
+            artifacts/PS5PKGTool-Mac-osx-arm64.tar.gz
+            artifacts/PS5PKGTool-Mac-source.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

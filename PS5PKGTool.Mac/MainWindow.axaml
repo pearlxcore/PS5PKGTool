@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:PS5PKGTool.Mac" x:DataType="local:ConversionViewModel"
+        x:Class="PS5PKGTool.Mac.MainWindow" Title="PS5 PKG Tool" Width="700" Height="720"
+        MinWidth="540" MinHeight="620" Background="#F5F6F8">
+  <Window.Styles>
+    <Style Selector="TextBlock.label"><Setter Property="FontWeight" Value="SemiBold" /></Style>
+    <Style Selector="TextBox"><Setter Property="MinHeight" Value="36" /></Style>
+    <Style Selector="Button"><Setter Property="MinHeight" Value="36" /></Style>
+  </Window.Styles>
+  <ScrollViewer>
+    <StackPanel Margin="32" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="PS5 PKG Tool" FontSize="28" FontWeight="SemiBold" Foreground="#14243B" />
+        <TextBlock Text="macOS port · Debug PKG → exFAT" Foreground="#526078" />
+      </StackPanel>
+      <StackPanel Spacing="7" IsEnabled="{Binding CanEdit}">
+        <TextBlock Classes="label" Text="Input package" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox Text="{Binding Input, Mode=TwoWay}" PlaceholderText="Select a .pkg file" AutomationProperties.Name="Input package path" />
+          <Button Grid.Column="1" Content="Browse…" Click="BrowseInput" />
+        </Grid>
+        <Button Content="Read metadata" Click="ReadMetadata" HorizontalAlignment="Left" />
+      </StackPanel>
+      <Border Background="White" BorderBrush="#DCE1E8" BorderThickness="1" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding Title}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto" RowSpacing="5">
+            <TextBlock Text="Title ID" Foreground="#526078" /><TextBlock Grid.Column="1" Text="{Binding TitleId}" />
+            <TextBlock Grid.Row="1" Text="Type" Foreground="#526078" /><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PackageType}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+      <StackPanel Spacing="7" IsEnabled="{Binding CanEdit}">
+        <TextBlock Classes="label" Text="Output image · exFAT" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox Text="{Binding Output, Mode=TwoWay}" PlaceholderText="Choose a new .exfat filename" AutomationProperties.Name="Output image path" />
+          <Button Grid.Column="1" Content="Browse…" Click="BrowseOutput" />
+        </Grid>
+        <TextBlock Classes="label" Text="Temporary workspace" Margin="0,8,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox Text="{Binding Workspace, Mode=TwoWay}" PlaceholderText="Default: output image directory" AutomationProperties.Name="Temporary workspace path" />
+          <Button Grid.Column="1" Content="Browse…" Click="BrowseWorkspace" />
+        </Grid>
+        <TextBlock Text="Allow space for the extracted game and the image. Temporary files are removed after conversion." FontSize="12" Foreground="#526078" TextWrapping="Wrap" />
+      </StackPanel>
+      <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+        <Button Grid.Column="1" Content="Cancel" IsEnabled="{Binding CanCancel}" Click="CancelConversion" />
+        <Button Grid.Column="2" Content="Convert to exFAT" Background="#174FAD" Foreground="White" IsEnabled="{Binding CanConvert}" Click="Convert" />
+      </Grid>
+      <StackPanel Spacing="8">
+        <ProgressBar Minimum="0" Maximum="100" Value="{Binding Percent}" IsIndeterminate="{Binding Indeterminate}" Height="6" />
+        <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Error}" Foreground="#A32725" TextWrapping="Wrap" />
+      </StackPanel>
+      <TextBlock Text="Modified from pearlxcore/PS5PKGTool · GPL-3.0" FontSize="11" Foreground="#526078" />
+    </StackPanel>
+  </ScrollViewer>
+</Window>

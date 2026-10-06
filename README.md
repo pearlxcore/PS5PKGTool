@@ -9,6 +9,8 @@
 
 A Windows app for managing your PS5 dump and image collection, reading PS5 packages, and building or converting images.
 
+The modified [macOS port](MACOS.md) supports folder → exFAT and [debug PKG → exFAT](PKG-CONVERSION.md) through .NET 10, with an [Apple Silicon Avalonia frontend](MACOS-GUI.md).
+
 Suggestions are welcome. Report bugs [here](https://github.com/pearlxcore/PS5PkgTool/issues).
 
 **This is not software for obtaining free PS5 games.**

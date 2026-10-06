@@ -1,6 +1,9 @@
 <Solution>
+  <Project Path="PS5PKGTool.Mac/PS5PKGTool.Mac.csproj" />
+  <Project Path="PS5PKGTool.Cli/PS5PKGTool.Cli.csproj" />
   <Project Path="PS5PKGTool.Core/PS5PKGTool.Core.csproj" />
   <Project Path="PS5PKGTool.Ffpfsc/PS5PKGTool.Ffpfsc.csproj" />
   <Project Path="PS5PKGTool.Ufs2/PS5PKGTool.Ufs2.csproj" />
+  <Project Path="PS5PKGTool.Tests/PS5PKGTool.Tests.csproj" />
   <Project Path="PS5PKGTool/PS5PKGTool.csproj" />
 </Solution>
