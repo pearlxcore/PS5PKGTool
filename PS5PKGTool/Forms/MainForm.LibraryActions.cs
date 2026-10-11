@@ -516,9 +516,34 @@ public partial class MainForm
 
     // ---------------------------------------------------------------- delete to recycle bin
 
-    private void menuLibraryDelete_Click(object? sender, EventArgs e) => DeleteSelected();
+    private void menuLibraryDeleteFromDisk_Click(object? sender, EventArgs e) => DeleteSelectedFromDisk();
 
-    private void DeleteSelected()
+    private void menuLibraryDeleteFromList_Click(object? sender, EventArgs e) => DeleteSelectedFromList();
+
+    /// <summary>Drops the selected entries from the library list without touching any files.</summary>
+    private void DeleteSelectedFromList()
+    {
+        var games = SelectedGames().ToList();
+        if (games.Count == 0) return;
+
+        foreach (var game in games)
+        {
+            var path = game.RootPath;
+            RemoveSettingPath(_settings.LibraryFolders, path);
+            RemoveSettingPath(_settings.ManualSources, path);
+            RemoveSettingPath(_settings.RecentFolders, path);
+            _detailsCache.Remove(path);
+            _games.Remove(game);
+        }
+
+        SaveSettingsQuietly();
+        _stateStore.SaveManifest(_games);
+        ApplyFilter();
+        Logger.Info($"Removed {games.Count:N0} source(s) from the list.");
+        statusLabel.Text = $"Removed {games.Count:N0} source(s) from the list (files kept).";
+    }
+
+    private void DeleteSelectedFromDisk()
     {
         List<Ps5GameInfo> games = SelectedGames().ToList();
         if (games.Count == 0) return;
