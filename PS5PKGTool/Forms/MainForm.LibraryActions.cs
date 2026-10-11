@@ -548,7 +548,6 @@ public partial class MainForm
                 else if (File.Exists(path))
                     Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile(path,
                         Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, recycle);
-                else { skipped++; continue; }
 
                 RemoveSettingPath(_settings.LibraryFolders, path);
                 RemoveSettingPath(_settings.ManualSources, path);
