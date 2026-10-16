@@ -350,33 +350,58 @@ public partial class MainForm : DarkForm
 
     private async void AddFolder_Click(object? sender, EventArgs e)
     {
-        folderBrowserDialog.Description = "Select a PS5 library folder";
-        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
-        string selected = folderBrowserDialog.SelectedPath;
-        if (!_settings.LibraryFolders.Contains(selected, StringComparer.OrdinalIgnoreCase))
+        var folders = PickFolders("Select one or more PS5 library folders");
+        if (folders is null) return;
+        bool changed = false;
+        foreach (var selected in folders)
         {
-            _settings.LibraryFolders.Add(selected);
-            _stateStore.SaveSettings(_settings);
+            if (!_settings.LibraryFolders.Contains(selected, StringComparer.OrdinalIgnoreCase))
+            {
+                _settings.LibraryFolders.Add(selected);
+                changed = true;
+            }
+            AddRecentFolder(selected);
         }
-        AddRecentFolder(selected);
+        if (changed) _stateStore.SaveSettings(_settings);
         await ScanAsync(ScanRoots(), merge: false);
     }
 
     private async void OpenDump_Click(object? sender, EventArgs e)
     {
-        folderBrowserDialog.Description = "Select the root of an unpacked PS5 game dump";
-        if (folderBrowserDialog.ShowDialog(this) != DialogResult.OK) return;
-        AddRecentFolder(folderBrowserDialog.SelectedPath);
-        RememberManualSource(folderBrowserDialog.SelectedPath);
-        await ScanAsync([folderBrowserDialog.SelectedPath], merge: true);
+        var folders = PickFolders("Select the root of one or more unpacked PS5 game dumps");
+        if (folders is null) return;
+        foreach (var folder in folders)
+        {
+            AddRecentFolder(folder);
+            RememberManualSource(folder);
+        }
+        await ScanAsync(folders, merge: true);
+    }
+
+    private string[]? PickFolders(string description)
+    {
+        folderBrowserDialog.Description = description;
+        folderBrowserDialog.Multiselect = true;
+        try
+        {
+            return folderBrowserDialog.ShowDialog(this) == DialogResult.OK ? folderBrowserDialog.SelectedPaths : null;
+        }
+        finally
+        {
+            folderBrowserDialog.Multiselect = false;
+        }
     }
 
     private async void OpenPackage_Click(object? sender, EventArgs e)
     {
         if (packageOpenDialog.ShowDialog(this) != DialogResult.OK) return;
-        AddRecentFolder(packageOpenDialog.FileName);
-        RememberManualSource(packageOpenDialog.FileName);
-        await ScanAsync([packageOpenDialog.FileName], merge: true);
+        foreach(var file in packageOpenDialog.FileNames)
+        {
+            AddRecentFolder(file);
+            RememberManualSource(file);
+        }
+
+        await ScanAsync(packageOpenDialog.FileNames, merge: true);
     }
 
     private async void Refresh_Click(object? sender, EventArgs e)

@@ -266,14 +266,13 @@ partial class SettingsForm
         // 
         // lstFolders
         // 
-        lstFolders.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
         lstFolders.DrawMode = DrawMode.OwnerDrawFixed;
         lstFolders.FormattingEnabled = true;
         lstFolders.ItemHeight = 20;
         lstFolders.Location = new Point(16, 58);
         lstFolders.Name = "lstFolders";
         lstFolders.SelectionMode = SelectionMode.MultiExtended;
-        lstFolders.Size = new Size(380, 174);
+        lstFolders.Size = new Size(460, 174);
         lstFolders.TabIndex = 2;
         // 
         // btnAdd
@@ -296,7 +295,7 @@ partial class SettingsForm
         // 
         // lblManualSources
         // 
-        lblManualSources.Location = new Point(420, 40);
+        lblManualSources.Location = new Point(500, 40);
         lblManualSources.Name = "lblManualSources";
         lblManualSources.Size = new Size(252, 15);
         lblManualSources.TabIndex = 5;
@@ -304,19 +303,18 @@ partial class SettingsForm
         // 
         // lstManualSources
         // 
-        lstManualSources.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right;
         lstManualSources.DrawMode = DrawMode.OwnerDrawFixed;
         lstManualSources.FormattingEnabled = true;
         lstManualSources.ItemHeight = 20;
-        lstManualSources.Location = new Point(420, 58);
+        lstManualSources.Location = new Point(500, 58);
         lstManualSources.Name = "lstManualSources";
         lstManualSources.SelectionMode = SelectionMode.MultiExtended;
-        lstManualSources.Size = new Size(252, 174);
+        lstManualSources.Size = new Size(460, 174);
         lstManualSources.TabIndex = 6;
         // 
         // btnRemoveSource
         // 
-        btnRemoveSource.Location = new Point(420, 240);
+        btnRemoveSource.Location = new Point(500, 240);
         btnRemoveSource.Name = "btnRemoveSource";
         btnRemoveSource.Size = new Size(180, 30);
         btnRemoveSource.TabIndex = 7;

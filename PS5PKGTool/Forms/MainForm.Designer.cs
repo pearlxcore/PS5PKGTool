@@ -4945,10 +4945,15 @@ partial class MainForm
         statusCount.Size = new Size(51, 17);
         statusCount.Text = "0 games";
         // 
+        // folderBrowserDialog
+        // 
+        folderBrowserDialog.UseDescriptionForTitle = true;
+        // 
         // packageOpenDialog
         // 
         packageOpenDialog.DefaultExt = "ffpfsc";
         packageOpenDialog.Filter = resources.GetString("packageOpenDialog.Filter");
+        packageOpenDialog.Multiselect = true;
         packageOpenDialog.Title = "Open a PS5 package or filesystem image";
         // 
         // sourceImageOpenDialog
