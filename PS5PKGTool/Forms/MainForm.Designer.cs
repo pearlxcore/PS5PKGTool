@@ -59,6 +59,8 @@ partial class MainForm
     private DarkUI.Controls.DarkToolStripSeparator menuLibraryMoveSeparator = null!;
     private ToolStripMenuItem menuLibraryMoveSingle = null!;
     private ToolStripMenuItem menuLibraryDelete = null!;
+    private ToolStripMenuItem menuLibraryDeleteFromList = null!;
+    private ToolStripMenuItem menuLibraryDeleteFromDisk = null!;
     private DarkUI.Controls.DarkToolStripSeparator menuLibrarySeparator5 = null!;
     private ToolStripMenuItem menuLibraryGroupExport = null!;
     private ToolStripMenuItem menuLibraryGroupArtwork = null!;
@@ -445,6 +447,8 @@ partial class MainForm
         menuLibraryMoveSeparator = new DarkUI.Controls.DarkToolStripSeparator();
         menuLibraryMoveSingle = new ToolStripMenuItem();
         menuLibraryDelete = new ToolStripMenuItem();
+        menuLibraryDeleteFromList = new ToolStripMenuItem();
+        menuLibraryDeleteFromDisk = new ToolStripMenuItem();
         menuLibrarySeparator2 = new DarkUI.Controls.DarkToolStripSeparator();
         menuLibrarySaveArtwork = new ToolStripMenuItem();
         menuLibraryExport = new ToolStripMenuItem();
@@ -1227,9 +1231,27 @@ partial class MainForm
         menuLibraryDelete.BackColor = Color.FromArgb(60, 63, 65);
         menuLibraryDelete.ForeColor = Color.FromArgb(220, 220, 220);
         menuLibraryDelete.Name = "menuLibraryDelete";
+        menuLibraryDelete.DropDownItems.AddRange(new ToolStripItem[] { menuLibraryDeleteFromList, menuLibraryDeleteFromDisk });
         menuLibraryDelete.Size = new Size(260, 22);
-        menuLibraryDelete.Text = "Delete Package... (Recycle Bin)";
-        menuLibraryDelete.Click += menuLibraryDelete_Click;
+        menuLibraryDelete.Text = "Delete Package...";
+        //
+        // menuLibraryDeleteFromList
+        //
+        menuLibraryDeleteFromList.BackColor = Color.FromArgb(60, 63, 65);
+        menuLibraryDeleteFromList.ForeColor = Color.FromArgb(220, 220, 220);
+        menuLibraryDeleteFromList.Name = "menuLibraryDeleteFromList";
+        menuLibraryDeleteFromList.Size = new Size(220, 22);
+        menuLibraryDeleteFromList.Text = "Delete from List";
+        menuLibraryDeleteFromList.Click += menuLibraryDeleteFromList_Click;
+        //
+        // menuLibraryDeleteFromDisk
+        //
+        menuLibraryDeleteFromDisk.BackColor = Color.FromArgb(60, 63, 65);
+        menuLibraryDeleteFromDisk.ForeColor = Color.FromArgb(220, 220, 220);
+        menuLibraryDeleteFromDisk.Name = "menuLibraryDeleteFromDisk";
+        menuLibraryDeleteFromDisk.Size = new Size(220, 22);
+        menuLibraryDeleteFromDisk.Text = "Delete from Disk... (Recycle Bin)";
+        menuLibraryDeleteFromDisk.Click += menuLibraryDeleteFromDisk_Click;
         // 
         // menuLibrarySeparator2
         // 
