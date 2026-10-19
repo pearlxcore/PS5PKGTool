@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="../DarkUI/DarkUI/DarkUI.csproj" />
   <Project Path="PS5PKGTool.Core/PS5PKGTool.Core.csproj" />
   <Project Path="PS5PKGTool.Ffpfsc/PS5PKGTool.Ffpfsc.csproj" />
   <Project Path="PS5PKGTool.Ufs2/PS5PKGTool.Ufs2.csproj" />
